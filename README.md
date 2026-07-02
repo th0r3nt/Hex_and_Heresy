@@ -1,76 +1,79 @@
 # Hex & Heresy
 
-**Hex & Heresy** - это пошаговая глобально-тактическая текстовая стратегия с глубокой интеграцией больших языковых моделей (LLM). Проект находится на стадии разработки MVP. 
-
-Игра объединяет классические механики 4X-стратегий, тактические сеточные бои в духе настольных варгеймов и ролевой отыгрыш, генерируемый нейросетями в реальном времени.
+**Hex & Heresy** is a turn-based grand tactical strategy game combining 4X elements, grid-based tactical battles, and role-playing interaction powered by Large Language Models (LLMs). The project is currently in the Minimum Viable Product (MVP) development stage.
 
 ---
 
-## О проекте
+## General Concept and Game World
 
-Мир игры - это постапокалиптическое темное фэнтези в эпоху «Долгой Зимы». Тысячелетия назад на Землю рухнул метеорит-«Прародитель», принесший радиоактивный изотоп - Резонит (первичную магию). Катастрофа расколола континенты, замедлила вращение планеты (сутки теперь длятся 28 часов) и навсегда изменила биосферу, породив мутации и новые виды. 
+The game is set in an original dark post-apocalyptic fantasy setting. In the era of the "Long Winter," the remnants of civilizations survive on a planet devastated by the impact of a celestial body known as "The Progenitor." 
 
-Игроку предстоит взять на себя управление одной из фракций, отстраивать гексагональные базы, управлять экономикой, собирать армии по принципу «конструктора» и вести дипломатию с ИИ-правителями, которые обладают собственным характером и памятью.
-
----
-
-## Ключевые особенности и механики
-
-### 1. Интеграция LLM (Искусственный Интеллект)
-Нейросети в проекте не просто генерируют текст, они являются ядром геймплея и управления:
-* **ИИ-противники:** Поведение вражеских полководцев формируется через модульную сборку промптов (раса + архетип + системные правила). ИИ принимает решения на глобальной карте, отправляя JSON-команды (Function Calling).
-* **Советник:** Встроенный ассистент с уникальным характером. Может не только комментировать события, но и автоматизировать рутину (например, по текстовому запросу игрока «Подготовь экономику к войне, уложись в 1000 золота» советник сам построит здания и наймет войска).
-* **Дипломатия:** Общение с другими фракциями происходит через написание свободных писем-депеш, на которые ИИ реагирует согласно своему лорному архетипу.
-* **Ветеранство:** Безымянный отряд, совершивший подвиг и выживший в бою, получает статус «Именного». LLM генерирует для него командира, лор и уникальный характер, базируясь на событиях битвы.
-
-### 2. Глобальная карта и экономика
-* **Гексагональная сетка:** Карта разделена на Базу (цитадель), Союзные земли и Ничью землю. База является центром управления, потеря которой означает поражение.
-* **Распределение рисков:** Экономика (Золото, Материалы, Провизия) требует ручного распределения рабочих. Безопасная добыча на базе приносит мало ресурсов, в то время как экспедиции в нейтральные зоны сулят высокую прибыль, но подвергают рабочих риску.
-* **Снабжение:** Войска требуют регулярного содержания едой и золотом. Дефицит приводит к падению морали и дезертирству.
-
-### 3. Тактические бои
-Сражения происходят на сетке 40x24 (1 гекс = отряд). Механика учитывает:
-* **Физику боя и темп:** Удары во фланг и тыл, урон от «Натиска» (зависящий от разницы скоростей), усталость пехоты.
-* **Мораль и панику:** Провал проверки морали одним отрядом может вызвать цепную реакцию и бегство всей армии.
-* **Ландшафт:** Влияние высот, грязи, лесов и погодных условий. Убитые юниты формируют горы трупов, изменяя проходимость клеток прямо во время боя.
-* **Сборку отрядов (Lego-система):** Войска формируются из базы (расовый юнит) + оружия + брони + аксессуара. После битв можно заниматься мародерством, собирая и перековывая оружие поверженных фракций.
+The cataclysm altered Earth's physical constants:
+* **Astronomical shifts:** The day cycle has stretched to 28 hours, divided into safe *Grey Hours* and psychologically unstable *Neon Hours*, illuminated by residual radiation.
+* **Magical radiation:** Magic is represented by an isotope called *Resonite*—an information-receptive matter. Its use leads to biological mutations ("cursed genes") and contaminates the atmosphere with toxic dust ("primordial suspension").
+* **Geographical zones:** The game world is divided into protected Citadels (bases), adjacent allied lands, and anomalous neutral regions (No Man's Lands), which harbor resources and artifacts of bygone eras.
 
 ---
 
-## Игровые фракции
+## System Architecture
 
-1. **Люди (Империя):** Сохранили относительно чистый геном. Ненавидят магию (считая её радиоактивной скверной). Делают ставку на огнестрельное оружие, тяжелую пехоту, инквизицию и жесткую дисциплину.
-2. **Зеленокожие (Орки и Гоблины):** Одичавшая ветвь эволюции, вступившая в симбиоз с грибковыми спорами. Берут числом, используют мусор в качестве брони и полагаются на безумных шаманов.
-3. **Эльфы:** Долгожители, чьи тела подверглись кристаллизации от радиации Прародителя. Разделены на высокомерных обитателей парящих храмов и диких мутантов-выживальщиков из кратеров.
-4. **Баронские войска:** Человеческие сепаратисты. Защищаются в укрепленных замках, опираются на толпы угнетенных крепостных и профессиональных наемников. Делают ставку на рэкет и сбор пошлин.
-5. **Разбойники (Культисты и Мутанты):** Изгои с «Проклятыми генами». Используют некромантию, оборотничество и призыв хтонических сущностей. Их механики завязаны на жертвенности и самоуничтожении.
-6. **Наемники:** Уникальные контракты от летающих дирижаблей с гоблинами-бомбардирами до элитных отрядов тяжелой пехоты, воюющих исключительно ради выгоды.
+The project is divided into two isolated interaction layers to prevent game state desynchronization:
 
----
+```
+┌────────────────────────┐              ┌────────────────────────┐
+│   Frontend (Electron)  │ ◄── JSON ──► │    Backend (Python)    │
+│  - "Dumb terminal"     │              │  - Game logic          │
+│  - UI / DOM rendering  │              │  - Async LLM APIs      │
+│  - Grid and animation  │              │  - Pydantic validation │
+└────────────────────────┘              └────────────────────────┘
+```
 
-## Техническая реализация
-
-Архитектура проекта разделена на два изолированных слоя для предотвращения проблем с синхронизацией состояний:
-
-* **Backend (Python):** 
-  * Отвечает за всю игровую логику, расчеты, математику боев и поддержание состояния мира (`WorldState` через `Pydantic`).
-  * Полностью асинхронная архитектура во избежание блокировок интерфейса при ожидании ответа от LLM API.
-  * Интеграция с локальными или облачными LLM. Динамический `prompt builder` собирает контекст из JSON-схем, лора и предыдущих действий.
-* **Frontend (HTML/CSS/JS):**
-  * Работает как нативное десктопное окно (без браузерного UI).
-  * Выполняет роль исключительно «глупого монитора»: принимает JSON от Python и отрисовывает изменения (DOM-манипуляции). Не производит самостоятельных вычислений состояния.
-  * MVP версия использует текстовые иконки и эмодзи вместо тяжеловесной графики для оптимизации рендеринга сетки.
+1. **Backend (Python):**
+   * Processes battle mathematics, movement, economic calculations, and turn cycles.
+   * Relies on strict type definitions and world state (`WorldState`) validation via the `Pydantic` library.
+   * Interacts asynchronously with external LLM APIs, preventing the main execution thread from blocking during text response generation.
+2. **Frontend (TypeScript/JS, CSS, HTML in Electron container):**
+   * Functions as a "thin client." It receives structured JSON data from the backend and updates the interface state.
+   * In the MVP phase, it utilizes text characters, emojis, and CSS styling to render the hexagonal map and tactical grid.
 
 ---
 
-## Структура проекта
+## Core Game Mechanics
 
-* `docs/` - Проектная документация, геймдизайн-документ (GDD), лор фракций, механики и правила мира.
-* `src/back/` - Исходный код на Python.
-  * `llm/` - Логика работы с нейросетями, клиенты API, конструктор промптов, системные инструкции (System Prompts).
-  * `models.py` - Схемы данных Pydantic (юниты, здания, состояние карты).
-* `src/front/` - Пользовательский интерфейс (UI).
-  * `css/` - Стили (сетки, модальные окна, визуальное оформление).
-  * `js/` - Скрипты для работы с глобальной картой, тактической сеткой, дипломатией и связью с Python API.
-* `unit_phrases/` - Локализация и базы данных реплик для отрядов различных фракций.
-* `main.py` - Точка входа приложения.
+### 1. Text-Based Diplomacy and AI Commanders
+* **Modular Prompt Assembly:** The personality of each AI opponent is generated dynamically using a constructor script. The prompt combines general behavior rules, racial traits, basic action patterns, and a specific archetype (e.g., *Strategist*, *Paranoid*, or *Warmonger*).
+* **Free-text messaging:** Communication with AI leaders is implemented via text dispatches and ambassadors on the global map. The models accept free-text input from the player and react according to their personality traits.
+* **JSON Control:** Model responses contain instructions in JSON format. Using *Function Calling* tools, the AI executes actual in-game actions: declaring war, offering resource trades, or demanding tribute.
+
+### 2. Tactical Grid Battles
+* **Tactical Field:** Combat is simulated on a rectangular $20 \times 20$ grid, where each squad occupies a single position.
+* **Physics and Positioning:** The system calculates movement speed, stamina, attack direction (flank, rear), and charge damage, which depends on the speed difference between colliding squads.
+* **Terrain and Environmental Factors:** Tactical advantage is influenced by high ground, mud, marshland, night time, and weather conditions (e.g., rain preventing the use of gunpowder weapons).
+* **Heaps of Corpses:** Mass casualties in a specific area of the tactical field deform the terrain, creating blockades of bodies that reduce movement speed and provide new tactical opportunities for necromancers.
+
+### 3. Economy and Troop Assembly
+* **Risk Management:** Allocating workers (tier 00 units) between safe resource gathering at the base, moderately dangerous work in allied lands, and expeditions into neutral zones.
+* **Equipment Designer:** The stats of combat squads are formed based on their basic racial archetype, selected weapon, armor type, and additional accessories.
+* **Looting:** After battles, surviving squads or workers can scavenge equipment left on the battlefield. Loot is converted according to faction rules: humans can melt down foreign gear into resources or faith points, greenskins modify it to their standards, and mercenaries sell it on the black market.
+
+### 4. Equipment Designer ("Weaponsmith")
+* A unique in-game interface allows players to describe desired equipment in plain text. 
+* The weaponsmith model analyzes the request for lore friendliness, calculates balanced stats, assigns a tier, determines the production cost in materials, and creates a new equipment card available for the faction's squads to equip.
+
+### 5. Unit Progression and Veteran System
+* Upon recruitment, basic squads are non-personalized combat units without LLM integration.
+* Upon achieving key tactical milestones (surviving critical losses, destroying an elite unit, capturing a citadel), a squad receives the status of a **named** unit.
+* For named units, a commander's personality, a backstory of their exploit, and unique character traits are generated. The player gains the ability to communicate directly with veterans, who may demand a pay raise, refuse unfavorable tactical maneuvers, or request specific equipment.
+
+---
+
+## Game Factions
+
+| Faction | Gameplay Features | Technological Focus |
+| :--- | :--- | :--- |
+| **Humans (Empire)** | Rigid discipline, use of militia. Cannot tolerate magic. | Regular army, gunpowder weapons, inquisition. |
+| **Greenskins** | High numbers, horde mechanics (bonuses for the number of allies). | Handcrafted engineering, shamanism, taming of wild monsters. |
+| **Elves** | High initiative and high unit cost. | Crystal weaponry, illusions, harvesting resonite from the fallen. |
+| **Baronal Forces** | Economic pressure, collecting duties from neutral territories. | Defensive castles, crossbows, heavy plate armor. |
+| **Brigands** | Sacrificial mechanics, no concept of the value of life. | Necromancy, demon summoning, manipulation of the bodies of the fallen. |
+| **Mercenaries** | Unique contracts on the global map, high mobility. | Airships, professional heavy infantry. |
