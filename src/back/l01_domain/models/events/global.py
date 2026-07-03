@@ -1,0 +1,4 @@
+
+
+
+# Напр: TurnEndedEvent, CityCapturedEvent

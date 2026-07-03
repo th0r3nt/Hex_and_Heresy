@@ -10,7 +10,7 @@ The game is set in an original dark post-apocalyptic fantasy setting. In the era
 
 The cataclysm altered Earth's physical constants:
 * **Astronomical shifts:** The day cycle has stretched to 28 hours, divided into safe *Grey Hours* and psychologically unstable *Neon Hours*, illuminated by residual radiation.
-* **Magical radiation:** Magic is represented by an isotope called *Resonite*—an information-receptive matter. Its use leads to biological mutations ("cursed genes") and contaminates the atmosphere with toxic dust ("primordial suspension").
+* **Magical radiation:** Magic is represented by an isotope called *Resonite*-an information-receptive matter. Its use leads to biological mutations ("cursed genes") and contaminates the atmosphere with toxic dust ("primordial suspension").
 * **Geographical zones:** The game world is divided into protected Citadels (bases), adjacent allied lands, and anomalous neutral regions (No Man's Lands), which harbor resources and artifacts of bygone eras.
 
 ---

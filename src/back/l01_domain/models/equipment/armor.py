@@ -1,0 +1,1 @@
+# Наследники: LightArmor, HeavyArmor, MagicShield

@@ -1,0 +1,1 @@
+// Слой связи с Python: WebSockets и HTTP

@@ -1,0 +1,1 @@
+# Наследники: MeleeWeapon, RangedWeapon, MagicWeapon

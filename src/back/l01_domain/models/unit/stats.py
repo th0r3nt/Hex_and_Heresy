@@ -1,0 +1,1 @@
+# Модели характеристик (Health, Stamina, Morale, Initiative, Armor)
