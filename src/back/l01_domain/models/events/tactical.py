@@ -1,3 +1,0 @@
-
-
-# Напр: BattleEndedEvent, UnitDiedEvent

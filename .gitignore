@@ -1,7 +1,7 @@
+custom.json
+
 .env
 
-_TODO.md
-git.md
-
-copy_all_code.py
-all_code.txt
+_docs
+copy_code.py
+code.txt

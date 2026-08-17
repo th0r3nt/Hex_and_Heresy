@@ -47,5 +47,5 @@
     Фразы: "I am the judge, jury, and executioner.", "Your sins are measured." 
 
 ## Ультимативное оружие
-06. Воплощение Мщения (1 юнит). Бог из машины. Левитирует над полем боя (игнорирует грязь/болота).
+06. Воплощение Мщения (1 юнит). Deus Ex Machina.
     Фразы: "I AM THE WRATH OF HEAVEN.", "KNEEL.", "REPENT."
