@@ -107,8 +107,8 @@ class Headquarters(BaseModel):
         return HQ_BASE_BUILDING_SLOTS + max(0, self.level - 1) * HQ_BUILDING_SLOTS_PER_LEVEL
 
     def upgrade(self) -> None:
-        if self.level >= self.max_level:
-            raise ValueError(f"headquarters already at max level {self.max_level}")
+        if self.level >= MAX_HQ_LEVEL:
+            raise ValueError(f"headquarters already at max level {MAX_HQ_LEVEL}")
         self.level += 1
 
 

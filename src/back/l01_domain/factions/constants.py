@@ -12,8 +12,7 @@ from typing import Final
 
 class ResourceType(str, Enum):
     """
-    Три базовых ресурса, общих для всех фракций. 
-    (см. economy.md)
+    Три базовых ресурса, общих для всех фракций.
     """
 
     GOLD = "gold"
@@ -22,13 +21,13 @@ class ResourceType(str, Enum):
 
 
 # ==================================================================
-# ЗДАНИЯ — категории и зоны застройки
+# ЗДАНИЯ - категории
 # ==================================================================
 
 
 class BuildingCategory(str, Enum):
     """
-    Функциональная категория здания. 
+    Функциональная категория здания.
     (см. game_mechanics/building.md)
     """
 
@@ -36,16 +35,6 @@ class BuildingCategory(str, Enum):
     MILITARY = "military"
     DEFENSIVE = "defensive"
     UNIQUE = "unique"
-
-
-class TerritoryZoneType(str, Enum):
-    """
-    Тип зоны, где вообще разрешена застройка.
-    """
-
-    BASE = "base"
-    ALLIED_LANDS = "allied_lands"
-    NEUTRAL_LANDS = "neutral_lands"
 
 
 # ==================================================================
@@ -93,7 +82,6 @@ class WorkerRiskTier(str, Enum):
     HIGH = "high"  # экспедиция в нейтральные земли
 
 
-# Числа - иллюстративный пример из economy.md, не финальный баланс
 WORKER_GOLD_YIELD_SAFE: Final[float] = 10.0
 WORKER_GOLD_YIELD_MODERATE: Final[float] = 20.0
 WORKER_GOLD_YIELD_HIGH: Final[float] = 50.0

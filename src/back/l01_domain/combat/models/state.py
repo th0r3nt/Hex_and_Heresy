@@ -1,7 +1,7 @@
 """
 Динамическое состояние конкретного тактического боя.
 
-Геометрия сетки (клетки, соседство) - забота maps/models/tactical.py;
+Геометрия сетки (клетки, соседство) — забота maps/models/tactical.py;
 здесь хранится только то, что специфично для именно этого боя: кто где стоит,
 какая сейчас фаза, погода, время суток, активные эффекты.
 """
@@ -21,10 +21,7 @@ from src.back.l01_domain.combat.constants import (
     SPEED_MARCH_PACE,
 )
 from src.back.l01_domain.combat.models.effects import CombatEffect
-
-# TODO: заменить на тип координат из maps/models/tactical.py, когда там
-# появится геометрия сетки. Пока - простая пара (ряд, столбец)
-CellCoordinates = tuple[int, int]
+from src.back.l01_domain.maps.models.tactical_map import CellCoordinates
 
 
 class TacticalCellState(BaseModel):
@@ -42,10 +39,8 @@ class TacticalCellState(BaseModel):
     def add_effect(self, effect: CombatEffect) -> None:
         """
         Накладывает эффект на клетку с учётом stacking_rule.
-        Полный пересчёт итоговых модификаторов - забота l02_services,
-        здесь только корректная работа со списком активных эффектов.
         """
-
+        
         already_present = any(e.id == effect.id for e in self.active_effects)
 
         if effect.stacking_rule == EffectStackingRule.IGNORE and already_present:
@@ -88,10 +83,6 @@ class TacticalBattleState(BaseModel):
     """
     Агрегат состояния тактического боя.
     Мутируется на каждый расчёт хода в l02_services/turns/tactical.
-
-    cells хранится списком, а не dict[координаты, ...]: ключи-кортежи
-    не сериализуются в JSON напрямую, а это состояние будет уходить
-    на фронт по WebSocket (см. l04_api/ws/connection.py).
     """
 
     id: str = Field(default_factory=lambda: str(uuid4()))
