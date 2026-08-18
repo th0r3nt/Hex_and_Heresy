@@ -9,10 +9,10 @@ from uuid import uuid4
 from pydantic import BaseModel, Field, ConfigDict
 
 from src.back.l01_domain.common import MechanicalModifier
+from src.back.l01_domain.maps.constants import TerritoryZoneType
 from src.back.l01_domain.factions.constants import (
     ResourceType,
     BuildingCategory,
-    TerritoryZoneType,
     MIN_HQ_LEVEL,
     MAX_HQ_LEVEL,
     HQ_BASE_BUILDING_SLOTS,

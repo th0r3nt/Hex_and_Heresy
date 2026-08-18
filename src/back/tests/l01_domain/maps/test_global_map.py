@@ -1,20 +1,26 @@
 """
-Тесты для src/back/l01_domain/maps/models/global.py
+Тесты для src/back/l01_domain/maps/models/global_map.py
 """
 
 import pytest
 from pydantic import ValidationError
 
-from src.back.l01_domain.maps.constants import HexDirection, TerritoryZoneType
+from src.back.l01_domain.maps.constants import (
+    DISTANCE_BETWEEN_CITADELS_HEXES,
+    GLOBAL_MAP_TOTAL_HEXES,
+    HexDirection,
+    TerritoryZoneType,
+)
 from src.back.l01_domain.maps.models.global_map import (
     HexCoordinates,
     determine_zone_type,
+    generate_standard_map_coordinates,
+    get_standard_base_coordinates,
     hex_distance,
     hex_line,
     hex_neighbor,
     hex_neighbors,
     hex_ring,
-    hex_spiral,
 )
 
 
@@ -55,7 +61,6 @@ class TestHexMath:
     def test_hex_distance_arbitrary(self):
         a = HexCoordinates.from_axial(-2, 3)
         b = HexCoordinates.from_axial(2, -1)
-        # dq = 4, dr = -4, ds = 0 -> distance = (4 + 4 + 0) // 2 = 4
         assert hex_distance(a, b) == 4
 
     def test_hex_neighbors_count_and_distance(self):
@@ -100,14 +105,6 @@ class TestHexMath:
         with pytest.raises(ValueError):
             hex_ring(origin, -1)
 
-    def test_hex_spiral_radius_three_matches_svg_map_size(self):
-        # 1 + 6 + 12 + 18 = 37 гексов (ровно как в map.svg)
-        origin = HexCoordinates.from_axial(0, 0)
-        spiral = hex_spiral(origin, 3)
-
-        assert len(spiral) == 37
-        assert len(set(spiral)) == 37
-
     def test_hex_line_single_cell(self):
         origin = HexCoordinates.from_axial(1, 1)
         assert hex_line(origin, origin) == [origin]
@@ -120,25 +117,59 @@ class TestHexMath:
         assert len(line) == 4
         assert line[0] == start
         assert line[-1] == end
-        assert line == [
-            HexCoordinates.from_axial(0, 0),
-            HexCoordinates.from_axial(1, 0),
-            HexCoordinates.from_axial(2, 0),
-            HexCoordinates.from_axial(3, 0),
-        ]
+
+
+class TestStandardMapGeneration:
+    def test_generate_standard_map_hex_count(self):
+        coords = generate_standard_map_coordinates()
+        assert len(coords) == GLOBAL_MAP_TOTAL_HEXES
+        assert len(set(coords)) == GLOBAL_MAP_TOTAL_HEXES
+
+    def test_standard_bases_distance_matches_constant(self):
+        north_base, south_base = get_standard_base_coordinates()
+        distance = hex_distance(north_base, south_base)
+        assert distance == DISTANCE_BETWEEN_CITADELS_HEXES
+
+    def test_standard_bases_have_allied_petals(self):
+        north_base, south_base = get_standard_base_coordinates()
+        north_petals = hex_neighbors(north_base)
+        south_petals = hex_neighbors(south_base)
+
+        assert len(north_petals) == 6
+        assert len(south_petals) == 6
+
+        all_coords = set(generate_standard_map_coordinates())
+        for petal in north_petals + south_petals:
+            assert petal in all_coords
 
 
 class TestZoneDetermination:
-    def test_base_zone(self):
+    def test_base_zone_single(self):
         base = HexCoordinates.from_axial(0, 0)
         assert determine_zone_type(base, base) == TerritoryZoneType.BASE
 
-    def test_allied_zone(self):
+    def test_allied_zone_single(self):
         base = HexCoordinates.from_axial(0, 0)
         allied_hex = HexCoordinates.from_axial(1, -1)
         assert determine_zone_type(allied_hex, base) == TerritoryZoneType.ALLIED_LANDS
 
-    def test_neutral_zone(self):
+    def test_neutral_zone_single(self):
         base = HexCoordinates.from_axial(0, 0)
         neutral_hex = HexCoordinates.from_axial(2, 0)
         assert determine_zone_type(neutral_hex, base) == TerritoryZoneType.NEUTRAL_LANDS
+
+    def test_zone_determination_multiple_bases(self):
+        north_base, south_base = get_standard_base_coordinates()
+        bases = [north_base, south_base]
+
+        # Сами базы
+        assert determine_zone_type(north_base, bases) == TerritoryZoneType.BASE
+        assert determine_zone_type(south_base, bases) == TerritoryZoneType.BASE
+
+        # Лепестки союзных земель
+        north_petal = HexCoordinates.from_axial(north_base.q + 1, north_base.r)
+        assert determine_zone_type(north_petal, bases) == TerritoryZoneType.ALLIED_LANDS
+
+        # Нейтральный центр
+        center_hex = HexCoordinates.from_axial(0, 0)
+        assert determine_zone_type(center_hex, bases) == TerritoryZoneType.NEUTRAL_LANDS

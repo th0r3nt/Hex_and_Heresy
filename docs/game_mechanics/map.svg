@@ -1,58 +1,331 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="-260 -240 520 480" width="100%" height="100%">
-  <style>
-    .gray { fill: #c2c2c2; stroke: #000000; stroke-width: 3; stroke-linejoin: round; }
-    .light-blue { fill: #99dbeb; stroke: #000000; stroke-width: 3; stroke-linejoin: round; }
-    .dark-blue { fill: #0095da; stroke: #000000; stroke-width: 3; stroke-linejoin: round; }
-  </style>
-  
-  <!-- Ряд 1 (r = -3) -->
-  <polygon class="gray" points="-103.9,-220 -69.3,-200 -69.3,-160 -103.9,-140 -138.6,-160 -138.6,-200" />
-  <polygon class="gray" points="-34.6,-220 0,-200 0,-160 -34.6,-140 -69.3,-160 -69.3,-200" />
-  <polygon class="gray" points="34.6,-220 69.3,-200 69.3,-160 34.6,-140 0,-160 0,-200" />
-  <polygon class="gray" points="103.9,-220 138.6,-200 138.6,-160 103.9,-140 69.3,-160 69.3,-200" />
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 1000" width="100%" height="100%">
+  <defs>
+    <!-- Базовая форма вертикально ориентированного гексагона (pointy-topped) -->
+    <polygon id="hex" points="0,-30 25.98,-15 25.98,15 0,30 -25.98,15 -25.98,-15" />
+    
+    <style>
+      .bg { fill: #14171a; }
+      .grid { stroke: #14171a; stroke-width: 2.2; stroke-linejoin: round; }
+      .tile-grey { fill: #656f7a; }
+      .tile-red-core { fill: #d92525; }
+      .tile-red-petal { fill: #f76d6d; }
+      .tile-blue-core { fill: #0066ff; }
+      .tile-blue-petal { fill: #5ba7f9; }
+    </style>
+  </defs>
 
-  <!-- Ряд 2 (r = -2) -->
-  <polygon class="gray" points="-138.6,-160 -104,-140 -104,-100 -138.6,-80 -173.2,-100 -173.2,-140" />
-  <polygon class="gray" points="-69.3,-160 -34.7,-140 -34.7,-100 -69.3,-80 -103.9,-100 -103.9,-140" />
-  <polygon class="gray" points="0,-160 34.6,-140 34.6,-100 0,-80 -34.6,-100 -34.6,-140" />
-  <polygon class="gray" points="69.3,-160 103.9,-140 103.9,-100 69.3,-80 34.7,-100 34.7,-140" />
-  <polygon class="gray" points="138.6,-160 173.2,-140 173.2,-100 138.6,-80 104,-100 104,-140" />
+  <!-- Фон -->
+  <rect width="100%" height="100%" class="bg" />
 
-  <!-- Ряд 3 (r = -1) -->
-  <polygon class="gray" points="-173.2,-100 -138.6,-80 -138.6,-40 -173.2,-20 -207.8,-40 -207.8,-80" />
-  <polygon class="gray" points="-103.9,-100 -69.3,-80 -69.3,-40 -103.9,-20 -138.6,-40 -138.6,-80" />
-  <polygon class="light-blue" points="-34.6,-100 0,-80 0,-40 -34.6,-20 -69.3,-40 -69.3,-80" />
-  <polygon class="light-blue" points="34.6,-100 69.3,-80 69.3,-40 34.6,-20 0,-40 0,-80" />
-  <polygon class="gray" points="103.9,-100 138.6,-80 138.6,-40 103.9,-20 69.3,-40 69.3,-80" />
-  <polygon class="gray" points="173.2,-100 207.8,-80 207.8,-40 173.2,-20 138.6,-40 138.6,-80" />
+  <!-- Сетка гексагонов -->
+  <g class="grid">
+    <!-- Ряд 0 (10 гексагонов) -->
+    <use href="#hex" x="316.17" y="95" class="tile-grey" />
+    <use href="#hex" x="368.14" y="95" class="tile-grey" />
+    <use href="#hex" x="420.10" y="95" class="tile-grey" />
+    <use href="#hex" x="472.06" y="95" class="tile-grey" />
+    <use href="#hex" x="524.02" y="95" class="tile-red-petal" />
+    <use href="#hex" x="575.98" y="95" class="tile-red-petal" />
+    <use href="#hex" x="627.94" y="95" class="tile-grey" />
+    <use href="#hex" x="679.90" y="95" class="tile-grey" />
+    <use href="#hex" x="731.86" y="95" class="tile-grey" />
+    <use href="#hex" x="783.83" y="95" class="tile-grey" />
 
-  <!-- Ряд 4 (r = 0) -->
-  <polygon class="gray" points="-207.8,-40 -173.2,-20 -173.2,20 -207.8,40 -242.4,20 -242.4,-20" />
-  <polygon class="gray" points="-138.6,-40 -104,-20 -104,20 -138.6,40 -173.2,20 -173.2,-20" />
-  <polygon class="light-blue" points="-69.3,-40 -34.7,-20 -34.7,20 -69.3,40 -103.9,20 -103.9,-20" />
-  <polygon class="dark-blue" points="0,-40 34.6,-20 34.6,20 0,40 -34.6,20 -34.6,-20" />
-  <polygon class="light-blue" points="69.3,-40 103.9,-20 103.9,20 69.3,40 34.7,20 34.7,-20" />
-  <polygon class="gray" points="138.6,-40 173.2,-20 173.2,20 138.6,40 104,20 104,-20" />
-  <polygon class="gray" points="207.8,-40 242.4,-20 242.4,20 207.8,40 173.2,20 173.2,-20" />
+    <!-- Ряд 1 (11 гексагонов) -->
+    <use href="#hex" x="290.19" y="140" class="tile-grey" />
+    <use href="#hex" x="342.15" y="140" class="tile-grey" />
+    <use href="#hex" x="394.12" y="140" class="tile-grey" />
+    <use href="#hex" x="446.08" y="140" class="tile-grey" />
+    <use href="#hex" x="498.04" y="140" class="tile-red-petal" />
+    <use href="#hex" x="550.00" y="140" class="tile-red-core" />
+    <use href="#hex" x="601.96" y="140" class="tile-red-petal" />
+    <use href="#hex" x="653.92" y="140" class="tile-grey" />
+    <use href="#hex" x="705.88" y="140" class="tile-grey" />
+    <use href="#hex" x="757.85" y="140" class="tile-grey" />
+    <use href="#hex" x="809.81" y="140" class="tile-grey" />
 
-  <!-- Ряд 5 (r = 1) -->
-  <polygon class="gray" points="-173.2,20 -138.6,40 -138.6,80 -173.2,100 -207.8,80 -207.8,40" />
-  <polygon class="gray" points="-103.9,20 -69.3,40 -69.3,80 -103.9,100 -138.6,80 -138.6,40" />
-  <polygon class="light-blue" points="-34.6,20 0,40 0,80 -34.6,100 -69.3,80 -69.3,40" />
-  <polygon class="light-blue" points="34.6,20 69.3,40 69.3,80 34.6,100 0,80 0,40" />
-  <polygon class="gray" points="103.9,20 138.6,40 138.6,80 103.9,100 69.3,80 69.3,40" />
-  <polygon class="gray" points="173.2,20 207.8,40 207.8,80 173.2,100 138.6,80 138.6,40" />
+    <!-- Ряд 2 (12 гексагонов) -->
+    <use href="#hex" x="264.21" y="185" class="tile-grey" />
+    <use href="#hex" x="316.17" y="185" class="tile-grey" />
+    <use href="#hex" x="368.14" y="185" class="tile-grey" />
+    <use href="#hex" x="420.10" y="185" class="tile-grey" />
+    <use href="#hex" x="472.06" y="185" class="tile-grey" />
+    <use href="#hex" x="524.02" y="185" class="tile-red-petal" />
+    <use href="#hex" x="575.98" y="185" class="tile-red-petal" />
+    <use href="#hex" x="627.94" y="185" class="tile-grey" />
+    <use href="#hex" x="679.90" y="185" class="tile-grey" />
+    <use href="#hex" x="731.86" y="185" class="tile-grey" />
+    <use href="#hex" x="783.83" y="185" class="tile-grey" />
+    <use href="#hex" x="835.79" y="185" class="tile-grey" />
 
-  <!-- Ряд 6 (r = 2) -->
-  <polygon class="gray" points="-138.6,80 -104,100 -104,140 -138.6,160 -173.2,140 -173.2,100" />
-  <polygon class="gray" points="-69.3,80 -34.7,100 -34.7,140 -69.3,160 -103.9,140 -103.9,100" />
-  <polygon class="gray" points="0,80 34.6,100 34.6,140 0,160 -34.6,140 -34.6,100" />
-  <polygon class="gray" points="69.3,80 103.9,100 103.9,140 69.3,160 34.7,140 34.7,100" />
-  <polygon class="gray" points="138.6,80 173.2,100 173.2,140 138.6,160 104,140 104,100" />
+    <!-- Ряд 3 (13 гексагонов) -->
+    <use href="#hex" x="238.23" y="230" class="tile-grey" />
+    <use href="#hex" x="290.19" y="230" class="tile-grey" />
+    <use href="#hex" x="342.15" y="230" class="tile-grey" />
+    <use href="#hex" x="394.12" y="230" class="tile-grey" />
+    <use href="#hex" x="446.08" y="230" class="tile-grey" />
+    <use href="#hex" x="498.04" y="230" class="tile-grey" />
+    <use href="#hex" x="550.00" y="230" class="tile-grey" />
+    <use href="#hex" x="601.96" y="230" class="tile-grey" />
+    <use href="#hex" x="653.92" y="230" class="tile-grey" />
+    <use href="#hex" x="705.88" y="230" class="tile-grey" />
+    <use href="#hex" x="757.85" y="230" class="tile-grey" />
+    <use href="#hex" x="809.81" y="230" class="tile-grey" />
+    <use href="#hex" x="861.77" y="230" class="tile-grey" />
 
-  <!-- Ряд 7 (r = 3) -->
-  <polygon class="gray" points="-103.9,140 -69.3,160 -69.3,200 -103.9,220 -138.6,200 -138.6,160" />
-  <polygon class="gray" points="-34.6,140 0,160 0,200 -34.6,220 -69.3,200 -69.3,160" />
-  <polygon class="gray" points="34.6,140 69.3,160 69.3,200 34.6,220 0,200 0,160" />
-  <polygon class="gray" points="103.9,140 138.6,160 138.6,200 103.9,220 69.3,200 69.3,160" />
+    <!-- Ряд 4 (14 гексагонов) -->
+    <use href="#hex" x="212.25" y="275" class="tile-grey" />
+    <use href="#hex" x="264.21" y="275" class="tile-grey" />
+    <use href="#hex" x="316.17" y="275" class="tile-grey" />
+    <use href="#hex" x="368.14" y="275" class="tile-grey" />
+    <use href="#hex" x="420.10" y="275" class="tile-grey" />
+    <use href="#hex" x="472.06" y="275" class="tile-grey" />
+    <use href="#hex" x="524.02" y="275" class="tile-grey" />
+    <use href="#hex" x="575.98" y="275" class="tile-grey" />
+    <use href="#hex" x="627.94" y="275" class="tile-grey" />
+    <use href="#hex" x="679.90" y="275" class="tile-grey" />
+    <use href="#hex" x="731.86" y="275" class="tile-grey" />
+    <use href="#hex" x="783.83" y="275" class="tile-grey" />
+    <use href="#hex" x="835.79" y="275" class="tile-grey" />
+    <use href="#hex" x="887.75" y="275" class="tile-grey" />
+
+    <!-- Ряд 5 (15 гексагонов) -->
+    <use href="#hex" x="186.27" y="320" class="tile-grey" />
+    <use href="#hex" x="238.23" y="320" class="tile-grey" />
+    <use href="#hex" x="290.19" y="320" class="tile-grey" />
+    <use href="#hex" x="342.15" y="320" class="tile-grey" />
+    <use href="#hex" x="394.12" y="320" class="tile-grey" />
+    <use href="#hex" x="446.08" y="320" class="tile-grey" />
+    <use href="#hex" x="498.04" y="320" class="tile-grey" />
+    <use href="#hex" x="550.00" y="320" class="tile-grey" />
+    <use href="#hex" x="601.96" y="320" class="tile-grey" />
+    <use href="#hex" x="653.92" y="320" class="tile-grey" />
+    <use href="#hex" x="705.88" y="320" class="tile-grey" />
+    <use href="#hex" x="757.85" y="320" class="tile-grey" />
+    <use href="#hex" x="809.81" y="320" class="tile-grey" />
+    <use href="#hex" x="861.77" y="320" class="tile-grey" />
+    <use href="#hex" x="913.73" y="320" class="tile-grey" />
+
+    <!-- Ряд 6 (16 гексагонов) -->
+    <use href="#hex" x="160.29" y="365" class="tile-grey" />
+    <use href="#hex" x="212.25" y="365" class="tile-grey" />
+    <use href="#hex" x="264.21" y="365" class="tile-grey" />
+    <use href="#hex" x="316.17" y="365" class="tile-grey" />
+    <use href="#hex" x="368.14" y="365" class="tile-grey" />
+    <use href="#hex" x="420.10" y="365" class="tile-grey" />
+    <use href="#hex" x="472.06" y="365" class="tile-grey" />
+    <use href="#hex" x="524.02" y="365" class="tile-grey" />
+    <use href="#hex" x="575.98" y="365" class="tile-grey" />
+    <use href="#hex" x="627.94" y="365" class="tile-grey" />
+    <use href="#hex" x="679.90" y="365" class="tile-grey" />
+    <use href="#hex" x="731.86" y="365" class="tile-grey" />
+    <use href="#hex" x="783.83" y="365" class="tile-grey" />
+    <use href="#hex" x="835.79" y="365" class="tile-grey" />
+    <use href="#hex" x="887.75" y="365" class="tile-grey" />
+    <use href="#hex" x="939.71" y="365" class="tile-grey" />
+
+    <!-- Ряд 7 (17 гексагонов) -->
+    <use href="#hex" x="134.31" y="410" class="tile-grey" />
+    <use href="#hex" x="186.27" y="410" class="tile-grey" />
+    <use href="#hex" x="238.23" y="410" class="tile-grey" />
+    <use href="#hex" x="290.19" y="410" class="tile-grey" />
+    <use href="#hex" x="342.15" y="410" class="tile-grey" />
+    <use href="#hex" x="394.12" y="410" class="tile-grey" />
+    <use href="#hex" x="446.08" y="410" class="tile-grey" />
+    <use href="#hex" x="498.04" y="410" class="tile-grey" />
+    <use href="#hex" x="550.00" y="410" class="tile-grey" />
+    <use href="#hex" x="601.96" y="410" class="tile-grey" />
+    <use href="#hex" x="653.92" y="410" class="tile-grey" />
+    <use href="#hex" x="705.88" y="410" class="tile-grey" />
+    <use href="#hex" x="757.85" y="410" class="tile-grey" />
+    <use href="#hex" x="809.81" y="410" class="tile-grey" />
+    <use href="#hex" x="861.77" y="410" class="tile-grey" />
+    <use href="#hex" x="913.73" y="410" class="tile-grey" />
+    <use href="#hex" x="965.69" y="410" class="tile-grey" />
+
+    <!-- Ряд 8 (18 гексагонов) -->
+    <use href="#hex" x="108.33" y="455" class="tile-grey" />
+    <use href="#hex" x="160.29" y="455" class="tile-grey" />
+    <use href="#hex" x="212.25" y="455" class="tile-grey" />
+    <use href="#hex" x="264.21" y="455" class="tile-grey" />
+    <use href="#hex" x="316.17" y="455" class="tile-grey" />
+    <use href="#hex" x="368.14" y="455" class="tile-grey" />
+    <use href="#hex" x="420.10" y="455" class="tile-grey" />
+    <use href="#hex" x="472.06" y="455" class="tile-grey" />
+    <use href="#hex" x="524.02" y="455" class="tile-grey" />
+    <use href="#hex" x="575.98" y="455" class="tile-grey" />
+    <use href="#hex" x="627.94" y="455" class="tile-grey" />
+    <use href="#hex" x="679.90" y="455" class="tile-grey" />
+    <use href="#hex" x="731.86" y="455" class="tile-grey" />
+    <use href="#hex" x="783.83" y="455" class="tile-grey" />
+    <use href="#hex" x="835.79" y="455" class="tile-grey" />
+    <use href="#hex" x="887.75" y="455" class="tile-grey" />
+    <use href="#hex" x="939.71" y="455" class="tile-grey" />
+    <use href="#hex" x="991.67" y="455" class="tile-grey" />
+
+    <!-- Ряд 9 - Центральный ряд (19 гексагонов) -->
+    <use href="#hex" x="82.35" y="500" class="tile-grey" />
+    <use href="#hex" x="134.31" y="500" class="tile-grey" />
+    <use href="#hex" x="186.27" y="500" class="tile-grey" />
+    <use href="#hex" x="238.23" y="500" class="tile-grey" />
+    <use href="#hex" x="290.19" y="500" class="tile-grey" />
+    <use href="#hex" x="342.15" y="500" class="tile-grey" />
+    <use href="#hex" x="394.12" y="500" class="tile-grey" />
+    <use href="#hex" x="446.08" y="500" class="tile-grey" />
+    <use href="#hex" x="498.04" y="500" class="tile-grey" />
+    <use href="#hex" x="550.00" y="500" class="tile-grey" />
+    <use href="#hex" x="601.96" y="500" class="tile-grey" />
+    <use href="#hex" x="653.92" y="500" class="tile-grey" />
+    <use href="#hex" x="705.88" y="500" class="tile-grey" />
+    <use href="#hex" x="757.85" y="500" class="tile-grey" />
+    <use href="#hex" x="809.81" y="500" class="tile-grey" />
+    <use href="#hex" x="861.77" y="500" class="tile-grey" />
+    <use href="#hex" x="913.73" y="500" class="tile-grey" />
+    <use href="#hex" x="965.69" y="500" class="tile-grey" />
+    <use href="#hex" x="1017.65" y="500" class="tile-grey" />
+
+    <!-- Ряд 10 (18 гексагонов) -->
+    <use href="#hex" x="108.33" y="545" class="tile-grey" />
+    <use href="#hex" x="160.29" y="545" class="tile-grey" />
+    <use href="#hex" x="212.25" y="545" class="tile-grey" />
+    <use href="#hex" x="264.21" y="545" class="tile-grey" />
+    <use href="#hex" x="316.17" y="545" class="tile-grey" />
+    <use href="#hex" x="368.14" y="545" class="tile-grey" />
+    <use href="#hex" x="420.10" y="545" class="tile-grey" />
+    <use href="#hex" x="472.06" y="545" class="tile-grey" />
+    <use href="#hex" x="524.02" y="545" class="tile-grey" />
+    <use href="#hex" x="575.98" y="545" class="tile-grey" />
+    <use href="#hex" x="627.94" y="545" class="tile-grey" />
+    <use href="#hex" x="679.90" y="545" class="tile-grey" />
+    <use href="#hex" x="731.86" y="545" class="tile-grey" />
+    <use href="#hex" x="783.83" y="545" class="tile-grey" />
+    <use href="#hex" x="835.79" y="545" class="tile-grey" />
+    <use href="#hex" x="887.75" y="545" class="tile-grey" />
+    <use href="#hex" x="939.71" y="545" class="tile-grey" />
+    <use href="#hex" x="991.67" y="545" class="tile-grey" />
+
+    <!-- Ряд 11 (17 гексагонов) -->
+    <use href="#hex" x="134.31" y="590" class="tile-grey" />
+    <use href="#hex" x="186.27" y="590" class="tile-grey" />
+    <use href="#hex" x="238.23" y="590" class="tile-grey" />
+    <use href="#hex" x="290.19" y="590" class="tile-grey" />
+    <use href="#hex" x="342.15" y="590" class="tile-grey" />
+    <use href="#hex" x="394.12" y="590" class="tile-grey" />
+    <use href="#hex" x="446.08" y="590" class="tile-grey" />
+    <use href="#hex" x="498.04" y="590" class="tile-grey" />
+    <use href="#hex" x="550.00" y="590" class="tile-grey" />
+    <use href="#hex" x="601.96" y="590" class="tile-grey" />
+    <use href="#hex" x="653.92" y="590" class="tile-grey" />
+    <use href="#hex" x="705.88" y="590" class="tile-grey" />
+    <use href="#hex" x="757.85" y="590" class="tile-grey" />
+    <use href="#hex" x="809.81" y="590" class="tile-grey" />
+    <use href="#hex" x="861.77" y="590" class="tile-grey" />
+    <use href="#hex" x="913.73" y="590" class="tile-grey" />
+    <use href="#hex" x="965.69" y="590" class="tile-grey" />
+
+    <!-- Ряд 12 (16 гексагонов) -->
+    <use href="#hex" x="160.29" y="635" class="tile-grey" />
+    <use href="#hex" x="212.25" y="635" class="tile-grey" />
+    <use href="#hex" x="264.21" y="635" class="tile-grey" />
+    <use href="#hex" x="316.17" y="635" class="tile-grey" />
+    <use href="#hex" x="368.14" y="635" class="tile-grey" />
+    <use href="#hex" x="420.10" y="635" class="tile-grey" />
+    <use href="#hex" x="472.06" y="635" class="tile-grey" />
+    <use href="#hex" x="524.02" y="635" class="tile-grey" />
+    <use href="#hex" x="575.98" y="635" class="tile-grey" />
+    <use href="#hex" x="627.94" y="635" class="tile-grey" />
+    <use href="#hex" x="679.90" y="635" class="tile-grey" />
+    <use href="#hex" x="731.86" y="635" class="tile-grey" />
+    <use href="#hex" x="783.83" y="635" class="tile-grey" />
+    <use href="#hex" x="835.79" y="635" class="tile-grey" />
+    <use href="#hex" x="887.75" y="635" class="tile-grey" />
+    <use href="#hex" x="939.71" y="635" class="tile-grey" />
+
+    <!-- Ряд 13 (15 гексагонов) -->
+    <use href="#hex" x="186.27" y="680" class="tile-grey" />
+    <use href="#hex" x="238.23" y="680" class="tile-grey" />
+    <use href="#hex" x="290.19" y="680" class="tile-grey" />
+    <use href="#hex" x="342.15" y="680" class="tile-grey" />
+    <use href="#hex" x="394.12" y="680" class="tile-grey" />
+    <use href="#hex" x="446.08" y="680" class="tile-grey" />
+    <use href="#hex" x="498.04" y="680" class="tile-grey" />
+    <use href="#hex" x="550.00" y="680" class="tile-grey" />
+    <use href="#hex" x="601.96" y="680" class="tile-grey" />
+    <use href="#hex" x="653.92" y="680" class="tile-grey" />
+    <use href="#hex" x="705.88" y="680" class="tile-grey" />
+    <use href="#hex" x="757.85" y="680" class="tile-grey" />
+    <use href="#hex" x="809.81" y="680" class="tile-grey" />
+    <use href="#hex" x="861.77" y="680" class="tile-grey" />
+    <use href="#hex" x="913.73" y="680" class="tile-grey" />
+
+    <!-- Ряд 14 (14 гексагонов) -->
+    <use href="#hex" x="212.25" y="725" class="tile-grey" />
+    <use href="#hex" x="264.21" y="725" class="tile-grey" />
+    <use href="#hex" x="316.17" y="725" class="tile-grey" />
+    <use href="#hex" x="368.14" y="725" class="tile-grey" />
+    <use href="#hex" x="420.10" y="725" class="tile-grey" />
+    <use href="#hex" x="472.06" y="725" class="tile-grey" />
+    <use href="#hex" x="524.02" y="725" class="tile-grey" />
+    <use href="#hex" x="575.98" y="725" class="tile-grey" />
+    <use href="#hex" x="627.94" y="725" class="tile-grey" />
+    <use href="#hex" x="679.90" y="725" class="tile-grey" />
+    <use href="#hex" x="731.86" y="725" class="tile-grey" />
+    <use href="#hex" x="783.83" y="725" class="tile-grey" />
+    <use href="#hex" x="835.79" y="725" class="tile-grey" />
+    <use href="#hex" x="887.75" y="725" class="tile-grey" />
+
+    <!-- Ряд 15 (13 гексагонов) -->
+    <use href="#hex" x="238.23" y="770" class="tile-grey" />
+    <use href="#hex" x="290.19" y="770" class="tile-grey" />
+    <use href="#hex" x="342.15" y="770" class="tile-grey" />
+    <use href="#hex" x="394.12" y="770" class="tile-grey" />
+    <use href="#hex" x="446.08" y="770" class="tile-grey" />
+    <use href="#hex" x="498.04" y="770" class="tile-grey" />
+    <use href="#hex" x="550.00" y="770" class="tile-grey" />
+    <use href="#hex" x="601.96" y="770" class="tile-grey" />
+    <use href="#hex" x="653.92" y="770" class="tile-grey" />
+    <use href="#hex" x="705.88" y="770" class="tile-grey" />
+    <use href="#hex" x="757.85" y="770" class="tile-grey" />
+    <use href="#hex" x="809.81" y="770" class="tile-grey" />
+    <use href="#hex" x="861.77" y="770" class="tile-grey" />
+
+    <!-- Ряд 16 (12 гексагонов) -->
+    <use href="#hex" x="264.21" y="815" class="tile-grey" />
+    <use href="#hex" x="316.17" y="815" class="tile-grey" />
+    <use href="#hex" x="368.14" y="815" class="tile-grey" />
+    <use href="#hex" x="420.10" y="815" class="tile-grey" />
+    <use href="#hex" x="472.06" y="815" class="tile-grey" />
+    <use href="#hex" x="524.02" y="815" class="tile-blue-petal" />
+    <use href="#hex" x="575.98" y="815" class="tile-blue-petal" />
+    <use href="#hex" x="627.94" y="815" class="tile-grey" />
+    <use href="#hex" x="679.90" y="815" class="tile-grey" />
+    <use href="#hex" x="731.86" y="815" class="tile-grey" />
+    <use href="#hex" x="783.83" y="815" class="tile-grey" />
+    <use href="#hex" x="835.79" y="815" class="tile-grey" />
+
+    <!-- Ряд 17 (11 гексагонов) -->
+    <use href="#hex" x="290.19" y="860" class="tile-grey" />
+    <use href="#hex" x="342.15" y="860" class="tile-grey" />
+    <use href="#hex" x="394.12" y="860" class="tile-grey" />
+    <use href="#hex" x="446.08" y="860" class="tile-grey" />
+    <use href="#hex" x="498.04" y="860" class="tile-blue-petal" />
+    <use href="#hex" x="550.00" y="860" class="tile-blue-core" />
+    <use href="#hex" x="601.96" y="860" class="tile-blue-petal" />
+    <use href="#hex" x="653.92" y="860" class="tile-grey" />
+    <use href="#hex" x="705.88" y="860" class="tile-grey" />
+    <use href="#hex" x="757.85" y="860" class="tile-grey" />
+    <use href="#hex" x="809.81" y="860" class="tile-grey" />
+
+    <!-- Ряд 18 (10 гексагонов) -->
+    <use href="#hex" x="316.17" y="905" class="tile-grey" />
+    <use href="#hex" x="368.14" y="905" class="tile-grey" />
+    <use href="#hex" x="420.10" y="905" class="tile-grey" />
+    <use href="#hex" x="472.06" y="905" class="tile-grey" />
+    <use href="#hex" x="524.02" y="905" class="tile-blue-petal" />
+    <use href="#hex" x="575.98" y="905" class="tile-blue-petal" />
+    <use href="#hex" x="627.94" y="905" class="tile-grey" />
+    <use href="#hex" x="679.90" y="905" class="tile-grey" />
+    <use href="#hex" x="731.86" y="905" class="tile-grey" />
+    <use href="#hex" x="783.83" y="905" class="tile-grey" />
+  </g>
 </svg>

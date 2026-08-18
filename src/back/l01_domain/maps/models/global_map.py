@@ -1,12 +1,16 @@
 """
 Геометрия глобальной гексагональной карты: кубические координаты,
-расстояния, соседство, кольца, спирали и линейная интерполяция.
+расстояния, соседство, генерация 271-гексагонной сетки и зонирование.
 """
 
+from typing import Union
 from pydantic import BaseModel, Field, ConfigDict, model_validator
 
 from src.back.l01_domain.maps.constants import (
     ALLIED_LANDS_RING_RADIUS,
+    GLOBAL_MAP_ROW_LENGTHS,
+    GLOBAL_MAP_TOTAL_HEXES,
+    GLOBAL_MAP_TOTAL_ROWS,
     HEX_DIRECTION_VECTORS,
     HexDirection,
     TerritoryZoneType,
@@ -84,7 +88,6 @@ def hex_ring(center: HexCoordinates, radius: int) -> list[HexCoordinates]:
         return [center]
 
     results: list[HexCoordinates] = []
-    # Начинаем с западного направления, смещаясь на радиус
     west_vector = HEX_DIRECTION_VECTORS[HexDirection.WEST]
     current = HexCoordinates(
         q=center.q + west_vector[0] * radius,
@@ -114,7 +117,6 @@ def hex_spiral(center: HexCoordinates, max_radius: int) -> list[HexCoordinates]:
     """
     Возвращает список всех координат в пределах радиуса max_radius от центра (включая центр).
     """
-
     if max_radius < 0:
         raise ValueError(f"max_radius must be non-negative, got {max_radius}")
 
@@ -128,7 +130,6 @@ def _cube_round(frac_q: float, frac_r: float, frac_s: float) -> HexCoordinates:
     """
     Округление дробных кубических координат до ближайшего целочисленного гекса.
     """
-
     q = round(frac_q)
     r = round(frac_r)
     s = round(frac_s)
@@ -151,13 +152,11 @@ def hex_line(start: HexCoordinates, end: HexCoordinates) -> list[HexCoordinates]
     """
     Линейная интерполяция между двумя гексами (трассировка пути).
     """
-
     distance = hex_distance(start, end)
     if distance == 0:
         return [start]
 
     results: list[HexCoordinates] = []
-    # Добавляем небольшое смещение для детерминированного округления на ребрах
     nudge_q = 1e-6
     nudge_r = 1e-6
     nudge_s = -2e-6
@@ -176,16 +175,58 @@ def hex_line(start: HexCoordinates, end: HexCoordinates) -> list[HexCoordinates]
     return results
 
 
+# ==================================================================
+# ГЕНЕРАЦИЯ СТАНДАРТНОЙ КАРТЫ (271 гекс)
+# ==================================================================
+
+
+def get_standard_base_coordinates() -> tuple[HexCoordinates, HexCoordinates]:
+    """
+    Возвращает кубические координаты Северной (красной) и Южной (синей) цитаделей.
+    """
+    north_base = HexCoordinates.from_axial(4, -8)  # ряд 1 в SVG
+    south_base = HexCoordinates.from_axial(-4, 8)  # ряд 17 в SVG
+    return north_base, south_base
+
+
+def generate_standard_map_coordinates() -> list[HexCoordinates]:
+    """
+    Генерирует полный список из 271 кубической координаты для стандартной карты (19 рядов).
+    Математически и позиционно строго соответствует раскладке map.svg.
+    """
+    coordinates: list[HexCoordinates] = []
+    center_row = GLOBAL_MAP_TOTAL_ROWS // 2  # ряд 9 (экватор r = 0)
+
+    for row_idx, row_len in enumerate(GLOBAL_MAP_ROW_LENGTHS):
+        r = row_idx - center_row
+        half_len = (row_len - 1) / 2.0
+
+        for col_idx in range(row_len):
+            offset_from_center = col_idx - half_len
+            q = int(offset_from_center - r / 2.0)
+            coordinates.append(HexCoordinates.from_axial(q, r))
+
+    if len(coordinates) != GLOBAL_MAP_TOTAL_HEXES:
+        raise RuntimeError(
+            f"ошибка генерации карты: ожидался {GLOBAL_MAP_TOTAL_HEXES} гекс, получено {len(coordinates)}"
+        )
+
+    return coordinates
+
+
 def determine_zone_type(
-    coord: HexCoordinates, base_coord: HexCoordinates
+    coord: HexCoordinates,
+    base_coords: Union[HexCoordinates, list[HexCoordinates]],
 ) -> TerritoryZoneType:
     """
-    Определяет категорию территории относительно базы фракции.
+    Определяет категорию территории относительно одной или нескольких баз.
     """
-    
-    distance = hex_distance(coord, base_coord)
-    if distance == 0:
+    bases = [base_coords] if isinstance(base_coords, HexCoordinates) else base_coords
+
+    min_distance = min(hex_distance(coord, base) for base in bases)
+
+    if min_distance == 0:
         return TerritoryZoneType.BASE
-    if distance <= ALLIED_LANDS_RING_RADIUS:
+    if min_distance <= ALLIED_LANDS_RING_RADIUS:
         return TerritoryZoneType.ALLIED_LANDS
     return TerritoryZoneType.NEUTRAL_LANDS
