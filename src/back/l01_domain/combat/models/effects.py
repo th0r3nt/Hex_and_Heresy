@@ -5,7 +5,7 @@
 from typing import Optional
 from pydantic import BaseModel, Field, ConfigDict
 
-from src.back.l01_domain.army.models.card.veterancy import MechanicalModifier
+from src.back.l01_domain.common import MechanicalModifier
 from src.back.l01_domain.combat.constants import (
     TerrainType,
     CombatEffectCategory,

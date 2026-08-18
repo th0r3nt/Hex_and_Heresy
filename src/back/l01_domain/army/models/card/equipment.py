@@ -5,7 +5,7 @@
 from typing import Optional
 from pydantic import BaseModel, Field, ConfigDict
 
-from src.back.l01_domain.army.constants import EquipmentSlot
+from src.back.l01_domain.army.constants import EquipmentSlot, UnitSizeCategory
 
 
 class EquipmentStats(BaseModel):
@@ -33,6 +33,11 @@ class EquipmentStats(BaseModel):
     # Дополнительный расход выносливости на ход
     stamina_drain_per_turn: float = Field(
         default=0.0, ge=0, description="Доп. расход выносливости за ход"
+    )
+    # Доп. урон против больших целей
+    damage_bonus_vs_size: dict[UnitSizeCategory, float] = Field(
+        default_factory=dict,
+        description="Доп. доля урона против целей конкретного размера, напр. алебарда {LARGE: 0.3, HUGE: 0.3}",
     )
 
 

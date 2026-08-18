@@ -4,14 +4,7 @@
 
 from typing import Optional
 from pydantic import BaseModel, Field
-
-
-class MechanicalModifier(BaseModel):
-    """Математический бонус/штраф, полученный ветеранами за подвиг."""
-
-    stat_name: str = Field(..., description="Имя изменяемого стата (morale, armor, damage)")
-    value: float = Field(..., description="Значение (абсолютное или относительное)")
-    is_percentage: bool = Field(default=False, description="Процентный ли модификатор")
+from src.back.l01_domain.common import MechanicalModifier
 
 
 class VeterancyStatus(BaseModel):

@@ -11,7 +11,10 @@ from typing import Final
 
 
 class ResourceType(str, Enum):
-    """Три базовых ресурса, общих для всех фракций (economy.md)."""
+    """
+    Три базовых ресурса, общих для всех фракций. 
+    (см. economy.md)
+    """
 
     GOLD = "gold"
     MATERIAL = "material"
@@ -24,7 +27,10 @@ class ResourceType(str, Enum):
 
 
 class BuildingCategory(str, Enum):
-    """Функциональная категория здания (game_mechanics/building.md)."""
+    """
+    Функциональная категория здания. 
+    (см. game_mechanics/building.md)
+    """
 
     ECONOMIC = "economic"
     MILITARY = "military"
@@ -34,8 +40,7 @@ class BuildingCategory(str, Enum):
 
 class TerritoryZoneType(str, Enum):
     """
-    Тип зоны, где вообще разрешена застройка (building.md:
-    "Игрок может строить здания исключительно на базе и в союзных землях").
+    Тип зоны, где вообще разрешена застройка.
     """
 
     BASE = "base"
@@ -48,6 +53,7 @@ class TerritoryZoneType(str, Enum):
 # ==================================================================
 
 MIN_HQ_LEVEL: Final[int] = 0
+MAX_HQ_LEVEL: Final[int] = 6
 
 HQ_BASE_BUILDING_SLOTS: Final[int] = 4
 HQ_BUILDING_SLOTS_PER_LEVEL: Final[int] = 1

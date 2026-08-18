@@ -3,18 +3,14 @@
 слотами артефактов и механикой травм (см. game_mechanics/heroic cards.md).
 """
 
-from typing import Final, Optional
+from typing import Optional
 from uuid import uuid4
 
 from pydantic import BaseModel, Field, ConfigDict
 
-from src.back.l01_domain.army.models.card.equipment import Equipment
-from src.back.l01_domain.army.models.card.veterancy import MechanicalModifier
-
-# TODO: перенести в army/constants.py вместе с MAX_SQUAD_UNITS и т.д.,
-# как только заведём второй файл, которому эта константа тоже понадобится
-MAX_HERO_LEVEL: Final[int] = 20
-
+from src.back.l01_domain.army.models.characters.artifacts import HeroArtifact
+from src.back.l01_domain.common import MechanicalModifier
+from src.back.l01_domain.army.constants import MAX_HERO_LEVEL
 
 class HeroArchetype(BaseModel):
     """
@@ -61,7 +57,7 @@ class Scar(BaseModel):
 
     name: str = Field(..., min_length=1)
     description: str = Field(...)
-    modifier: MechanicalModifier = Field(...) # TODO: Возможно, подобные общие модификаторы стоит вынести за veterancy.py
+    modifier: MechanicalModifier = Field(...)
 
 
 class HeroState(BaseModel):
@@ -94,11 +90,10 @@ class Hero(BaseModel):
     archetype: HeroArchetype = Field(...)
     max_hp: float = Field(..., gt=0)
 
-    # 3 слота артефактов - переиспользуем модель экипировки из card/equipment.py
-    # TODO: Возможно, стоит вынести отдельно
-    weapon: Optional[Equipment] = Field(default=None)
-    armor: Optional[Equipment] = Field(default=None)
-    accessory: Optional[Equipment] = Field(default=None)
+    # 3 слота артефактов
+    weapon: Optional[HeroArtifact] = Field(default=None)
+    armor: Optional[HeroArtifact] = Field(default=None)
+    accessory: Optional[HeroArtifact] = Field(default=None)
 
     chosen_perks: list[Perk] = Field(
         default_factory=list,

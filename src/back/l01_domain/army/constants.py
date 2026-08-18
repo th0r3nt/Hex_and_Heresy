@@ -18,6 +18,9 @@ MAX_STAMINA: Final[float] = 100.0
 MIN_STAMINA: Final[float] = 0.0
 EXHAUSTION_THRESHOLD_STAMINA: Final[float] = 15.0
 
+# Лимиты героя
+MAX_HERO_LEVEL: Final[int] = 20
+
 
 class DamageType(str, Enum):
     """Тип наносимого урона."""
@@ -36,3 +39,16 @@ class EquipmentSlot(str, Enum):
     WEAPON = "weapon"
     ARMOR = "armor"
     ACCESSORY = "accessory"
+
+
+class UnitSizeCategory(str, Enum):
+    """
+    Габарит юнита. Влияет на бонус урона оружия против цели такого размера
+    (см. equipment.py, damage_bonus_vs_size) и на вклад в "кучу трупов"
+    (см. combat/constants.py, UNIT_SIZE_CORPSE_WEIGHT).
+    """
+
+    SMALL = "small"  # гоблины, крысы
+    MEDIUM = "medium"  # люди, орки, эльфы
+    LARGE = "large"  # кавалерия, крупные звери
+    HUGE = "huge"  # огры, драконы, монстры

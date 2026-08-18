@@ -1,11 +1,12 @@
 """
 Faction - корневой агрегат одной политической стороны в партии.
 
-Раса (race_id - каталог юнитов/зданий/лора) и фракция - разные вещи.
-Внутри одной расы может быть несколько независимых Faction: например, у Баронских
-войск сразу четыре соперничающих правителя (Медные Врата, Чёрные Топи,
-Ржавая Корона, Кровавый Гребень), каждый со своим Lord, территорией и
-дипломатией, но общим каталогом юнитов/зданий расы.
+Раса (каталог юнитов/зданий/лора) и фракция - разные вещи.
+Внутри одной расы может быть несколько независимых Faction: 
+например, у Баронских войск сразу четыре соперничающих правителя 
+(Медные Врата, Чёрные Топи, Ржавая Корона, Кровавый Гребень), 
+каждый со своим Lord, территорией и дипломатией, 
+но общим каталогом юнитов/зданий расы.
 """
 
 from uuid import uuid4
@@ -29,7 +30,7 @@ class Faction(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid4()))
     race_id: str = Field(
         ...,
-        description="'humans' | 'greenskins' | 'elfs' | 'baronial_troops' | 'robbers' | 'mercenaries'",
+        description="'humans' | 'greenskins' | 'elfs' | 'baronial_troops' | 'congregation_of_the_meteorite' | 'mercenaries'",
     )
     name: str = Field(
         ..., min_length=1, description="Имя конкретной фракции в партии, не расы"
@@ -47,23 +48,32 @@ class Faction(BaseModel):
         default_factory=list, description="ID гексов союзных земель под контролем"
     )
 
+    # =======================================================================
+    # ДЕЙСТВИЯ ФРАКЦИИ
+    # =======================================================================
+
+    # "Можно ли позволить"
     def can_afford(self, resource: ResourceType, amount: float) -> bool:
         return self.resources.get(resource, 0.0) >= amount
 
+    # "Потратить" (на здания, юнитов и т.п.)
     def spend(self, resource: ResourceType, amount: float) -> None:
         if not self.can_afford(resource, amount):
             raise ValueError(f"not enough {resource.value}")
         self.resources[resource] -= amount
 
+    # "Получить" (напр. из экономических зданий)
     def earn(self, resource: ResourceType, amount: float) -> None:
         if amount < 0:
             raise ValueError("earned amount must be non-negative")
         self.resources[resource] = self.resources.get(resource, 0.0) + amount
 
+    # "Получить зону" (напр. при колонизации союзных земель)
     def gain_zone(self, zone_id: str) -> None:
         if zone_id not in self.controlled_zone_ids:
             self.controlled_zone_ids.append(zone_id)
 
+    # "Потерять зону" (напр. при захвате союзных земель)
     def lose_zone(self, zone_id: str) -> None:
         if zone_id in self.controlled_zone_ids:
             self.controlled_zone_ids.remove(zone_id)

@@ -8,7 +8,7 @@ from uuid import uuid4
 
 from pydantic import BaseModel, Field, ConfigDict
 
-from src.back.l01_domain.army.models.card.veterancy import MechanicalModifier
+from src.back.l01_domain.common import MechanicalModifier
 
 
 class CommanderGenerationType(str, Enum):

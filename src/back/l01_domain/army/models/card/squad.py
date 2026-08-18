@@ -12,6 +12,7 @@ from src.back.l01_domain.army.constants import (
     MAX_STAMINA,
     MIN_STAMINA,
     PANIC_THRESHOLD_MORALE,
+    UnitSizeCategory,
 )
 from src.back.l01_domain.army.models.card.unit import UnitArchetype
 from src.back.l01_domain.army.models.card.equipment import Equipment
@@ -19,7 +20,9 @@ from src.back.l01_domain.army.models.card.veterancy import VeterancyStatus
 
 
 class SquadState(BaseModel):
-    """Динамическое состояние отряда в текущем бою или на ходу."""
+    """
+    Динамическое состояние отряда в текущем бою или на ходу.
+    """
 
     unit_count: int = Field(..., ge=0)
     hp_first_unit: float = Field(
@@ -44,7 +47,7 @@ class Squad(BaseModel):
     archetype: UnitArchetype = Field(..., description="Базовый расовый юнит")
 
     # Модульное снаряжение
-    weapon: Optional[Equipment] = Field(default=None)  # TODO Импортировать из equipment?
+    weapon: Optional[Equipment] = Field(default=None)
     armor: Optional[Equipment] = Field(default=None)
     accessory: Optional[Equipment] = Field(default=None)
 
@@ -69,6 +72,7 @@ class Squad(BaseModel):
         unit_count = custom_unit_count or archetype.default_unit_count
         initial_state = SquadState(
             unit_count=unit_count,
+            hp_first_unit=archetype.base_stats.max_hp,
             morale=archetype.base_stats.base_morale,
             stamina=archetype.base_stats.base_stamina,
         )
@@ -121,6 +125,28 @@ class Squad(BaseModel):
         return dmg
 
     @property
+    def total_effective_speed(self) -> float:
+        """
+        Итоговая скорость перемещения одного бойца с учётом снаряжения.
+        """
+
+        modifier_sum = 0.0
+        if self.weapon:
+            modifier_sum += self.weapon.stats.speed_modifier
+        if self.armor:
+            modifier_sum += self.armor.stats.speed_modifier
+        if self.accessory:
+            modifier_sum += self.accessory.stats.speed_modifier
+        return max(0.0, self.archetype.base_stats.base_speed * (1.0 + modifier_sum))
+
+    @property
+    def size_category(self) -> UnitSizeCategory:
+        """
+        Габарит бойцов этого отряда.
+        """
+        return self.archetype.base_stats.size_category
+
+    @property
     def upkeep_gold(self) -> float:
         """
         Итоговое содержание золотом за такт для ВСЕГО отряда.
@@ -138,8 +164,21 @@ class Squad(BaseModel):
         return self.archetype.base_upkeep_food * self.state.unit_count
 
     # ==================================================================
-    # ДОМЕННЫЕ МЕТОДЫ ИЗМЕНЕНИЯ СОСТОЯНИЯ
+    # ДОМЕННЫЕ МЕТОДЫ
     # ==================================================================
+
+    def total_attack_damage_vs(self, target_size: UnitSizeCategory) -> float:
+        """
+        Итоговый урон одной атаки по цели конкретного размера с учётом
+        бонусов оружия/аксессуара против крупных или мелких целей.
+        """
+
+        bonus = 0.0
+        if self.weapon:
+            bonus += self.weapon.stats.damage_bonus_vs_size.get(target_size, 0.0)
+        if self.accessory:
+            bonus += self.accessory.stats.damage_bonus_vs_size.get(target_size, 0.0)
+        return self.total_attack_damage * (1.0 + bonus)
 
     def take_damage(self, raw_damage: float, armor_piercing: float = 0.0) -> int:
         """

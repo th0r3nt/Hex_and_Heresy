@@ -8,12 +8,13 @@ from typing import Optional
 from uuid import uuid4
 from pydantic import BaseModel, Field, ConfigDict
 
-from src.back.l01_domain.army.models.card.veterancy import MechanicalModifier # TODO: перенести в отдельный файл
+from src.back.l01_domain.common import MechanicalModifier
 from src.back.l01_domain.factions.constants import (
     ResourceType,
     BuildingCategory,
     TerritoryZoneType,
     MIN_HQ_LEVEL,
+    MAX_HQ_LEVEL,
     HQ_BASE_BUILDING_SLOTS,
     HQ_BUILDING_SLOTS_PER_LEVEL,
     MIN_TOWNHALL_LEVEL,
@@ -28,8 +29,9 @@ from src.back.l01_domain.factions.constants import (
 
 class BuildingUpgrade(BaseModel):
     """
-    Улучшение здания. Не занимает отдельный слот - пристраивается к
-    уже построенному зданию (см. building.md).
+    Улучшение здания. Не занимает отдельный слот
+    - пристраивается к уже построенному зданию.
+    (см. building.md).
     """
 
     model_config = ConfigDict(frozen=True)
@@ -41,12 +43,9 @@ class BuildingUpgrade(BaseModel):
     cost_gold: float = Field(default=0.0, ge=0)
     cost_material: float = Field(default=0.0, ge=0)
 
-    modifiers: list[MechanicalModifier] = Field(default_factory=list)
-
-    # Сложные условные механики 
-    # ("Кипящее масло", "Долговая тюрьма" и т.п.) 
-    # не сводятся к простому modifiers
-    special_rules: Optional[str] = Field(default=None)
+    modifiers: list[MechanicalModifier] = Field(
+        default_factory=list
+    )
 
 
 class Building(BaseModel):
@@ -59,6 +58,7 @@ class Building(BaseModel):
 
     id: str = Field(..., min_length=1, description="напр. baronial_building_oppressed_village")
     faction_id: str = Field(..., description="К какой расе/гейм-каталогу принадлежит")
+
     name: str = Field(..., min_length=1)
     lore_description: str = Field(default="")
 
@@ -67,10 +67,12 @@ class Building(BaseModel):
 
     cost_gold: float = Field(default=0.0, ge=0)
     cost_material: float = Field(default=0.0, ge=0)
-    construction_ticks: int = Field(default=1, ge=1) # Время постройки
+
+    construction_ticks: int = Field(default=1, ge=1)  # Время постройки
 
     requires_workers: bool = Field(
-        default=False, description="Нужны ли назначенные рабочие для производства (см. economy.md)"
+        default=False,
+        description="Нужны ли назначенные рабочие для производства (см. economy.md)",
     )
     resource_output_per_worker: dict[ResourceType, float] = Field(default_factory=dict)
 
@@ -82,7 +84,7 @@ class Building(BaseModel):
     )
     unlock_tier: Optional[int] = Field(
         default=None, ge=MIN_BUILDING_UNLOCK_TIER, le=MAX_BUILDING_UNLOCK_TIER
-    )
+    )  # На каком тире будет доступна постройка
 
     available_upgrades: list[BuildingUpgrade] = Field(default_factory=list)
     special_rules: Optional[str] = Field(default=None)
@@ -98,12 +100,7 @@ class Headquarters(BaseModel):
     name: str = Field(
         ..., description="Расово-специфичное название — 'Цитадель', 'Шатёр вождя' и т.д."
     )
-    level: int = Field(default=1, ge=MIN_HQ_LEVEL)
-    max_level: int = Field(
-        ...,
-        ge=MIN_HQ_LEVEL,
-        description="Индивидуален для фракции: у большинства 6",
-    )
+    level: int = Field(default=1, ge=MIN_HQ_LEVEL, le=MAX_HQ_LEVEL)
 
     @property
     def building_slots(self) -> int:

@@ -1,0 +1,102 @@
+"""
+Тесты для src/back/l01_domain/army/models/card/equipment.py
+"""
+
+import pytest
+from pydantic import ValidationError
+
+from src.back.l01_domain.army.constants import EquipmentSlot
+from src.back.l01_domain.army.models.card.equipment import Equipment, EquipmentStats
+
+
+class TestEquipmentStats:
+    def test_defaults_are_zero_or_neutral(self):
+        stats = EquipmentStats()
+
+        assert stats.damage == 0.0
+        assert stats.armor_piercing == 0.0
+        assert stats.armor_bonus == 0.0
+        assert stats.range_hexes == 1
+        assert stats.speed_modifier == 0.0
+        assert stats.initiative_modifier == 0
+        assert stats.stamina_drain_per_turn == 0.0
+
+    @pytest.mark.parametrize(
+        "field_name",
+        ["damage", "armor_piercing", "armor_bonus", "stamina_drain_per_turn"],
+    )
+    def test_negative_values_are_rejected(self, field_name):
+        with pytest.raises(ValidationError):
+            EquipmentStats(**{field_name: -1.0})
+
+    def test_range_hexes_must_be_at_least_one(self):
+        with pytest.raises(ValidationError):
+            EquipmentStats(range_hexes=0)
+
+    def test_speed_and_initiative_modifiers_can_be_negative(self):
+        # В отличие от damage/armor, штрафы (тяжёлая броня, неудобное оружие)
+        # должны уметь уходить в минус.
+        stats = EquipmentStats(speed_modifier=-0.2, initiative_modifier=-1)
+
+        assert stats.speed_modifier == -0.2
+        assert stats.initiative_modifier == -1
+
+    def test_is_frozen(self):
+        stats = EquipmentStats(damage=5.0)
+
+        with pytest.raises(ValidationError):
+            stats.damage = 10.0
+
+
+class TestEquipment:
+    def _make(self, **overrides) -> Equipment:
+        payload = dict(
+            id="weapon_test_halberd",
+            name="Тестовая алебарда",
+            lore="Простое оружие для проверки модели.",
+            slot=EquipmentSlot.WEAPON,
+            tier=2,
+        )
+        payload.update(overrides)
+        return Equipment(**payload)
+
+    def test_minimal_construction_uses_default_stats(self):
+        item = self._make()
+
+        assert item.stats == EquipmentStats()
+        assert item.cost_gold == 0.0
+        assert item.cost_material == 0.0
+        assert item.is_custom is False
+        assert item.special_rules is None
+
+    @pytest.mark.parametrize("field_name", ["id", "name", "lore"])
+    def test_empty_strings_are_rejected(self, field_name):
+        with pytest.raises(ValidationError):
+            self._make(**{field_name: ""})
+
+    @pytest.mark.parametrize("tier", [-1, 7])
+    def test_tier_out_of_bounds_is_rejected(self, tier):
+        with pytest.raises(ValidationError):
+            self._make(tier=tier)
+
+    @pytest.mark.parametrize("tier", [0, 6])
+    def test_tier_boundaries_are_accepted(self, tier):
+        item = self._make(tier=tier)
+        assert item.tier == tier
+
+    def test_custom_equipment_carries_special_rules(self):
+        # Кейс из gunsmith.md: LLM-оружейник генерирует чертёж с текстовым
+        # описанием уникальной механики.
+        item = self._make(
+            is_custom=True,
+            special_rules="Развертывание: наносит 50 ед. урона первому вошедшему отряду.",
+        )
+
+        assert item.is_custom is True
+        assert "50 ед." in item.special_rules
+
+    def test_is_frozen(self):
+        item = self._make()
+
+        with pytest.raises(ValidationError):
+            item.cost_gold = 999.0

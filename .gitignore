@@ -1,6 +1,7 @@
 custom.json
 
 .env
+__pycache__
 
 _docs
 copy_code.py

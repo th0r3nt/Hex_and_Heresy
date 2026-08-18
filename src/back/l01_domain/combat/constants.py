@@ -7,11 +7,13 @@
 from enum import Enum
 from typing import Final
 
+from src.back.l01_domain.army.constants import UnitSizeCategory
+
 # ==================================================================
 # ГЕОМЕТРИЯ И ВРЕМЯ
 # ==================================================================
 
-CELL_SIZE_METERS: Final[float] = 25.0 # 25 * 25
+CELL_SIZE_METERS: Final[float] = 25.0  # 25 * 25
 TURN_DURATION_SECONDS: Final[int] = 30
 
 
@@ -23,18 +25,26 @@ class BattleMapSize(str, Enum):
     LARGE = "large"
 
 
-# черновые значения, требуют утверждения гейм-дизайном
+# Черновые значения, требуют утверждения гейм-дизайном
 BATTLE_MAP_DIMENSIONS: Final[dict[BattleMapSize, tuple[int, int]]] = {
-    BattleMapSize.SMALL: (11, 11),
-    BattleMapSize.MEDIUM: (13, 13),
-    BattleMapSize.LARGE: (15, 15),
+    BattleMapSize.SMALL: (14, 14),
+    BattleMapSize.MEDIUM: (17, 17),
+    BattleMapSize.LARGE: (20, 20),
 }
 
 # Зона развертки войск перед началом боя
-DEPLOYMENT_ZONE_DEPTH_CELLS: Final[int] = 10 # TODO: должно занимать полную ширину карты, несмотря на размер, и иметь длину, зависящую от размера 
+# Ширина зоны (перпендикулярно направлению атаки)
+# всегда равна полной ширине карты.
+# Здесь фиксируется только глубина (в клетках от края карты),
+# которая растёт вместе с размером карты
+# Черновые значения, требуют утверждения гейм-дизайном
+DEPLOYMENT_ZONE_DEPTH_CELLS: Final[dict[BattleMapSize, int]] = {
+    BattleMapSize.SMALL: 3,
+    BattleMapSize.MEDIUM: 4,
+    BattleMapSize.LARGE: 5,
+}
 
 NIGHT_VISION_RANGE_CELLS: Final[int] = 3
-
 
 # ==================================================================
 # ДАЛЬНОСТЬ АТАК (в клетках)
@@ -55,8 +65,8 @@ SIEGE_RANGE_CELLS_MAX: Final[int] = 20
 # ==================================================================
 
 # Базовые значения скорости передвижения умножаются на следующие значения в зависимости от выбранной скорости
-SPEED_DEFENSE_PACE: Final[float] = 0.0 # Оборона на месте
-SPEED_TACTICAL_PACE: Final[float] = 0.5 # Тактический шаг, сохраняющий доп. оборону на 0.5
+SPEED_DEFENSE_PACE: Final[float] = 0.0  # Оборона на месте
+SPEED_TACTICAL_PACE: Final[float] = 0.5  # Тактический шаг, сохраняющий доп. оборону на 0.5
 SPEED_SLOW_PACE: Final[float] = 0.75  # Замедленный шаг, сохраняющий доп. оборону на 0.25
 SPEED_MARCH_PACE: Final[float] = 1.0
 SPEED_CHARGE_PACE: Final[float] = 2.0
@@ -68,10 +78,39 @@ CHARGE_DAMAGE_BONUS: Final[float] = 1.5
 # МОРАЛЬ И ПОСЛЕДСТВИЯ БОЯ
 # ==================================================================
 
-CHAIN_PANIC_RADIUS_CELLS: Final[int] = 1 # Если отряд пал духом на поле боя - он деморализирует соседние отряды в радиусе 1 клетки
-CORPSE_PILE_UNIT_THRESHOLD: Final[int] = 150 # Если на одной клетке падет больше 150 юнитов - клетка превратится в местность "куча трупов"
-# TODO: ввести критерий размера юнита, влияющий на бонус дальней атаки и атаки древковым оружием, а также на заполненность кучи трупов на клетке
+CHAIN_PANIC_RADIUS_CELLS: Final[int] = (
+    1  # Если отряд пал духом на поле боя - он деморализирует соседние отряды в радиусе 1 клетки
+)
+CORPSE_PILE_UNIT_THRESHOLD: Final[int] = (
+    150  # Если на одной клетке падет больше 150 юнитов - клетка превратится в местность "куча трупов"
+)
 
+# Вес одного погибшего бойца для расчёта заполненности кучи трупов
+# Например, огр занимает место как несколько десятков людей
+# Черновые значения, требуют утверждения гейм-дизайном
+UNIT_SIZE_CORPSE_WEIGHT: Final[dict[UnitSizeCategory, float]] = {
+    UnitSizeCategory.SMALL: 0.5,
+    UnitSizeCategory.MEDIUM: 1.0,
+    UnitSizeCategory.LARGE: 5.0,
+    UnitSizeCategory.HUGE: 20.0,
+}
+# ==================================================================
+# НАТИСК И РЕАКЦИИ
+# ==================================================================
+
+# Черновые значения, требуют утверждения гейм-дизайном
+MORALE_THRESHOLD_ACCEPT_CHARGE: Final[float] = (
+    350.0  # мин. мораль, чтобы удержать строй и "принять удар"
+)
+ACCEPT_CHARGE_DEFENDER_DAMAGE_RATIO: Final[float] = (
+    0.4  # доля урона натиска, которую защитник всё равно получает при успешном приёме
+)
+FLEE_CATCH_DAMAGE_MULTIPLIER: Final[float] = 1.7  # урон при поимке бегущего отряда
+DOWNHILL_CHARGE_DAMAGE_MULTIPLIER: Final[float] = 1.3  # бонус натиска с холма
+UPHILL_CHARGE_DAMAGE_PENALTY: Final[float] = 0.7  # штраф натиска снизу вверх
+CHAIN_PANIC_MORALE_SHOCK: Final[float] = (
+    10.0  # удар по морали соседей/при несостоявшемся приёме удара
+)
 
 # ==================================================================
 # КЛАССИФИКАЦИИ (простые Enum без собственных данных)
@@ -80,7 +119,7 @@ CORPSE_PILE_UNIT_THRESHOLD: Final[int] = 150 # Если на одной клет
 
 class SurfaceIncline(str, Enum):
     """
-    Наклон поверхности клетки - влияет на бонус натиска 
+    Наклон поверхности клетки - влияет на бонус натиска
     и стоимость выносливости при передвижении.
     """
 
@@ -91,7 +130,7 @@ class SurfaceIncline(str, Enum):
 
 class TerrainType(str, Enum):
     """
-    Тип местности клетки. 
+    Тип местности клетки.
     Расширяется под лор конкретных гексов.
     """
 
@@ -148,18 +187,21 @@ class ReactionType(str, Enum):
 
 class WeatherCondition(str, Enum):
     """
-    Погодные условия боя.
+    Погодные условия боя. Конкретные игровые эффекты каждого условия -
+    см. combat/weather.py, get_weather_combat_effects().
     """
 
-    CLEAR = "clear"
-    HEAVY_RAIN = "heavy_rain"
-    SNOWFALL = "snowfall"
-    CLOUDY = "cloudy"
-    # TODO: добавить больше и описать механику действия
+    CLEAR = "clear"  # без штрафов
+    HEAVY_RAIN = "heavy_rain"  # луки намокают, аркебузы чаще дают осечку
+    SNOWFALL = "snowfall"  # снижена скорость и видимость
+    CLOUDY = "cloudy"  # незначительное снижение видимости
+    ASH_STORM = "ash_storm"  # пепел стратосферы прибивает к земле; видимость как ночью, отряды без масок задыхаются (быстрее теряют выносливость)
+    TOXIC_MIST = "toxic_mist"  # испарения Ничьей земли; урон по тактам, снижена видимость
+    MAGNETIC_STORM = "magnetic_storm"  # магия отключена на весь бой; люди воодушевлены, эльфы дезориентированы
 
 
 class TimeOfDay(str, Enum):
-    """Время суток по лору мира. 
+    """Время суток по лору мира.
     (см. lore/timekeeping_system.md)"""
 
     GREY_HOURS = "grey_hours"

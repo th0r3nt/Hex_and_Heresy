@@ -3,7 +3,7 @@
 """
 
 from pydantic import BaseModel, Field, ConfigDict
-
+from src.back.l01_domain.army.constants import UnitSizeCategory
 
 class BaseUnitStats(BaseModel):
     """Базовые физические и ментальные параметры одного бойца без экипировки."""
@@ -23,6 +23,10 @@ class BaseUnitStats(BaseModel):
     base_stamina: float = Field(default=100.0, ge=0, le=100, description="Запас сил")
     base_initiative: int = Field(default=10, description="Инициатива в очереди ходов")
 
+    size_category: UnitSizeCategory = Field(
+        default=UnitSizeCategory.MEDIUM, description="Габарит бойца - влияет на урон по нему и на кучи трупов"
+    )
+
 
 class UnitArchetype(BaseModel):
     """Шаблон юнита из gamedata (например: 'Городская стража')."""
@@ -37,6 +41,7 @@ class UnitArchetype(BaseModel):
         ..., gt=0, description="Стандартное количество бойцов в отряде"
     )
 
+    base_stats: BaseUnitStats = Field(..., description="Базовые статы одного бойца архетипа")
 
     # Требования к содержанию за 1 бойца в такт
     base_upkeep_food: float = Field(default=1.0, ge=0)
