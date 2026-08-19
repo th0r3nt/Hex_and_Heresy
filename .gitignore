@@ -1,6 +1,7 @@
 custom.json
 
 .env
+assets/
 __pycache__
 
 _docs

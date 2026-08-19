@@ -346,7 +346,7 @@ class TestTimekeepingExceptions:
         error = TimeRewindForbiddenError(ticks=-10)
         assert error.ticks == -10
         assert "-10" in str(error)
-        assert "нельзя перематывать" in str(error)
+        assert "Нельзя перематывать" in str(error)
 
 
 class TestWorldStateExceptions:

@@ -16,6 +16,8 @@ from src.back.l01_domain.army.models.characters.commanders import (
     CommanderTrait,
 )
 
+from src.back.l01_domain.exceptions import NegativeExperienceError
+
 
 @pytest.fixture
 def strategist_archetype() -> CommanderArchetype:
@@ -146,7 +148,7 @@ class TestCommander:
         assert procedural_commander.state.experience == 75
 
     def test_gain_experience_rejects_negative_amount(self, procedural_commander):
-        with pytest.raises(ValueError):
+        with pytest.raises(NegativeExperienceError):
             procedural_commander.gain_experience(-10)
 
     def test_assign_and_unassign_army(self, procedural_commander):

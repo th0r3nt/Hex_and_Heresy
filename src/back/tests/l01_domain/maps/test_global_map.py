@@ -23,6 +23,11 @@ from src.back.l01_domain.maps.models.global_map import (
     hex_ring,
 )
 
+from src.back.l01_domain.exceptions import (
+    InvalidCubeCoordinatesError,
+    InvalidRadiusError,
+)
+
 
 class TestHexCoordinates:
     def test_valid_cube_coordinates(self):
@@ -32,7 +37,7 @@ class TestHexCoordinates:
         assert coord.s == 1
 
     def test_invalid_cube_coordinates_raise_error(self):
-        with pytest.raises(ValidationError):
+        with pytest.raises(InvalidCubeCoordinatesError):
             HexCoordinates(q=1, r=1, s=1)
 
     def test_from_axial_factory(self):
@@ -102,7 +107,7 @@ class TestHexMath:
 
     def test_hex_ring_negative_radius_raises(self):
         origin = HexCoordinates.from_axial(0, 0)
-        with pytest.raises(ValueError):
+        with pytest.raises(InvalidRadiusError):
             hex_ring(origin, -1)
 
     def test_hex_line_single_cell(self):

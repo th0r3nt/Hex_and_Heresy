@@ -8,6 +8,7 @@ from src.back.l01_domain.combat.constants import TimeOfDay
 from src.back.l01_domain.world.constants import DAYS_PER_CYCLE, GREY_HOURS_COUNT, HOURS_PER_DAY
 from src.back.l01_domain.world.models.timekeeping import GameTime
 
+from src.back.l01_domain.exceptions import TimeRewindForbiddenError
 
 class TestGameTime:
     def test_initial_state_defaults(self):
@@ -63,7 +64,7 @@ class TestGameTime:
 
     def test_negative_ticks_raise_error(self):
         time = GameTime()
-        with pytest.raises(ValueError):
+        with pytest.raises(TimeRewindForbiddenError):
             time.advance_ticks(-1)
 
     def test_format_timestamp_output(self):

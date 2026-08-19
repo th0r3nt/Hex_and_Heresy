@@ -16,6 +16,8 @@ from src.back.l01_domain.army.models.characters.heroes import (
     Scar,
 )
 
+from src.back.l01_domain.exceptions import HeroLevelTooLowError
+
 
 @pytest.fixture
 def unkillable_archetype() -> HeroArchetype:
@@ -210,5 +212,5 @@ class TestHero:
         )
         hero.state.level = 1  # перк требует 5-й уровень
 
-        with pytest.raises(ValueError):
+        with pytest.raises(HeroLevelTooLowError):
             hero.learn_perk(resilience_perk)
