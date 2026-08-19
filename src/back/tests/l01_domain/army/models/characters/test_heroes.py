@@ -109,7 +109,7 @@ class TestHero:
     def test_active_modifiers_combine_perks_and_scars(
         self, unkillable_archetype, resilience_perk, limp_scar
     ):
-        # У архетипа нет trigger_modifier — он не должен ничего добавлять.
+        # У архетипа нет trigger_modifier - он не должен ничего добавлять.
         hero = Hero.create_new(
             name="Гром", faction_id="greenskins", archetype=unkillable_archetype, max_hp=300.0
         )
@@ -150,7 +150,7 @@ class TestHero:
         is_dead = hero.take_damage(raw_damage=5.0)
 
         # В отличие от Squad.take_damage, у героя нет гарантированного
-        # минимального урона в 1 единицу — броня может погасить удар целиком.
+        # минимального урона в 1 единицу - броня может погасить удар целиком.
         assert is_dead is False
         assert hero.state.current_hp == 300.0
 

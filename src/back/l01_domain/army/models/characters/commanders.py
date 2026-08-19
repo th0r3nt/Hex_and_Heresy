@@ -106,7 +106,7 @@ class CommanderCharacteristics(BaseModel):
         default=10,
         ge=0,
         le=100,
-        description="Тактическое чутьё - инициатива, качество советов игроку",
+        description="Тактическое чутьё - инициатива отрядов, качество советов игроку",
     )
     resilience: int = Field(
         default=10,

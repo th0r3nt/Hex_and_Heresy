@@ -1,5 +1,5 @@
 """
-Артефакты героев — экипировка геройских карточек (3 слота: оружие,
+Артефакты героев - экипировка геройских карточек (3 слота: оружие,
 броня, аксессуар). В отличие от Equipment, которая массово экипирует
 обычные отряды из общего арсенала фракции, артефакт героя обычно
 уникален и не тиражируется.
@@ -17,7 +17,9 @@ class HeroArtifact(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    id: str = Field(..., min_length=1, description="Уникальный ID (напр. artifact_grom_cannonball)")
+    id: str = Field(
+        ..., min_length=1, description="Уникальный ID (напр. artifact_grom_cannonball)"
+    )
     name: str = Field(..., min_length=1)
     lore: str = Field(..., min_length=1)
 
@@ -30,7 +32,9 @@ class HeroArtifact(BaseModel):
         default=True, description="Найден в мире/уникален, не идёт в общий арсенал фракции"
     )
     cost_gold: float = Field(
-        default=0.0, ge=0, description="Заполняется, если артефакт всё же можно заказать у оружейника"
+        default=0.0,
+        ge=0,
+        description="Заполняется, если артефакт всё же можно заказать у оружейника",
     )
     cost_material: float = Field(default=0.0, ge=0)
 

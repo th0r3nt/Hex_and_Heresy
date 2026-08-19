@@ -28,6 +28,7 @@ from src.back.l01_domain.factions.constants import (
 
 from src.back.l01_domain.exceptions import BuildingMaxLevelReachedError
 
+
 class BuildingUpgrade(BaseModel):
     """
     Улучшение здания. Не занимает отдельный слот
@@ -44,9 +45,7 @@ class BuildingUpgrade(BaseModel):
     cost_gold: float = Field(default=0.0, ge=0)
     cost_material: float = Field(default=0.0, ge=0)
 
-    modifiers: list[MechanicalModifier] = Field(
-        default_factory=list
-    )
+    modifiers: list[MechanicalModifier] = Field(default_factory=list)
 
 
 class Building(BaseModel):
@@ -99,7 +98,7 @@ class Headquarters(BaseModel):
 
     faction_id: str = Field(...)
     name: str = Field(
-        ..., description="Расово-специфичное название — 'Цитадель', 'Шатёр вождя' и т.д."
+        ..., description="Расово-специфичное название - 'Цитадель', 'Шатёр вождя' и т.д."
     )
     level: int = Field(default=1, ge=MIN_HQ_LEVEL, le=MAX_HQ_LEVEL)
 

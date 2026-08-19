@@ -10,6 +10,7 @@ from src.back.l01_domain.world.models.timekeeping import GameTime
 
 from src.back.l01_domain.exceptions import TimeRewindForbiddenError
 
+
 class TestGameTime:
     def test_initial_state_defaults(self):
         time = GameTime()
@@ -22,12 +23,12 @@ class TestGameTime:
         assert not time.is_neon_hours
 
     def test_time_of_day_phase_transitions(self):
-        # 0..15 — серые часы
+        # 0..15 - серые часы
         time = GameTime(current_hour=GREY_HOURS_COUNT - 1)
         assert time.time_of_day == TimeOfDay.GREY_HOURS
         assert not time.is_neon_hours
 
-        # 16..27 — неоновые часы
+        # 16..27 - неоновые часы
         time = GameTime(current_hour=GREY_HOURS_COUNT)
         assert time.time_of_day == TimeOfDay.NEON_HOURS
         assert time.is_neon_hours

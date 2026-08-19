@@ -100,7 +100,7 @@ UNIT_SIZE_CORPSE_WEIGHT: Final[dict[UnitSizeCategory, float]] = {
 
 # Черновые значения, требуют утверждения гейм-дизайном
 MORALE_THRESHOLD_ACCEPT_CHARGE: Final[float] = (
-    350.0  # мин. мораль, чтобы удержать строй и "принять удар"
+    35.0  # мин. мораль, чтобы удержать строй и "принять удар"
 )
 ACCEPT_CHARGE_DEFENDER_DAMAGE_RATIO: Final[float] = (
     0.4  # доля урона натиска, которую защитник всё равно получает при успешном приёме

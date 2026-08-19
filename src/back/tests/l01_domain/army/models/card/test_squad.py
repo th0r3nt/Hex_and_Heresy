@@ -1,7 +1,7 @@
 """
 Тесты для src/back/l01_domain/army/models/card/squad.py
 
-Фикстуры unit_archetype / weapon / armor / accessory — из
+Фикстуры unit_archetype / weapon / armor / accessory - из
 tests/l01_domain/army/conftest.py.
 """
 
@@ -141,7 +141,7 @@ class TestTakeDamage:
         assert squad.take_damage(100.0) == 0
 
     def test_minimum_one_damage_gets_through_heavy_armor(self, unit_archetype, armor):
-        # Урон меньше брони не должен превращаться в 0 — иначе отряд
+        # Урон меньше брони не должен превращаться в 0 - иначе отряд
         # становится абсолютно неубиваемым.
         squad = Squad.create_new(archetype=unit_archetype, armor=armor, custom_unit_count=1)
         squad.state.hp_first_unit = 1.0
@@ -211,7 +211,7 @@ class TestMorale:
     def test_recovering_to_exact_threshold_does_not_clear_panic(self, unit_archetype):
         # Пограничный случай: apply_morale_shock ставит панику при morale <= 20,
         # а recover_morale снимает её только при morale > 20 (строгое неравенство).
-        # Восстановление ровно до 20 панику НЕ снимет — это асимметрично,
+        # Восстановление ровно до 20 панику НЕ снимет - это асимметрично,
         # но так написан код, и тест это фиксирует явно.
         squad = Squad.create_new(archetype=unit_archetype)
         squad.state.morale = 0.0

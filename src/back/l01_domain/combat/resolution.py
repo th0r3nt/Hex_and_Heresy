@@ -45,15 +45,19 @@ def calculate_charge_damage(
     """
     Базовый урон натиска одной стороны, до применения брони цели.
 
-    Зависит от: атакующего урона отряда, бонуса натиска, относительной
-    скорости атакующего к защищающемуся (быстрее = больнее), рельефа и
-    местности цели (лес/грязь режут натиск).
+    Зависит от: атакующего урона бойца, численности отряда, бонуса натиска,
+    относительной скорости атакующего к защищающемуся, рельефа и местности цели.
     """
 
     speed_ratio = charging_squad.total_effective_speed / max(
         opposing_squad.total_effective_speed, 0.01
     )
-    damage = charging_squad.total_attack_damage * CHARGE_DAMAGE_BONUS * speed_ratio
+    damage = (
+        charging_squad.total_attack_damage
+        * charging_squad.state.unit_count
+        * CHARGE_DAMAGE_BONUS
+        * speed_ratio
+    )
     damage *= max(0.0, 1.0 - target_terrain.charge_penalty)
 
     if elevation == SurfaceIncline.DESCENT:

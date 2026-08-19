@@ -28,7 +28,7 @@ class HexCoordinates(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     q: int = Field(..., description="Координата q (ось /)")
-    r: int = Field(..., description="Координата r (ось —)")
+    r: int = Field(..., description="Координата r (ось -)")
     s: int = Field(..., description="Координата s (ось \\)")
 
     @model_validator(mode="after")

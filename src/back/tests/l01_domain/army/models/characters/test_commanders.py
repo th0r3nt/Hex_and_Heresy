@@ -80,7 +80,7 @@ class TestCommanderTrait:
         assert cynic_trait.modifier is None
 
     def test_trait_can_carry_a_mechanical_modifier(self):
-        # "Труслив" — не только нарративная черта, но и числовой эффект.
+        # "Труслив" - не только нарративная черта, но и числовой эффект.
         trait = CommanderTrait(
             id="trait_craven",
             name="Труслив",

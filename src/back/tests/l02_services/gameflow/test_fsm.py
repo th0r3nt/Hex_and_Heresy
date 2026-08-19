@@ -108,7 +108,7 @@ class TestGameFlowFSM:
         await fsm.trigger(GameFlowTrigger.PAUSE_GAME)
         assert fsm.current_state == GameState.PAUSE
 
-        # Снимаем с паузы — должны вернуться именно в бой
+        # Снимаем с паузы - должны вернуться именно в бой
         await fsm.trigger(GameFlowTrigger.RESUME_GAME)
         assert fsm.current_state == GameState.TACTICAL_COMBAT
 

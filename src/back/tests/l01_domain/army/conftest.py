@@ -1,6 +1,6 @@
 """
 Общие фикстуры для тестов src/back/l01_domain/army/.
-Лежит на уровне tests/l01_domain/army/ — доступен и card-, и characters-тестам.
+Лежит на уровне tests/l01_domain/army/ - доступен и card-, и characters-тестам.
 """
 
 import pytest
