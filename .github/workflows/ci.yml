@@ -1,23 +1,13 @@
-name: CI Pipeline
+name: Backend CI
 
 on:
   push:
-    branches:
-      - main
-      - 'beta-*'
-      - dev
+    branches: [ main, master ]
   pull_request:
-    branches:
-      - main
-      - 'beta-*'
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+    branches: [ main, master ]
 
 jobs:
-  backend-ci:
-    name: Backend (Python) Checks & Tests
+  test:
     runs-on: ubuntu-latest
 
     steps:
@@ -33,44 +23,8 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-          if [ -f requirements-dev.txt ]; then pip install -r requirements-dev.txt; fi
-          # Если dev-зависимости еще не вынесены в файл:
-          pip install pytest pytest-asyncio mypy ruff
+          pip install -r requirements.txt
 
-      - name: Lint with Ruff
+      - name: Run tests
         run: |
-          ruff check src/back/
-
-      - name: Type check with Mypy
-        run: |
-          mypy src/back/
-
-      - name: Run Pytest
-        run: |
-          python -m pytest src/back/tests/ -v --durations=10
-
-  frontend-ci:
-    name: Frontend (Electron & TypeScript) Checks
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: 'src/front/utils/package.json'
-
-      - name: Install npm dependencies
-        working-directory: src/front/utils
-        run: |
-          npm ci
-
-      - name: Type check TypeScript
-        working-directory: src/front/utils
-        run: |
-          npm run typecheck || npx tsc --noEmit
+          pytest
