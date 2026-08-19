@@ -17,6 +17,10 @@ from src.back.l01_domain.factions.models.diplomacy.pacts import (
     WarAlliancePact,
 )
 
+from src.back.l01_domain.exceptions import (
+    PactForbiddenDuringWarError,
+    WarAllianceWithEnemyForbiddenError,
+)
 
 class DiplomaticRelation(BaseModel):
     """Состояние отношений между двумя конкретными фракциями."""
@@ -58,37 +62,35 @@ class DiplomaticRelation(BaseModel):
     # Торговля
     def propose_trade(self, agreement: TradeAgreement) -> None:
         if self.stance == DiplomaticStance.WAR:
-            raise ValueError("cannot trade while at war")
+            raise PactForbiddenDuringWarError("trade", self.faction_a_id, self.faction_b_id)
         self.trade_agreement = agreement
 
     # Право прохода
     def establish_right_of_passage(self, pact: RightOfPassagePact) -> None:
         if self.stance == DiplomaticStance.WAR:
-            raise ValueError("cannot grant passage while at war")
+            raise PactForbiddenDuringWarError("right_of_passage", self.faction_a_id, self.faction_b_id)
         self.right_of_passage = pact
 
     # Вассалитет
     def form_vassalage(self, pact: VassalPact) -> None:
         if self.stance == DiplomaticStance.WAR:
-            raise ValueError("cannot form vassalage while at war")
+            raise PactForbiddenDuringWarError("form_vassalage", self.faction_a_id, self.faction_b_id)
         self.vassal_pact = pact
 
     # Обмен разведданными
     def share_intelligence(self, pact: IntelligenceSharingPact) -> None:
         if self.stance == DiplomaticStance.WAR:
-            raise ValueError("cannot share intelligence while at war")
+            raise PactForbiddenDuringWarError("share_intelligence", self.faction_a_id, self.faction_b_id)
         self.intelligence_sharing = pact
 
     # Обмен заложниками как гарантия мира
     def exchange_hostages(self, pact: HostageExchangePact) -> None:
         if self.stance == DiplomaticStance.WAR:
-            raise ValueError("cannot exchange hostages while at war")
+            raise PactForbiddenDuringWarError("exchange_hostages", self.faction_a_id, self.faction_b_id)
         self.hostage_exchange = pact
 
     # Военный союз
     def form_war_alliance(self, pact: WarAlliancePact) -> None:
         if self.stance == DiplomaticStance.WAR:
-            raise ValueError(
-                "cannot form a war alliance while already at war with this faction"
-            )
+            raise WarAllianceWithEnemyForbiddenError(self.faction_a_id, self.faction_b_id)
         self.war_alliance = pact

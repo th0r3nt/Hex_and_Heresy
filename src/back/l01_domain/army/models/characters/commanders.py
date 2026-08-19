@@ -10,6 +10,8 @@ from pydantic import BaseModel, Field, ConfigDict
 
 from src.back.l01_domain.common import MechanicalModifier
 
+from src.back.l01_domain.exceptions import NegativeExperienceError
+
 
 class CommanderGenerationType(str, Enum):
     """Способ появления полководца в игре (см. game_mechanics/commanders.md)."""
@@ -182,7 +184,7 @@ class Commander(BaseModel):
         """
 
         if amount < 0:
-            raise ValueError("experience amount must be non-negative")
+            raise NegativeExperienceError(amount)
         self.state.experience += amount
 
     def assign_to_army(self, army_id: str) -> None:

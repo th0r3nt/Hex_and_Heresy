@@ -12,6 +12,9 @@ from src.back.l01_domain.army.models.characters.artifacts import HeroArtifact
 from src.back.l01_domain.common import MechanicalModifier
 from src.back.l01_domain.army.constants import MAX_HERO_LEVEL
 
+from src.back.l01_domain.exceptions import HeroLevelTooLowError
+
+
 class HeroArchetype(BaseModel):
     """
     Уникальный архетип героя (напр. 'Неубиваемый' у Грома "Железное брюхо").
@@ -188,7 +191,9 @@ class Hero(BaseModel):
         """
 
         if perk.level_required > self.state.level:
-            raise ValueError(
-                f"hero level {self.state.level} is too low for perk requiring level {perk.level_required}"
+            raise HeroLevelTooLowError(
+                current_level=self.state.level,
+                required_level=perk.level_required,
+                perk_id=perk.id,
             )
         self.chosen_perks.append(perk)

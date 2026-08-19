@@ -2,10 +2,10 @@
 Faction - корневой агрегат одной политической стороны в партии.
 
 Раса (каталог юнитов/зданий/лора) и фракция - разные вещи.
-Внутри одной расы может быть несколько независимых Faction: 
-например, у Баронских войск сразу четыре соперничающих правителя 
-(Медные Врата, Чёрные Топи, Ржавая Корона, Кровавый Гребень), 
-каждый со своим Lord, территорией и дипломатией, 
+Внутри одной расы может быть несколько независимых Faction:
+например, у Баронских войск сразу четыре соперничающих правителя
+(Медные Врата, Чёрные Топи, Ржавая Корона, Кровавый Гребень),
+каждый со своим Lord, территорией и дипломатией,
 но общим каталогом юнитов/зданий расы.
 """
 
@@ -16,14 +16,19 @@ from src.back.l01_domain.factions.constants import ResourceType
 from src.back.l01_domain.factions.models.lord import Lord
 from src.back.l01_domain.factions.models.buildings import Headquarters
 
+from src.back.l01_domain.exceptions import (
+    InsufficientResourcesError,
+    NegativeResourceAmountError,
+)
+
 
 class Faction(BaseModel):
     """
     Одна политическая сторона партии: игрок или ИИ, конкретный правитель,
-    территория, экономика. 
+    территория, экономика.
 
-    Дипломатические отношения сюда не встраиваются 
-    - двусторонняя связь хранится в общем реестре уровня партии, 
+    Дипломатические отношения сюда не встраиваются
+    - двусторонняя связь хранится в общем реестре уровня партии,
     а не дублируется в каждом Faction.
     """
 
@@ -59,13 +64,18 @@ class Faction(BaseModel):
     # "Потратить" (на здания, юнитов и т.п.)
     def spend(self, resource: ResourceType, amount: float) -> None:
         if not self.can_afford(resource, amount):
-            raise ValueError(f"not enough {resource.value}")
+            raise InsufficientResourcesError(
+                resource=resource.value,
+                required=amount,
+                available=self.resources.get(resource, 0.0),
+                faction_id=self.id,
+            )
         self.resources[resource] -= amount
 
     # "Получить" (напр. из экономических зданий)
     def earn(self, resource: ResourceType, amount: float) -> None:
         if amount < 0:
-            raise ValueError("earned amount must be non-negative")
+            raise NegativeResourceAmountError(amount=amount, operation="earn")
         self.resources[resource] = self.resources.get(resource, 0.0) + amount
 
     # "Получить зону" (напр. при колонизации союзных земель)

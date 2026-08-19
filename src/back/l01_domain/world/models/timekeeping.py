@@ -12,6 +12,7 @@ from src.back.l01_domain.world.constants import (
     HOURS_PER_DAY,
 )
 
+from src.back.l01_domain.exceptions import TimeRewindForbiddenError
 
 class GameTime(BaseModel):
     """
@@ -59,7 +60,7 @@ class GameTime(BaseModel):
         Корректно производит перенос часов, дней и циклов.
         """
         if ticks < 0:
-            raise ValueError(f"нельзя перематывать время назад: получено {ticks}")
+            raise TimeRewindForbiddenError(ticks)
         if ticks == 0:
             return
 

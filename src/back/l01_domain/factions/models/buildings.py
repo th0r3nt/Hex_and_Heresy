@@ -26,6 +26,7 @@ from src.back.l01_domain.factions.constants import (
     MAX_BUILDING_UNLOCK_TIER,
 )
 
+from src.back.l01_domain.exceptions import BuildingMaxLevelReachedError
 
 class BuildingUpgrade(BaseModel):
     """
@@ -108,7 +109,7 @@ class Headquarters(BaseModel):
 
     def upgrade(self) -> None:
         if self.level >= MAX_HQ_LEVEL:
-            raise ValueError(f"headquarters already at max level {MAX_HQ_LEVEL}")
+            raise BuildingMaxLevelReachedError(self.name, MAX_HQ_LEVEL)
         self.level += 1
 
 
@@ -136,7 +137,7 @@ class RegionalHall(BaseModel):
 
     def upgrade(self) -> None:
         if self.level >= MAX_TOWNHALL_LEVEL:
-            raise ValueError(f"regional hall already at max level {MAX_TOWNHALL_LEVEL}")
+            raise BuildingMaxLevelReachedError(self.name, MAX_TOWNHALL_LEVEL)
         self.level += 1
 
 

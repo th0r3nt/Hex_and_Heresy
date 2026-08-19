@@ -16,6 +16,7 @@ from src.back.l01_domain.maps.constants import (
     TerritoryZoneType,
 )
 
+from src.back.l01_domain.exceptions import InvalidRadiusError, InvalidCubeCoordinatesError
 
 class HexCoordinates(BaseModel):
     """
@@ -32,9 +33,7 @@ class HexCoordinates(BaseModel):
     @model_validator(mode="after")
     def validate_cube_invariant(self) -> "HexCoordinates":
         if self.q + self.r + self.s != 0:
-            raise ValueError(
-                f"cube coordinates invariant violated: q({self.q}) + r({self.r}) + s({self.s}) != 0"
-            )
+            raise InvalidCubeCoordinatesError(self.q, self.r, self.s)
         return self
 
     @classmethod
@@ -83,7 +82,7 @@ def hex_ring(center: HexCoordinates, radius: int) -> list[HexCoordinates]:
     Возвращает координаты замкнутого кольца гексов заданного радиуса.
     """
     if radius < 0:
-        raise ValueError(f"radius must be non-negative, got {radius}")
+        raise InvalidRadiusError(radius)
     if radius == 0:
         return [center]
 
@@ -118,7 +117,7 @@ def hex_spiral(center: HexCoordinates, max_radius: int) -> list[HexCoordinates]:
     Возвращает список всех координат в пределах радиуса max_radius от центра (включая центр).
     """
     if max_radius < 0:
-        raise ValueError(f"max_radius must be non-negative, got {max_radius}")
+        raise InvalidRadiusError(max_radius)
 
     results: list[HexCoordinates] = []
     for r in range(max_radius + 1):

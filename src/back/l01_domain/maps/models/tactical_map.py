@@ -13,6 +13,7 @@ from src.back.l01_domain.maps.constants import (
     GridDirection,
 )
 
+from src.back.l01_domain.exceptions import InvalidRadiusError
 
 class CellCoordinates(BaseModel):
     """
@@ -141,7 +142,7 @@ def get_cells_in_radius(
     """
     
     if radius < 0:
-        raise ValueError(f"radius must be non-negative, got {radius}")
+        raise InvalidRadiusError(radius)
 
     results: list[CellCoordinates] = []
     for dx in range(-radius, radius + 1):
