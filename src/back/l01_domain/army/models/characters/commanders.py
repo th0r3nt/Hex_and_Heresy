@@ -31,7 +31,7 @@ class CommanderArchetypeStats(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    global_map_range_bonus: int = Field(
+    strategic_map_range_bonus: int = Field(
         default=0, description="Доп. дальность перемещения возглавляемой армии по глобальной карте (в гексах)"
     )
     melee_damage_modifier: float = Field(
@@ -174,7 +174,9 @@ class Commander(BaseModel):
 
     @property
     def upkeep_gold_multiplier(self) -> float:
-        """Итоговый множитель содержания армии от архетипа."""
+        """
+        Итоговый множитель содержания армии от архетипа.
+        """
         return self.archetype.stats.upkeep_gold_modifier
 
     def gain_experience(self, amount: int) -> None:

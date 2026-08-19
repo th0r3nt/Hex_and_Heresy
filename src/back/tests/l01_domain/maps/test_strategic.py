@@ -1,5 +1,5 @@
 """
-Тесты для src/back/l01_domain/maps/models/global_map.py
+Тесты для src/back/l01_domain/maps/models/strategic.py
 """
 
 import pytest
@@ -7,11 +7,11 @@ from pydantic import ValidationError
 
 from src.back.l01_domain.maps.constants import (
     DISTANCE_BETWEEN_CITADELS_HEXES,
-    GLOBAL_MAP_TOTAL_HEXES,
+    STRATEGIC_MAP_TOTAL_HEXES,
     HexDirection,
     TerritoryZoneType,
 )
-from src.back.l01_domain.maps.models.global_map import (
+from src.back.l01_domain.maps.models.strategic import (
     HexCoordinates,
     determine_zone_type,
     generate_standard_map_coordinates,
@@ -127,8 +127,8 @@ class TestHexMath:
 class TestStandardMapGeneration:
     def test_generate_standard_map_hex_count(self):
         coords = generate_standard_map_coordinates()
-        assert len(coords) == GLOBAL_MAP_TOTAL_HEXES
-        assert len(set(coords)) == GLOBAL_MAP_TOTAL_HEXES
+        assert len(coords) == STRATEGIC_MAP_TOTAL_HEXES
+        assert len(set(coords)) == STRATEGIC_MAP_TOTAL_HEXES
 
     def test_standard_bases_distance_matches_constant(self):
         north_base, south_base = get_standard_base_coordinates()

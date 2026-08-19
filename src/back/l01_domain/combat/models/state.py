@@ -21,7 +21,7 @@ from src.back.l01_domain.combat.constants import (
     SPEED_MARCH_PACE,
 )
 from src.back.l01_domain.combat.models.effects import CombatEffect
-from src.back.l01_domain.maps.models.tactical_map import CellCoordinates
+from src.back.l01_domain.maps.models.tactical import CellCoordinates
 
 
 class TacticalCellState(BaseModel):
@@ -40,7 +40,7 @@ class TacticalCellState(BaseModel):
         """
         Накладывает эффект на клетку с учётом stacking_rule.
         """
-        
+
         already_present = any(e.id == effect.id for e in self.active_effects)
 
         if effect.stacking_rule == EffectStackingRule.IGNORE and already_present:

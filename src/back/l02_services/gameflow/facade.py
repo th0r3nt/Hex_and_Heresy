@@ -5,7 +5,7 @@
 from typing import Optional
 
 from src.back.l01_domain.combat.models.state import TacticalBattleState
-from src.back.l01_domain.maps.models.global_map import HexCoordinates
+from src.back.l01_domain.maps.models.strategic import HexCoordinates
 from src.back.l01_domain.protocols.events import EventBusProtocol
 from src.back.l01_domain.world.models.events import GlobalEvent
 from src.back.l02_services.gameflow.fsm import GameFlowFSM

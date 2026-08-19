@@ -5,7 +5,7 @@
 import pytest
 
 from src.back.l01_domain.combat.models.state import TacticalBattleState
-from src.back.l01_domain.maps.models.global_map import HexCoordinates
+from src.back.l01_domain.maps.models.strategic import HexCoordinates
 from src.back.l02_services.gameflow.facade import GameFlowFacade
 from src.back.l02_services.gameflow.fsm import GameFlowFSM
 from src.back.l02_services.gameflow.guards import (
@@ -51,8 +51,8 @@ class TestGameFlowFSM:
     @pytest.mark.asyncio
     async def test_start_new_game_transition(self, fsm):
         new_state = await fsm.trigger(GameFlowTrigger.START_NEW_GAME)
-        assert new_state == GameState.GLOBAL_MAP
-        assert fsm.current_state == GameState.GLOBAL_MAP
+        assert new_state == GameState.STRATEGIC_MAP
+        assert fsm.current_state == GameState.STRATEGIC_MAP
 
     @pytest.mark.asyncio
     async def test_invalid_transition_raises_error(self, fsm):
@@ -89,7 +89,7 @@ class TestGameFlowFSM:
         assert combat_state == GameState.TACTICAL_COMBAT
 
         resolved_state = await fsm.trigger(GameFlowTrigger.RESOLVE_COMBAT)
-        assert resolved_state == GameState.GLOBAL_MAP
+        assert resolved_state == GameState.STRATEGIC_MAP
 
     @pytest.mark.asyncio
     async def test_pause_and_resume_preserves_previous_state(self, fsm, dummy_battle_state):
@@ -123,7 +123,7 @@ class TestGameFlowFSM:
         event_name, kwargs = bus.published_events[0]
         assert event_name == "gameflow.state_changed"
         assert kwargs["from_state"] == GameState.MAIN_MENU
-        assert kwargs["to_state"] == GameState.GLOBAL_MAP
+        assert kwargs["to_state"] == GameState.STRATEGIC_MAP
 
 
 class TestGameFlowFacade:
@@ -133,7 +133,7 @@ class TestGameFlowFacade:
 
         # Старт игры
         await facade.start_new_game()
-        assert facade.current_state == GameState.GLOBAL_MAP
+        assert facade.current_state == GameState.STRATEGIC_MAP
 
         # На глобальной карте разрешено строительство и дипломатия
         facade.assert_can_build()
@@ -162,7 +162,7 @@ class TestGameFlowFacade:
 
         # Завершение боя
         await facade.finish_tactical_combat(battle_id="b_1", victor_faction_id="humans")
-        assert facade.current_state == GameState.GLOBAL_MAP
+        assert facade.current_state == GameState.STRATEGIC_MAP
 
         # Конец игры
         await facade.trigger_game_over(

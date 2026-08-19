@@ -1,35 +1,27 @@
 """
 Faction - корневой агрегат одной политической стороны в партии.
-
-Раса (каталог юнитов/зданий/лора) и фракция - разные вещи.
-Внутри одной расы может быть несколько независимых Faction:
-например, у Баронских войск сразу четыре соперничающих правителя
-(Медные Врата, Чёрные Топи, Ржавая Корона, Кровавый Гребень),
-каждый со своим Lord, территорией и дипломатией,
-но общим каталогом юнитов/зданий расы.
 """
 
+from typing import Optional
 from uuid import uuid4
 from pydantic import BaseModel, Field
-
-from src.back.l01_domain.factions.constants import ResourceType
-from src.back.l01_domain.factions.models.lord import Lord
-from src.back.l01_domain.factions.models.buildings import Headquarters
 
 from src.back.l01_domain.exceptions import (
     InsufficientResourcesError,
     NegativeResourceAmountError,
 )
+from src.back.l01_domain.factions.constants import ResourceType
+from src.back.l01_domain.factions.models.buildings import (
+    ConstructedBuilding,
+    Headquarters,
+)
+from src.back.l01_domain.factions.models.lord import Lord
 
 
 class Faction(BaseModel):
     """
     Одна политическая сторона партии: игрок или ИИ, конкретный правитель,
-    территория, экономика.
-
-    Дипломатические отношения сюда не встраиваются
-    - двусторонняя связь хранится в общем реестре уровня партии,
-    а не дублируется в каждом Faction.
+    территория, здания и экономика.
     """
 
     id: str = Field(default_factory=lambda: str(uuid4()))
@@ -53,16 +45,20 @@ class Faction(BaseModel):
         default_factory=list, description="ID гексов союзных земель под контролем"
     )
 
-    # =======================================================================
-    # ДЕЙСТВИЯ ФРАКЦИИ
-    # =======================================================================
+    buildings: list[ConstructedBuilding] = Field(
+        default_factory=list, description="Список возведенных и строящихся зданий"
+    )
 
-    # "Можно ли позволить"
     def can_afford(self, resource: ResourceType, amount: float) -> bool:
+        """
+        Проверяет наличие достаточного объема ресурса.
+        """
         return self.resources.get(resource, 0.0) >= amount
 
-    # "Потратить" (на здания, юнитов и т.п.)
     def spend(self, resource: ResourceType, amount: float) -> None:
+        """
+        Списывает указанный объем ресурса.
+        """
         if not self.can_afford(resource, amount):
             raise InsufficientResourcesError(
                 resource=resource.value,
@@ -72,18 +68,39 @@ class Faction(BaseModel):
             )
         self.resources[resource] -= amount
 
-    # "Получить" (напр. из экономических зданий)
     def earn(self, resource: ResourceType, amount: float) -> None:
+        """
+        Начисляет ресурс в казну.
+        """
         if amount < 0:
             raise NegativeResourceAmountError(amount=amount, operation="earn")
         self.resources[resource] = self.resources.get(resource, 0.0) + amount
 
-    # "Получить зону" (напр. при колонизации союзных земель)
     def gain_zone(self, zone_id: str) -> None:
+        """
+        Берет союзную зону под контроль.
+        """
         if zone_id not in self.controlled_zone_ids:
             self.controlled_zone_ids.append(zone_id)
 
-    # "Потерять зону" (напр. при захвате союзных земель)
     def lose_zone(self, zone_id: str) -> None:
+        """
+        Теряет контроль над зоной.
+        """
         if zone_id in self.controlled_zone_ids:
             self.controlled_zone_ids.remove(zone_id)
+
+    def add_building(self, building: ConstructedBuilding) -> None:
+        """
+        Регистрирует построенное или строящееся здание.
+        """
+        self.buildings.append(building)
+
+    def remove_building(self, building_id: str) -> Optional[ConstructedBuilding]:
+        """
+        Удаляет здание по идентификатору.
+        """
+        for i, b in enumerate(self.buildings):
+            if b.id == building_id:
+                return self.buildings.pop(i)
+        return None

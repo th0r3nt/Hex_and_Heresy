@@ -7,7 +7,7 @@ from typing import Optional
 from pydantic import BaseModel, ConfigDict, Field
 
 from src.back.l01_domain.combat.models.state import TacticalBattleState
-from src.back.l01_domain.maps.models.global_map import HexCoordinates
+from src.back.l01_domain.maps.models.strategic import HexCoordinates
 from src.back.l01_domain.world.models.events import GlobalEvent
 
 
@@ -15,7 +15,7 @@ class GameState(str, Enum):
     """Высокоуровневые состояния игрового процесса."""
 
     MAIN_MENU = "main_menu"  # Главное меню до загрузки или старта партии
-    GLOBAL_MAP = "global_map"  # Основной стратегический режим глобальной карты
+    STRATEGIC_MAP = "strategic_map"  # Основной стратегический режим глобальной карты
     TACTICAL_COMBAT = "tactical_combat"  # Тактический бой на сеточной карте
     DIPLOMATIC_SESSION = (
         "diplomatic_session"  # Активная дипломатическая аудиенция или переговоры

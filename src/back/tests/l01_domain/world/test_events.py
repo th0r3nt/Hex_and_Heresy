@@ -2,7 +2,7 @@
 Тесты для src/back/l01_domain/world/models/events.py
 """
 
-from src.back.l01_domain.maps.models.global_map import HexCoordinates
+from src.back.l01_domain.maps.models.strategic import HexCoordinates
 from src.back.l01_domain.world.constants import GlobalEventCategory, GlobalEventScope
 from src.back.l01_domain.world.models.events import GlobalEvent
 

@@ -26,7 +26,7 @@ def strategist_archetype() -> CommanderArchetype:
         name="Стратег",
         description="+1 к дальности перемещения, штраф к урону в ближнем бою.",
         stats=CommanderArchetypeStats(
-            global_map_range_bonus=1,
+            strategic_map_range_bonus=1,
             melee_damage_modifier=-0.1,
         ),
     )
@@ -56,7 +56,7 @@ class TestCommanderArchetypeStats:
     def test_defaults_are_neutral(self):
         stats = CommanderArchetypeStats()
 
-        assert stats.global_map_range_bonus == 0
+        assert stats.strategic_map_range_bonus == 0
         assert stats.melee_damage_modifier == 0.0
         assert stats.upkeep_gold_modifier == 1.0
 
@@ -72,7 +72,7 @@ class TestCommanderArchetypeStats:
         stats = CommanderArchetypeStats()
 
         with pytest.raises(ValidationError):
-            stats.global_map_range_bonus = 5
+            stats.strategic_map_range_bonus = 5
 
 
 class TestCommanderTrait:

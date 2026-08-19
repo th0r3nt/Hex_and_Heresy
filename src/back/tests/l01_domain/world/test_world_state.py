@@ -6,7 +6,7 @@ from src.back.l01_domain.factions.models.buildings import Headquarters
 from src.back.l01_domain.factions.models.diplomacy.relation import DiplomaticRelation
 from src.back.l01_domain.factions.models.faction import Faction
 from src.back.l01_domain.factions.models.lord import Lord, LordArchetype, LordTrait
-from src.back.l01_domain.maps.models.global_map import HexCoordinates
+from src.back.l01_domain.maps.models.strategic import HexCoordinates
 from src.back.l01_domain.world.constants import GlobalEventCategory
 from src.back.l01_domain.world.models.battleground import BattlefieldLootSite
 from src.back.l01_domain.world.models.events import GlobalEvent

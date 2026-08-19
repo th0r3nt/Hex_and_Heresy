@@ -6,7 +6,7 @@ import pytest
 from pydantic import ValidationError
 
 from src.back.l01_domain.maps.constants import GridDirection
-from src.back.l01_domain.maps.models.tactical_map import (
+from src.back.l01_domain.maps.models.tactical import (
     CellCoordinates,
     cell_distance_chebyshev,
     cell_distance_euclidean,

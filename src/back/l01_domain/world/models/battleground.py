@@ -6,7 +6,7 @@ from uuid import uuid4
 from pydantic import BaseModel, Field, ConfigDict
 
 from src.back.l01_domain.army.constants import UnitSizeCategory
-from src.back.l01_domain.maps.models.global_map import HexCoordinates
+from src.back.l01_domain.maps.models.strategic import HexCoordinates
 from src.back.l01_domain.world.constants import DEFAULT_BATTLEFIELD_DECAY_TICKS
 
 

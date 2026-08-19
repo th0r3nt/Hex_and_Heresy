@@ -30,11 +30,29 @@ ALLIED_LANDS_RING_RADIUS: Final[int] = 1
 # ПАРАМЕТРЫ СТАНДАРТНОЙ КАРТЫ (271 гекс, 19 рядов)
 # ==================================================================
 
-GLOBAL_MAP_TOTAL_ROWS: Final[int] = 19
-GLOBAL_MAP_ROW_LENGTHS: Final[tuple[int, ...]] = (
-    10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10
+STRATEGIC_MAP_TOTAL_ROWS: Final[int] = 19
+STRATEGIC_MAP_ROW_LENGTHS: Final[tuple[int, ...]] = (
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    18,
+    17,
+    16,
+    15,
+    14,
+    13,
+    12,
+    11,
+    10,
 )
-GLOBAL_MAP_TOTAL_HEXES: Final[int] = 271
+STRATEGIC_MAP_TOTAL_HEXES: Final[int] = 271
 
 # Дистанция в гексах между Северной и Южной цитаделями
 DISTANCE_BETWEEN_CITADELS_HEXES: Final[int] = 16

@@ -112,25 +112,25 @@ def is_diplomacy_action_allowed(state: GameState) -> bool:
     """
     Отправка писем и работа с послами разрешены только на глобальной карте.
     """
-    return state in (GameState.GLOBAL_MAP, GameState.DIPLOMATIC_SESSION)
+    return state in (GameState.STRATEGIC_MAP, GameState.DIPLOMATIC_SESSION)
 
 
 def is_building_action_allowed(state: GameState) -> bool:
     """
     Строительство и снос зданий разрешены исключительно на глобальной карте.
     """
-    return state == GameState.GLOBAL_MAP
+    return state == GameState.STRATEGIC_MAP
 
 
 def is_recruitment_action_allowed(state: GameState) -> bool:
     """
     Найм и оснащение войск доступны только в стратегическом режиме.
     """
-    return state == GameState.GLOBAL_MAP
+    return state == GameState.STRATEGIC_MAP
 
 
 def is_saving_allowed(state: GameState) -> bool:
     """
     Сохранение состояния партии разрешено на глобальной карте или в меню паузы.
     """
-    return state in (GameState.GLOBAL_MAP, GameState.PAUSE)
+    return state in (GameState.STRATEGIC_MAP, GameState.PAUSE)

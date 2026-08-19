@@ -8,15 +8,16 @@ from pydantic import BaseModel, Field, ConfigDict, model_validator
 
 from src.back.l01_domain.maps.constants import (
     ALLIED_LANDS_RING_RADIUS,
-    GLOBAL_MAP_ROW_LENGTHS,
-    GLOBAL_MAP_TOTAL_HEXES,
-    GLOBAL_MAP_TOTAL_ROWS,
+    STRATEGIC_MAP_ROW_LENGTHS,
+    STRATEGIC_MAP_TOTAL_HEXES,
+    STRATEGIC_MAP_TOTAL_ROWS,
     HEX_DIRECTION_VECTORS,
     HexDirection,
     TerritoryZoneType,
 )
 
 from src.back.l01_domain.exceptions import InvalidRadiusError, InvalidCubeCoordinatesError
+
 
 class HexCoordinates(BaseModel):
     """
@@ -194,9 +195,9 @@ def generate_standard_map_coordinates() -> list[HexCoordinates]:
     Математически и позиционно строго соответствует раскладке map.svg.
     """
     coordinates: list[HexCoordinates] = []
-    center_row = GLOBAL_MAP_TOTAL_ROWS // 2  # ряд 9 (экватор r = 0)
+    center_row = STRATEGIC_MAP_TOTAL_ROWS // 2  # ряд 9 (экватор r = 0)
 
-    for row_idx, row_len in enumerate(GLOBAL_MAP_ROW_LENGTHS):
+    for row_idx, row_len in enumerate(STRATEGIC_MAP_ROW_LENGTHS):
         r = row_idx - center_row
         half_len = (row_len - 1) / 2.0
 
@@ -205,9 +206,9 @@ def generate_standard_map_coordinates() -> list[HexCoordinates]:
             q = int(offset_from_center - r / 2.0)
             coordinates.append(HexCoordinates.from_axial(q, r))
 
-    if len(coordinates) != GLOBAL_MAP_TOTAL_HEXES:
+    if len(coordinates) != STRATEGIC_MAP_TOTAL_HEXES:
         raise RuntimeError(
-            f"ошибка генерации карты: ожидался {GLOBAL_MAP_TOTAL_HEXES} гекс, получено {len(coordinates)}"
+            f"ошибка генерации карты: ожидался {STRATEGIC_MAP_TOTAL_HEXES} гекс, получено {len(coordinates)}"
         )
 
     return coordinates

@@ -43,12 +43,29 @@ class EquipmentSlot(str, Enum):
 
 class UnitSizeCategory(str, Enum):
     """
-    Габарит юнита. Влияет на бонус урона оружия против цели такого размера
-    (см. equipment.py, damage_bonus_vs_size) и на вклад в "кучу трупов"
-    (см. combat/constants.py, UNIT_SIZE_CORPSE_WEIGHT).
+    Габарит юнита. Влияет на бонус урона оружия против цели такого размера.
     """
 
     SMALL = "small"  # гоблины, крысы
     MEDIUM = "medium"  # люди, орки, эльфы
     LARGE = "large"  # кавалерия, крупные звери
     HUGE = "huge"  # огры, драконы, монстры
+
+class StrategicMovementPace(str, Enum):
+    """
+    Темп марша армии на глобальной карте (в гексах за один такт).
+    (см. strategic_map.md)
+    """
+
+    CAUTIOUS = "cautious"  # Осторожный шаг (1 гекс/7.5 км за 1 такт (4 часа игрового времени))
+    MARCH = "march"  # Обычный марш (2 гекса / 15 км)
+    FORCED = "forced"  # Форсированный марш (3 гекса / 22.5 км)
+    MOUNTED = "mounted"  # Конный марш (4 гекса / 30 км)
+
+
+STRATEGIC_PACE_SPEED_HEXES: Final[dict[StrategicMovementPace, int]] = {
+    StrategicMovementPace.CAUTIOUS: 1,
+    StrategicMovementPace.MARCH: 2,
+    StrategicMovementPace.FORCED: 3,
+    StrategicMovementPace.MOUNTED: 4,
+}

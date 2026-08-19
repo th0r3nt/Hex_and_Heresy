@@ -32,10 +32,10 @@ TRANSITION_MATRIX: dict[tuple[GameState, GameFlowTrigger], TransitionRule] = {
     # Из главного меню
     # ====================================================
     (GameState.MAIN_MENU, GameFlowTrigger.START_NEW_GAME): TransitionRule(
-        target_state=GameState.GLOBAL_MAP
+        target_state=GameState.STRATEGIC_MAP
     ),
     (GameState.MAIN_MENU, GameFlowTrigger.LOAD_SAVED_GAME): TransitionRule(
-        target_state=GameState.GLOBAL_MAP
+        target_state=GameState.STRATEGIC_MAP
     ),
     (GameState.MAIN_MENU, GameFlowTrigger.OPEN_SETTINGS): TransitionRule(
         target_state=GameState.SETTINGS,
@@ -45,26 +45,26 @@ TRANSITION_MATRIX: dict[tuple[GameState, GameFlowTrigger], TransitionRule] = {
     # ====================================================
     # Из режима глобальной карты
     # ====================================================
-    (GameState.GLOBAL_MAP, GameFlowTrigger.ENGAGE_COMBAT): TransitionRule(
+    (GameState.STRATEGIC_MAP, GameFlowTrigger.ENGAGE_COMBAT): TransitionRule(
         target_state=GameState.TACTICAL_COMBAT,
         guards=[guard_combat_payload_valid],
     ),
-    (GameState.GLOBAL_MAP, GameFlowTrigger.OPEN_AUDIENCE): TransitionRule(
+    (GameState.STRATEGIC_MAP, GameFlowTrigger.OPEN_AUDIENCE): TransitionRule(
         target_state=GameState.DIPLOMATIC_SESSION,
         guards=[guard_diplomacy_payload_valid],
     ),
-    (GameState.GLOBAL_MAP, GameFlowTrigger.TRIGGER_GLOBAL_EVENT): TransitionRule(
+    (GameState.STRATEGIC_MAP, GameFlowTrigger.TRIGGER_GLOBAL_EVENT): TransitionRule(
         target_state=GameState.GLOBAL_EVENT_RESOLUTION
     ),
-    (GameState.GLOBAL_MAP, GameFlowTrigger.PAUSE_GAME): TransitionRule(
+    (GameState.STRATEGIC_MAP, GameFlowTrigger.PAUSE_GAME): TransitionRule(
         target_state=GameState.PAUSE,
         saves_to_history=True,
     ),
-    (GameState.GLOBAL_MAP, GameFlowTrigger.OPEN_SETTINGS): TransitionRule(
+    (GameState.STRATEGIC_MAP, GameFlowTrigger.OPEN_SETTINGS): TransitionRule(
         target_state=GameState.SETTINGS,
         saves_to_history=True,
     ),
-    (GameState.GLOBAL_MAP, GameFlowTrigger.DECLARE_GAME_OVER): TransitionRule(
+    (GameState.STRATEGIC_MAP, GameFlowTrigger.DECLARE_GAME_OVER): TransitionRule(
         target_state=GameState.GAME_OVER,
         guards=[guard_game_over_payload_valid],
     ),
@@ -72,7 +72,7 @@ TRANSITION_MATRIX: dict[tuple[GameState, GameFlowTrigger], TransitionRule] = {
     # Из тактического боя
     # ====================================================
     (GameState.TACTICAL_COMBAT, GameFlowTrigger.RESOLVE_COMBAT): TransitionRule(
-        target_state=GameState.GLOBAL_MAP
+        target_state=GameState.STRATEGIC_MAP
     ),
     (GameState.TACTICAL_COMBAT, GameFlowTrigger.PAUSE_GAME): TransitionRule(
         target_state=GameState.PAUSE,
@@ -90,7 +90,7 @@ TRANSITION_MATRIX: dict[tuple[GameState, GameFlowTrigger], TransitionRule] = {
     # Из дипломатической сессии
     # ====================================================
     (GameState.DIPLOMATIC_SESSION, GameFlowTrigger.CLOSE_AUDIENCE): TransitionRule(
-        target_state=GameState.GLOBAL_MAP
+        target_state=GameState.STRATEGIC_MAP
     ),
     (GameState.DIPLOMATIC_SESSION, GameFlowTrigger.PAUSE_GAME): TransitionRule(
         target_state=GameState.PAUSE,
@@ -100,13 +100,13 @@ TRANSITION_MATRIX: dict[tuple[GameState, GameFlowTrigger], TransitionRule] = {
     # Из окна разрешения глобального события
     # ====================================================
     (GameState.GLOBAL_EVENT_RESOLUTION, GameFlowTrigger.RESOLVE_GLOBAL_EVENT): TransitionRule(
-        target_state=GameState.GLOBAL_MAP
+        target_state=GameState.STRATEGIC_MAP
     ),
     # ====================================================
     # Из паузы и настроек
     # ====================================================
     (GameState.PAUSE, GameFlowTrigger.RESUME_GAME): TransitionRule(
-        target_state=GameState.GLOBAL_MAP  # переопределяется возвратом из стека в FSM
+        target_state=GameState.STRATEGIC_MAP  # переопределяется возвратом из стека в FSM
     ),
     (GameState.PAUSE, GameFlowTrigger.OPEN_SETTINGS): TransitionRule(
         target_state=GameState.SETTINGS,
