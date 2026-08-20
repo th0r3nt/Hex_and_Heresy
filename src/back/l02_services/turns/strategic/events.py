@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from src.back.l01_domain.combat.constants import TimeOfDay
 from src.back.l01_domain.protocols.events import EventBusProtocol
 from src.back.l01_domain.world.models.state import WorldState
+from src.back.utils.event.registry import GameEvents
 
 
 class EventsStepReport(BaseModel):
@@ -52,9 +53,9 @@ class StrategicEventsService:
 
         if phase_changed and self._event_bus is not None:
             event_name = (
-                "strategic.neon_hours_started"  # TODO: создать типизированные имена событий для всего кода
+                GameEvents.Strategic.NEON_HOURS_STARTED
                 if world_state.time.is_neon_hours
-                else "strategic.grey_hours_started"
+                else GameEvents.Strategic.GREY_HOURS_STARTED
             )
             await self._event_bus.publish(
                 event_name,
@@ -73,7 +74,9 @@ class StrategicEventsService:
                 expired_event_ids.append(event.id)
                 if self._event_bus is not None:
                     await self._event_bus.publish(
-                        "strategic.event_expired", event_id=event.id, name=event.name
+                        GameEvents.Strategic.EVENT_EXPIRED,
+                        event_id=event.id,
+                        name=event.name,
                     )
 
         world_state.cleanup_expired_events()
@@ -106,7 +109,7 @@ class StrategicEventsService:
                         recovered_hero_ids.append(hero.id)
                         if self._event_bus is not None:
                             await self._event_bus.publish(
-                                "strategic.hero_recovered",
+                                GameEvents.Strategic.HERO_RECOVERED,
                                 hero_id=hero.id,
                                 hero_name=hero.name,
                                 faction_id=hero.faction_id,

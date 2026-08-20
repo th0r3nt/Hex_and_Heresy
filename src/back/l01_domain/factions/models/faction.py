@@ -6,6 +6,7 @@ from typing import Optional
 from uuid import uuid4
 from pydantic import BaseModel, Field
 
+from src.back.l01_domain.common import FactionRace
 from src.back.l01_domain.exceptions import (
     InsufficientResourcesError,
     NegativeResourceAmountError,
@@ -25,10 +26,7 @@ class Faction(BaseModel):
     """
 
     id: str = Field(default_factory=lambda: str(uuid4()))
-    race_id: str = Field(
-        ...,
-        description="'humans' | 'greenskins' | 'elfs' | 'baronial_troops' | 'congregation_of_the_meteorite' | 'mercenaries'",
-    )
+    race: FactionRace = Field(..., description="Расовая принадлежность фракции")
     name: str = Field(
         ..., min_length=1, description="Имя конкретной фракции в партии, не расы"
     )
@@ -48,6 +46,11 @@ class Faction(BaseModel):
     buildings: list[ConstructedBuilding] = Field(
         default_factory=list, description="Список возведенных и строящихся зданий"
     )
+
+    @property
+    def race_id(self) -> str:
+        """Строковый идентификатор расы для обратной совместимости."""
+        return self.race.value
 
     def can_afford(self, resource: ResourceType, amount: float) -> bool:
         """

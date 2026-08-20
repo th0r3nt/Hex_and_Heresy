@@ -11,6 +11,7 @@ from src.back.l02_services.gameflow.guards import (
 )
 from src.back.l02_services.gameflow.states import GameFlowTrigger, GameState
 from src.back.l02_services.gameflow.transitions import TRANSITION_MATRIX
+from src.back.utils.event.registry import GameEvents
 
 
 class GameFlowFSM:
@@ -48,7 +49,6 @@ class GameFlowFSM:
         """
         Проверяет возможность перехода без его фактического выполнения.
         """
-
         rule = TRANSITION_MATRIX.get((self._current_state, trigger))
         if rule is None:
             return False
@@ -64,9 +64,8 @@ class GameFlowFSM:
     ) -> GameState:
         """
         Выполняет переход по триггеру с валидацией стражей.
-        Выбрасывает сооветствующие ошибки при несоблюдении.
+        Выбрасывает соответствующие ошибки при несоблюдении.
         """
-
         rule = TRANSITION_MATRIX.get((self._current_state, trigger))
         if rule is None:
             raise InvalidStateTransitionError(self._current_state, trigger)
@@ -95,7 +94,7 @@ class GameFlowFSM:
 
         if self._event_bus is not None:
             await self._event_bus.publish(
-                "gameflow.state_changed",
+                GameEvents.GameFlow.STATE_CHANGED,
                 from_state=previous_state,
                 to_state=self._current_state,
                 trigger=trigger,

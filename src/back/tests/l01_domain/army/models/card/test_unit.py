@@ -6,6 +6,7 @@ import pytest
 from pydantic import ValidationError
 
 from src.back.l01_domain.army.models.card.unit import BaseUnitStats, UnitArchetype
+from src.back.l01_domain.common import FactionRace
 
 
 class TestBaseUnitStats:
@@ -42,6 +43,7 @@ class TestUnitArchetype:
     def _make(self, **overrides) -> UnitArchetype:
         payload = dict(
             id="unit_test_pikemen",
+            race=FactionRace.HUMANS,
             faction_id="humans",
             name="Тестовые копейщики",
             tier=1,
@@ -54,6 +56,7 @@ class TestUnitArchetype:
     def test_defaults(self):
         archetype = self._make()
 
+        assert archetype.race == FactionRace.HUMANS
         assert archetype.base_upkeep_food == 1.0
         assert archetype.base_upkeep_gold == 0.0
         assert archetype.lore_description == ""

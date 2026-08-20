@@ -4,7 +4,7 @@
 
 import pytest
 
-from src.back.l01_domain.army.constants import EquipmentSlot, StrategicMovementPace
+from src.back.l01_domain.army.constants import EquipmentSlot, StrategicMovementPace, WeaponCategory, EquipmentTag
 from src.back.l01_domain.army.models.card.equipment import Equipment, EquipmentStats
 from src.back.l01_domain.army.models.card.squad import Squad
 from src.back.l01_domain.army.models.card.unit import BaseUnitStats, UnitArchetype
@@ -14,7 +14,7 @@ from src.back.l01_domain.factions.models.buildings import Headquarters
 from src.back.l01_domain.factions.models.faction import Faction
 from src.back.l01_domain.factions.models.lord import Lord, LordArchetype, LordTrait
 from src.back.l01_domain.maps.models.strategic import HexCoordinates
-
+from src.back.l01_domain.common import FactionRace
 
 class FakeEventBus:
     """Фейковая шина событий для фиксации опубликованных сообщений в тестах."""
@@ -43,7 +43,7 @@ def human_faction() -> Faction:
     hq = Headquarters(faction_id="humans", name="Цитадель")
     faction = Faction(
         id="humans",
-        race_id="humans",
+        race=FactionRace.HUMANS,
         name="Священная Империя",
         is_player_controlled=True,
         lord=lord,
@@ -67,7 +67,7 @@ def orc_faction() -> Faction:
     hq = Headquarters(faction_id="greenskins", name="Шатер Вождя")
     faction = Faction(
         id="greenskins",
-        race_id="greenskins",
+        race=FactionRace.GREENSKINS,
         name="Орда Ржавых Клыков",
         is_player_controlled=False,
         lord=lord,
@@ -82,6 +82,7 @@ def orc_faction() -> Faction:
 def basic_squad() -> Squad:
     archetype = UnitArchetype(
         id="unit_human_guard",
+        race=FactionRace.HUMANS,
         faction_id="humans",
         name="Городская стража",
         tier=1,
@@ -95,6 +96,8 @@ def basic_squad() -> Squad:
         name="Меч",
         lore="...",
         slot=EquipmentSlot.WEAPON,
+        category=WeaponCategory.SWORD,
+        tags={EquipmentTag.ONE_HANDED},
         tier=1,
         stats=EquipmentStats(damage=5.0),
     )

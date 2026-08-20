@@ -19,6 +19,7 @@ from src.back.l02_services.gameflow.states import (
     GameFlowTrigger,
     GameState,
 )
+from src.back.utils.event.registry import GameEvents
 
 
 class FakeEventBus:
@@ -57,7 +58,6 @@ class TestGameFlowFSM:
 
     @pytest.mark.asyncio
     async def test_invalid_transition_raises_error(self, fsm):
-        # Нельзя начать тактический бой прямо из главного меню
         with pytest.raises(InvalidStateTransitionError):
             await fsm.trigger(GameFlowTrigger.ENGAGE_COMBAT)
 
@@ -68,7 +68,7 @@ class TestGameFlowFSM:
         invalid_payload = CombatTransitionPayload(
             hex_coordinates=HexCoordinates.from_axial(0, 0),
             attacker_faction_id="humans",
-            defender_faction_id="humans",  # одна и та же фракция
+            defender_faction_id="humans",
             battle_state=dummy_battle_state,
         )
 
@@ -105,11 +105,9 @@ class TestGameFlowFSM:
         await fsm.trigger(GameFlowTrigger.ENGAGE_COMBAT, payload=valid_payload)
         assert fsm.current_state == GameState.TACTICAL_COMBAT
 
-        # Ставим на паузу из боя
         await fsm.trigger(GameFlowTrigger.PAUSE_GAME)
         assert fsm.current_state == GameState.PAUSE
 
-        # Снимаем с паузы - должны вернуться именно в бой
         await fsm.trigger(GameFlowTrigger.RESUME_GAME)
         assert fsm.current_state == GameState.TACTICAL_COMBAT
 
@@ -122,7 +120,7 @@ class TestGameFlowFSM:
 
         assert len(bus.published_events) == 1
         event_name, kwargs = bus.published_events[0]
-        assert event_name == "gameflow.state_changed"
+        assert event_name == GameEvents.GameFlow.STATE_CHANGED
         assert kwargs["from_state"] == GameState.MAIN_MENU
         assert kwargs["to_state"] == GameState.STRATEGIC_MAP
 
@@ -132,21 +130,17 @@ class TestGameFlowFacade:
     async def test_facade_gameplay_lifecycle(self, facade, dummy_battle_state):
         assert facade.current_state == GameState.MAIN_MENU
 
-        # Старт игры
         await facade.start_new_game()
         assert facade.current_state == GameState.STRATEGIC_MAP
 
-        # Привязываем WorldState активной сессии
         world = WorldState()
         facade.bind_world_state(world)
 
-        # На глобальной карте разрешено строительство и дипломатия
         facade.assert_can_build()
         facade.assert_can_perform_diplomacy()
         facade.assert_can_recruit()
         facade.assert_can_save()
 
-        # Вход в бой
         await facade.enter_tactical_combat(
             hex_coords=HexCoordinates.from_axial(1, 0),
             attacker_faction_id="humans",
@@ -155,7 +149,6 @@ class TestGameFlowFacade:
         )
         assert facade.current_state == GameState.TACTICAL_COMBAT
 
-        # В бою дипломатия и стройка блокируются
         with pytest.raises(ActionForbiddenInCurrentStateError):
             facade.assert_can_build()
 
@@ -165,16 +158,13 @@ class TestGameFlowFacade:
         with pytest.raises(ActionForbiddenInCurrentStateError):
             facade.assert_can_save()
 
-        # Завершение боя
         await facade.finish_tactical_combat(battle_id="b_1", victor_faction_id="humans")
         assert facade.current_state == GameState.STRATEGIC_MAP
 
-        # Конец игры
         await facade.trigger_game_over(
             is_player_victorious=True, reason="Цитадель врага пала", total_ticks=42
         )
         assert facade.current_state == GameState.GAME_OVER
 
-        # Возврат в меню
         await facade.quit_to_main_menu()
         assert facade.current_state == GameState.MAIN_MENU

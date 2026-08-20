@@ -11,7 +11,7 @@ from src.back.l01_domain.world.constants import GlobalEventCategory
 from src.back.l01_domain.world.models.battleground import BattlefieldLootSite
 from src.back.l01_domain.world.models.events import GlobalEvent
 from src.back.l01_domain.world.models.state import WorldState
-
+from src.back.l01_domain.common import FactionRace
 
 def _make_dummy_faction(faction_id: str, name: str, is_player: bool = False) -> Faction:
     lord = Lord(
@@ -24,7 +24,7 @@ def _make_dummy_faction(faction_id: str, name: str, is_player: bool = False) -> 
     hq = Headquarters(faction_id=faction_id, name="Замок")
     return Faction(
         id=faction_id,
-        race_id="humans",
+        race=FactionRace.HUMANS,
         name=name,
         is_player_controlled=is_player,
         lord=lord,

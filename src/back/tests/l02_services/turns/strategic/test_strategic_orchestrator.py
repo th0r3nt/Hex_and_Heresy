@@ -9,6 +9,7 @@ from src.back.l02_services.turns.facade import TurnsFacade
 from src.back.l02_services.turns.strategic.orchestrator import (
     StrategicTurnOrchestrator,
 )
+from src.back.utils.event.registry import GameEvents
 
 
 class TestStrategicTurnOrchestrator:
@@ -35,8 +36,8 @@ class TestStrategicTurnOrchestrator:
 
         # 4. Проверяем события в шине
         event_names = [name for name, _ in fake_bus.events]
-        assert "strategic.turn_started" in event_names
-        assert "strategic.turn_completed" in event_names
+        assert GameEvents.Strategic.TURN_STARTED in event_names
+        assert GameEvents.Strategic.TURN_COMPLETED in event_names
 
     @pytest.mark.asyncio
     async def test_turns_facade_delegation(self, human_faction, sample_army, fake_bus):

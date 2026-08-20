@@ -8,6 +8,7 @@ from src.back.l01_domain.army.constants import StrategicMovementPace
 from src.back.l01_domain.army.models.card.squad import Squad
 from src.back.l01_domain.army.models.card.unit import BaseUnitStats, UnitArchetype
 from src.back.l01_domain.army.models.strategic import StrategicArmy
+from src.back.l01_domain.common import FactionRace
 from src.back.l01_domain.exceptions import (
     InvalidAssignmentTargetError,
     WorkerNotAvailableError,
@@ -31,6 +32,7 @@ from src.back.l02_services.turns.strategic.workers.stationary import (
 def peasant_squad() -> Squad:
     archetype = UnitArchetype(
         id="unit_peasants_00",
+        race=FactionRace.HUMANS,
         faction_id="humans",
         name="Крепостные",
         tier=0,

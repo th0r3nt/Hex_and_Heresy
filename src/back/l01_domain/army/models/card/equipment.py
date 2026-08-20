@@ -2,10 +2,20 @@
 Модели предметов экипировки: оружие, броня, аксессуары.
 """
 
-from typing import Optional
-from pydantic import BaseModel, Field, ConfigDict
+from typing import Optional, Union
+from pydantic import BaseModel, Field, ConfigDict, model_validator
 
-from src.back.l01_domain.army.constants import EquipmentSlot, UnitSizeCategory
+from src.back.l01_domain.army.constants import (
+    AccessoryCategory,
+    ArmorCategory,
+    EquipmentSlot,
+    EquipmentTag,
+    UnitSizeCategory,
+    WeaponCategory,
+)
+from src.back.l01_domain.exceptions import InvalidEquipmentSlotError
+
+EquipmentCategoryType = Union[WeaponCategory, ArmorCategory, AccessoryCategory]
 
 
 class EquipmentStats(BaseModel):
@@ -55,10 +65,15 @@ class Equipment(BaseModel):
     lore: str = Field(..., min_length=1, description="Лор предмета")
 
     slot: EquipmentSlot = Field(..., description="Слот экипировки")
+    category: Optional[EquipmentCategoryType] = Field(
+        default=None, description="Подтип предмета (оружие, броня, аксессуар)"
+    )
+    tags: set[EquipmentTag] = Field(
+        default_factory=set, description="Набор механических и лорных тегов"
+    )
     tier: int = Field(..., ge=0, le=6, description="Тир предмета (0-6)")
 
     # Каждый предмет выбирает, что будет давать юниту
-    # Например, дефолт оружие будет давать только урон
     stats: EquipmentStats = Field(default_factory=EquipmentStats)
 
     # Экономика производства
@@ -69,3 +84,46 @@ class Equipment(BaseModel):
     special_rules: Optional[str] = Field(
         default=None, description="Текстовое описание кастомных механик"
     )
+
+    @model_validator(mode="after")
+    def validate_category_matches_slot(self) -> "Equipment":
+        if self.category is None:
+            return self
+
+        if self.slot == EquipmentSlot.WEAPON and not isinstance(self.category, WeaponCategory):
+            raise InvalidEquipmentSlotError(
+                item_id=self.id,
+                expected_slot=EquipmentSlot.WEAPON.value,
+                actual_slot=str(self.category),
+            )
+        if self.slot == EquipmentSlot.ARMOR and not isinstance(self.category, ArmorCategory):
+            raise InvalidEquipmentSlotError(
+                item_id=self.id,
+                expected_slot=EquipmentSlot.ARMOR.value,
+                actual_slot=str(self.category),
+            )
+        if self.slot == EquipmentSlot.ACCESSORY and not isinstance(
+            self.category, AccessoryCategory
+        ):
+            raise InvalidEquipmentSlotError(
+                item_id=self.id,
+                expected_slot=EquipmentSlot.ACCESSORY.value,
+                actual_slot=str(self.category),
+            )
+        return self
+
+    def has_tag(self, tag: EquipmentTag) -> bool:
+        """Проверяет наличие механического или лорного тега."""
+        return tag in self.tags
+
+    @property
+    def is_two_handed(self) -> bool:
+        return EquipmentTag.TWO_HANDED in self.tags
+
+    @property
+    def is_firearm(self) -> bool:
+        return self.category == WeaponCategory.FIREARM or EquipmentTag.BLACKPOWDER in self.tags
+
+    @property
+    def is_braceable(self) -> bool:
+        return EquipmentTag.BRACEABLE in self.tags

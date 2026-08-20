@@ -8,6 +8,7 @@ from src.back.l01_domain.army.models.card.squad import Squad
 from src.back.l01_domain.combat.constants import BattlePhase
 from src.back.l01_domain.maps.models.strategic import HexCoordinates
 from src.back.l02_services.turns.tactical.orchestrator import TacticalTurnOrchestrator
+from src.back.utils.event.registry import GameEvents
 
 
 class TestTacticalTurnOrchestrator:
@@ -67,5 +68,5 @@ class TestTacticalTurnOrchestrator:
 
         # Проверка публикации событий
         event_names = [name for name, _ in fake_bus.events]
-        assert "tactical.turn_started" in event_names
-        assert "tactical.battle_completed" in event_names
+        assert GameEvents.Tactical.TURN_STARTED in event_names
+        assert GameEvents.Tactical.BATTLE_COMPLETED in event_names

@@ -3,7 +3,7 @@
 """
 
 from src.back.l01_domain.army.models.card.squad import Squad
-from src.back.l01_domain.combat.constants import TerrainType
+from src.back.l01_domain.combat.constants import TerrainType, WeatherCondition
 from src.back.l01_domain.combat.models.state import SquadOrder
 from src.back.l01_domain.maps.models.tactical import CellCoordinates
 from src.back.l02_services.turns.tactical.combat.ranged import TacticalRangedService
@@ -84,3 +84,28 @@ class TestTacticalRangedService:
         assert len(reports) == 1
         assert reports[0].friendly_fire_squad_id == "ally"
         assert sq_ally.state.unit_count < 100  # Союзник принял урон
+
+    def test_firearm_with_blackpowder_tag_misfires_in_rain(
+        self, empty_battle_state, archetype_human_sword, weapon_arquebus
+    ):
+        sq_gunner = Squad.create_new(archetype=archetype_human_sword, weapon=weapon_arquebus)
+        sq_gunner.id = "gunners"
+        sq_target = Squad.create_new(archetype=archetype_human_sword)
+        sq_target.id = "target"
+        squads = {"gunners": sq_gunner, "target": sq_target}
+
+        empty_battle_state.weather = WeatherCondition.HEAVY_RAIN
+        place_squad_on_grid(empty_battle_state, "gunners", 0, 0)
+        place_squad_on_grid(empty_battle_state, "target", 4, 0)
+
+        empty_battle_state.queue_order(
+            SquadOrder(squad_id="gunners", target_cell=CellCoordinates(x=4, y=0))
+        )
+
+        service = TacticalRangedService()
+        reports = service.resolve_ranged_attacks(empty_battle_state, squads)
+
+        assert len(reports) == 1
+        assert reports[0].is_misfire is True
+        assert reports[0].kills == 0
+        assert sq_target.state.unit_count == 100

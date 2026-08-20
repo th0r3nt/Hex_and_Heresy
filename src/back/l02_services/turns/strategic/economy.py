@@ -15,6 +15,7 @@ from src.back.l01_domain.factions.models.economy import FactionEconomyReport
 from src.back.l01_domain.factions.models.faction import Faction
 from src.back.l01_domain.protocols.events import EventBusProtocol
 from src.back.l01_domain.world.models.state import WorldState
+from src.back.utils.event.registry import GameEvents
 
 
 @dataclass(frozen=True)
@@ -38,9 +39,8 @@ class _UpkeepSettlement:
 
 class StrategicEconomyService:
     """
-    Выполняет экономический этап глобального такта: продвижение разогрева рабочих,
-    расчет добычи работающих зданий, списание содержания, дезертирство при голоде
-    и завершение строек.
+    Выполняет экономический этап глобального такта: расчет добычи работающих зданий,
+    списание содержания, дезертирство при голоде, завершение строек и продвижение разогрева рабочих.
     """
 
     def __init__(self, event_bus: Optional[EventBusProtocol] = None) -> None:
@@ -70,15 +70,14 @@ class StrategicEconomyService:
     async def _advance_worker_warmups(self, world_state: WorldState) -> None:
         """
         Продвигает таймеры разогрева рабочих. При завершении разогрева
-        статус переходит в working, и отряд начинает приносить доход.
+        статус переходит в working, и отряд начинает приносить доход со следующего такта.
         """
         for assignment in world_state.worker_assignments.values():
             if assignment.status == WorkerAssignmentStatus.WARMING_UP:
                 transitioned = assignment.advance_warmup()
-
                 if transitioned and self._event_bus is not None:
                     await self._event_bus.publish(
-                        "strategic.worker_warmup_completed",  # TODO: типизировать
+                        GameEvents.Economy.WORKER_WARMUP_COMPLETED,
                         assignment_id=assignment.id,
                         squad_id=assignment.squad_id,
                         faction_id=assignment.faction_id,
@@ -93,18 +92,11 @@ class StrategicEconomyService:
         """
         Рассчитывает экономику за 1 такт для одной конкретной фракции.
         """
-
-        # ========================================================================
         # 1. Строительство
-        # ========================================================================
-
         completed_buildings = await self._advance_construction(faction)
 
-        # ========================================================================
         # 2. Доход от зданий, где работают назначенные отряды
-        # ========================================================================
-
-        building_income, working_workers_count = self._calculate_building_income(
+        building_income, _ = self._calculate_building_income(
             faction=faction, world_state=world_state
         )
 
@@ -115,10 +107,7 @@ class StrategicEconomyService:
         )
         self._earn_income(faction, total_income)
 
-        # ========================================================================
         # 3. Расходы на содержание, голод и дезертирство
-        # ========================================================================
-
         faction_armies = world_state.get_faction_armies(faction.id)
         upkeep = self._settle_upkeep(faction, faction_armies)
 
@@ -128,8 +117,6 @@ class StrategicEconomyService:
             upkeep=upkeep,
             world_state=world_state,
         )
-
-        # ========================================================================
 
         return FactionEconomyReport(
             faction_id=faction.id,
@@ -163,7 +150,7 @@ class StrategicEconomyService:
                 completed_buildings.append(building.building.name)
                 if self._event_bus is not None:
                     await self._event_bus.publish(
-                        "strategic.building_completed",
+                        GameEvents.Economy.BUILDING_COMPLETED,
                         faction_id=faction.id,
                         building_id=building.building.id,
                         building_name=building.building.name,
@@ -188,7 +175,6 @@ class StrategicEconomyService:
             if building.is_under_construction or not building.building.requires_workers:
                 continue
 
-            # Считаем только отряды в статусе WORKING
             active_workers_count = 0
             for sq_id in building.assigned_worker_squad_ids:
                 assignment = world_state.get_squad_assignment(sq_id)
@@ -261,7 +247,7 @@ class StrategicEconomyService:
     ) -> list[str]:
         """
         При дефиците бьет по морали всех отрядов и инициирует дезертирство при сильном голоде.
-        Если дезертирует рабочий отряд, его назначение автоматически аннулируется.
+        Если дезертирует рабочий, его назначение автоматически аннулируется.
         """
         if upkeep.gold_deficit <= 0 and upkeep.food_deficit <= 0:
             return []
@@ -275,7 +261,7 @@ class StrategicEconomyService:
 
         if self._event_bus is not None:
             await self._event_bus.publish(
-                "strategic.famine_occurred",
+                GameEvents.Economy.FAMINE_OCCURRED,
                 faction_id=faction.id,
                 gold_deficit=upkeep.gold_deficit,
                 food_deficit=upkeep.food_deficit,
@@ -291,7 +277,6 @@ class StrategicEconomyService:
                 if squad_to_desert is None:
                     continue
 
-                # Снимаем назначение, если сбежал рабочий
                 assignment = world_state.get_squad_assignment(squad_to_desert.id)
                 if assignment is not None:
                     assignment.abort()
@@ -301,7 +286,7 @@ class StrategicEconomyService:
 
                 if self._event_bus is not None:
                     await self._event_bus.publish(
-                        "strategic.squad_deserted",
+                        GameEvents.Economy.SQUAD_DESERTED,
                         faction_id=faction.id,
                         squad_name=squad_to_desert.display_name,
                         army_id=army.id,

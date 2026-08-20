@@ -20,6 +20,7 @@ from src.back.l01_domain.factions.models.workers import WorkerAssignment
 from src.back.l01_domain.maps.models.strategic import HexCoordinates, hex_line
 from src.back.l01_domain.protocols.events import EventBusProtocol
 from src.back.l01_domain.world.models.state import WorldState
+from src.back.utils.event.registry import GameEvents
 
 
 class ExpeditionWorkerService:
@@ -45,7 +46,6 @@ class ExpeditionWorkerService:
         Формирует и отправляет караван рабочих в экспедицию на нейтральный гекс.
         Отряд рабочих отделяется в отдельную мобильную армию для физического движения по карте.
         """
-
         faction = world_state.get_faction(faction_id)
         if faction is None:
             raise InvalidAssignmentTargetError(faction_id, "фракция не найдена")
@@ -56,10 +56,7 @@ class ExpeditionWorkerService:
                 "длительность добычи должна быть не менее одного такта",
             )
 
-        # ===============================================================
         # 1. Поиск и валидация отряда
-        # ===============================================================
-
         source_army = None
         squad = None
         for army in world_state.get_faction_armies(faction_id):
@@ -89,15 +86,8 @@ class ExpeditionWorkerService:
         if existing_assignment is not None and existing_assignment.is_active:
             raise WorkerNotAvailableError(squad_id, "отряд уже выполняет другое назначение")
 
-        # ===============================================================
         # 2. Выделение отряда в отдельную армию-караван
-        # ===============================================================
-
         source_army.remove_squad(squad_id)
-
-        # ===============================================================
-        # Расчет маршрута от текущей позиции до целевого гекса
-        # ===============================================================
 
         path_to_target = hex_line(home_hex, target_hex)
         planned_path = path_to_target[1:] if len(path_to_target) > 1 else []
@@ -113,10 +103,7 @@ class ExpeditionWorkerService:
         caravan_army.add_squad(squad)
         world_state.add_army(caravan_army)
 
-        # ===============================================================
         # 3. Регистрация доменного назначения
-        # ===============================================================
-
         assignment = WorkerAssignment.create_expedition(
             squad_id=squad_id,
             faction_id=faction_id,
@@ -129,7 +116,7 @@ class ExpeditionWorkerService:
 
         if self._event_bus is not None:
             await self._event_bus.publish(
-                "strategic.expedition_dispatched",
+                GameEvents.Economy.EXPEDITION_DISPATCHED,
                 assignment_id=assignment.id,
                 squad_id=squad_id,
                 faction_id=faction_id,
@@ -169,21 +156,17 @@ class ExpeditionWorkerService:
                 assignment.abort()
                 if self._event_bus is not None:
                     await self._event_bus.publish(
-                        "strategic.expedition_lost",
+                        GameEvents.Economy.EXPEDITION_LOST,
                         assignment_id=assignment.id,
                         squad_id=assignment.squad_id,
                         faction_id=assignment.faction_id,
                     )
                 continue
 
-            # Если караван прямо сейчас связан боем — пауза в процессе добычи
             if caravan_army.is_in_tactical_battle:
                 continue
 
-            # ===============================================================
             # Фаза 1: движение к цели
-            # ===============================================================
-
             if assignment.status == WorkerAssignmentStatus.TRAVELING_OUT:
                 if (
                     caravan_army.current_hex == assignment.target_hex
@@ -192,7 +175,7 @@ class ExpeditionWorkerService:
                     assignment.start_mining()
                     if self._event_bus is not None:
                         await self._event_bus.publish(
-                            "strategic.expedition_mining_started",
+                            GameEvents.Economy.EXPEDITION_MINING_STARTED,
                             assignment_id=assignment.id,
                             squad_id=assignment.squad_id,
                             faction_id=assignment.faction_id,
@@ -203,24 +186,19 @@ class ExpeditionWorkerService:
                             ),
                         )
 
-            # ===============================================================
             # Фаза 2: добыча на месте
-            # ===============================================================
-
             elif assignment.status == WorkerAssignmentStatus.MINING:
                 squad = caravan_army.squads[0] if caravan_army.squads else None
                 if squad is None or squad.state.unit_count <= 0:
                     assignment.abort()
                     continue
 
-                # Расчет добычи за текущий такт
                 gold_mined = NEUTRAL_HEX_GOLD_BASE_YIELD_PER_UNIT * squad.state.unit_count
                 mined_res = {ResourceType.GOLD: gold_mined}
 
                 finished_mining = assignment.tick_mining(mined_res)
 
                 if finished_mining:
-                    # Формируем обратный маршрут на базу
                     if assignment.target_hex and assignment.home_hex:
                         return_path = hex_line(assignment.target_hex, assignment.home_hex)
                         caravan_army.planned_path = (
@@ -230,7 +208,7 @@ class ExpeditionWorkerService:
 
                     if self._event_bus is not None:
                         await self._event_bus.publish(
-                            "strategic.expedition_returning",
+                            GameEvents.Economy.EXPEDITION_RETURNING,
                             assignment_id=assignment.id,
                             squad_id=assignment.squad_id,
                             faction_id=assignment.faction_id,
@@ -239,10 +217,7 @@ class ExpeditionWorkerService:
                             ),
                         )
 
-            # ===============================================================
             # Фаза 3: возвращение домой и разгрузка
-            # ===============================================================
-            
             elif assignment.status == WorkerAssignmentStatus.TRAVELING_BACK:
                 if (
                     caravan_army.current_hex == assignment.home_hex
@@ -258,7 +233,7 @@ class ExpeditionWorkerService:
 
                     if self._event_bus is not None:
                         await self._event_bus.publish(
-                            "strategic.expedition_returned",
+                            GameEvents.Economy.EXPEDITION_RETURNED,
                             assignment_id=assignment.id,
                             squad_id=assignment.squad_id,
                             faction_id=assignment.faction_id,

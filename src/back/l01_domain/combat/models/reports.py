@@ -1,13 +1,53 @@
 """
-Доменные модели отчетов и результатов тактического боя.
+Доменные модели отчетов и результатов тактического боя и стратегических столкновений.
 """
 
 from typing import Optional
 from pydantic import BaseModel, ConfigDict, Field
 
 from src.back.l01_domain.combat.constants import BattlePhase, ReactionType
+from src.back.l01_domain.maps.models.strategic import HexCoordinates
 from src.back.l01_domain.maps.models.tactical import CellCoordinates
 from src.back.l01_domain.world.models.battleground import BattlefieldLootSite
+
+# ==================================================================
+# СТРАТЕГИЧЕСКИЕ СТОЛКНОВЕНИЯ И ПЕРЕМЕЩЕНИЯ
+# ==================================================================
+
+
+class EncounterEvent(BaseModel):
+    """
+    Событие боевого столкновения двух армий на гексе глобальной карты.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    hex_coordinates: HexCoordinates = Field(...)
+    faction_a_id: str = Field(...)
+    faction_b_id: str = Field(...)
+    army_a_id: str = Field(...)
+    army_b_id: str = Field(...)
+    is_ambush: bool = Field(default=False)
+    ambusher_army_id: Optional[str] = Field(default=None)
+
+
+class MovementStepReport(BaseModel):
+    """
+    Отчет о результатах фазы стратегических перемещений, столкновений и дипломатической логистики.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    moved_army_ids: list[str] = Field(default_factory=list)
+    encounters: list[EncounterEvent] = Field(default_factory=list)
+    delivered_dispatch_ids: list[str] = Field(default_factory=list)
+    intercepted_dispatch_ids: list[str] = Field(default_factory=list)
+    arrived_ambassador_ids: list[str] = Field(default_factory=list)
+
+
+# ==================================================================
+# ТАКТИЧЕСКИЙ БОЙ
+# ==================================================================
 
 
 class ChargeStepReport(BaseModel):
@@ -93,6 +133,8 @@ class TacticalTurnReport(BaseModel):
     """
     Итоговый отчет о результатах тактического раунда (30 секунд боя).
     """
+
+    model_config = ConfigDict(frozen=True)
 
     battle_id: str = Field(...)
     tick: int = Field(...)

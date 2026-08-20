@@ -5,8 +5,15 @@
 import pytest
 from pydantic import ValidationError
 
-from src.back.l01_domain.army.constants import EquipmentSlot
+from src.back.l01_domain.army.constants import (
+    AccessoryCategory,
+    ArmorCategory,
+    EquipmentSlot,
+    EquipmentTag,
+    WeaponCategory,
+)
 from src.back.l01_domain.army.models.card.equipment import Equipment, EquipmentStats
+from src.back.l01_domain.exceptions import InvalidEquipmentSlotError
 
 
 class TestEquipmentStats:
@@ -34,8 +41,6 @@ class TestEquipmentStats:
             EquipmentStats(range_hexes=0)
 
     def test_speed_and_initiative_modifiers_can_be_negative(self):
-        # В отличие от damage/armor, штрафы (тяжёлая броня, неудобное оружие)
-        # должны уметь уходить в минус.
         stats = EquipmentStats(speed_modifier=-0.2, initiative_modifier=-1)
 
         assert stats.speed_modifier == -0.2
@@ -55,6 +60,8 @@ class TestEquipment:
             name="Тестовая алебарда",
             lore="Простое оружие для проверки модели.",
             slot=EquipmentSlot.WEAPON,
+            category=WeaponCategory.POLEARM,
+            tags={EquipmentTag.TWO_HANDED, EquipmentTag.BRACEABLE},
             tier=2,
         )
         payload.update(overrides)
@@ -68,6 +75,34 @@ class TestEquipment:
         assert item.cost_material == 0.0
         assert item.is_custom is False
         assert item.special_rules is None
+        assert item.has_tag(EquipmentTag.BRACEABLE) is True
+        assert item.is_braceable is True
+        assert item.is_two_handed is True
+        assert item.is_firearm is False
+
+    def test_firearm_tags_and_properties(self):
+        arquebus = self._make(
+            id="weapon_human_arquebus",
+            category=WeaponCategory.FIREARM,
+            tags={EquipmentTag.BLACKPOWDER, EquipmentTag.TWO_HANDED},
+        )
+        assert arquebus.is_firearm is True
+        assert arquebus.has_tag(EquipmentTag.BLACKPOWDER) is True
+
+    def test_slot_category_mismatch_raises_domain_error(self):
+        # Попытка надеть латы в слот оружия
+        with pytest.raises(InvalidEquipmentSlotError):
+            self._make(
+                slot=EquipmentSlot.WEAPON,
+                category=ArmorCategory.PLATE,
+            )
+
+        # Попытка надеть щит в слот брони
+        with pytest.raises(InvalidEquipmentSlotError):
+            self._make(
+                slot=EquipmentSlot.ARMOR,
+                category=AccessoryCategory.SHIELD,
+            )
 
     @pytest.mark.parametrize("field_name", ["id", "name", "lore"])
     def test_empty_strings_are_rejected(self, field_name):
@@ -85,8 +120,6 @@ class TestEquipment:
         assert item.tier == tier
 
     def test_custom_equipment_carries_special_rules(self):
-        # Кейс из gunsmith.md: LLM-оружейник генерирует чертёж с текстовым
-        # описанием уникальной механики.
         item = self._make(
             is_custom=True,
             special_rules="Развертывание: наносит 50 ед. урона первому вошедшему отряду.",

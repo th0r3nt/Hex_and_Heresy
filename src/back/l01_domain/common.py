@@ -1,9 +1,21 @@
 """
-Общие доменные value-объекты, переиспользуемые в нескольких поддоменах
-(army, factions, combat) - чтобы не тянуть их друг у друга.
+Общие доменные сущности и value-объекты, переиспользуемые в нескольких
+поддоменах (army, factions, combat, world).
 """
 
+from enum import Enum
 from pydantic import BaseModel, Field
+
+
+class FactionRace(str, Enum):
+    """Базовые расы и культурные архетипы мира Hex & Heresy."""
+
+    HUMANS = "humans"
+    GREENSKINS = "greenskins"
+    ELFS = "elfs"
+    BARONIAL_TROOPS = "baronial_troops"
+    CONGREGATION_OF_THE_METEORITE = "congregation_of_the_meteorite"
+    MERCENARIES = "mercenaries"
 
 
 class MechanicalModifier(BaseModel):

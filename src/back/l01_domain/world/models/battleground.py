@@ -6,6 +6,7 @@ from uuid import uuid4
 from pydantic import BaseModel, Field, ConfigDict
 
 from src.back.l01_domain.army.constants import UnitSizeCategory
+from src.back.l01_domain.common import FactionRace
 from src.back.l01_domain.maps.models.strategic import HexCoordinates
 from src.back.l01_domain.world.constants import DEFAULT_BATTLEFIELD_DECAY_TICKS
 
@@ -17,9 +18,13 @@ class BattlefieldCorpsePile(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    race_id: str = Field(..., description="Раса погибших юнитов")
+    race: FactionRace = Field(..., description="Раса погибших юнитов")
     size_category: UnitSizeCategory = Field(default=UnitSizeCategory.MEDIUM)
     count: int = Field(..., gt=0, description="Количество тел")
+
+    @property
+    def race_id(self) -> str:
+        return self.race.value
 
 
 class BattlefieldLootSite(BaseModel):

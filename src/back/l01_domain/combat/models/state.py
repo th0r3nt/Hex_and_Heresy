@@ -101,6 +101,11 @@ class TacticalBattleState(BaseModel):
     attacker_squad_ids: list[str] = Field(default_factory=list)
     defender_squad_ids: list[str] = Field(default_factory=list)
 
+    accumulated_deaths_by_squad: dict[str, int] = Field(
+        default_factory=dict,
+        description="Накопитель потерь отрядов за все раунды боя для генерации поля брани",
+    )
+
     def get_cell(self, coordinates: CellCoordinates) -> Optional[TacticalCellState]:
         return next((c for c in self.cells if c.coordinates == coordinates), None)
 

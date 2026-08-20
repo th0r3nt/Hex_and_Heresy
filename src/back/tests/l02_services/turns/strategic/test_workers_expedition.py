@@ -7,6 +7,7 @@ import pytest
 from src.back.l01_domain.army.models.card.squad import Squad
 from src.back.l01_domain.army.models.card.unit import BaseUnitStats, UnitArchetype
 from src.back.l01_domain.army.models.strategic import StrategicArmy
+from src.back.l01_domain.common import FactionRace
 from src.back.l01_domain.exceptions import WorkerNotAvailableError
 from src.back.l01_domain.factions.constants import (
     ResourceType,
@@ -24,6 +25,7 @@ from src.back.l02_services.turns.strategic.workers.expedition import (
 def goblin_workers() -> Squad:
     archetype = UnitArchetype(
         id="unit_goblins_00",
+        race=FactionRace.GREENSKINS,
         faction_id="greenskins",
         name="Гоблины-рабы",
         tier=0,

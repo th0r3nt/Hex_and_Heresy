@@ -11,6 +11,7 @@ from src.back.l01_domain.exceptions import (
 from src.back.l01_domain.factions.models.workers import WorkerAssignment
 from src.back.l01_domain.protocols.events import EventBusProtocol
 from src.back.l01_domain.world.models.state import WorldState
+from src.back.utils.event.registry import GameEvents
 
 
 class StationaryWorkerService:
@@ -34,7 +35,6 @@ class StationaryWorkerService:
         Если отряд дислоцирован в том же гексе, что и здание — приступает к работе сразу (working).
         Если отряд находится в другом гексе — выставляется разогрев на 1 такт (warming_up).
         """
-        
         faction = world_state.get_faction(faction_id)
         if faction is None:
             raise InvalidAssignmentTargetError(faction_id, "фракция не найдена")
@@ -90,7 +90,6 @@ class StationaryWorkerService:
             raise WorkerNotAvailableError(squad_id, "отряд уже выполняет другое назначение")
 
         # 4. Проверка пространственной привязки (разогрев)
-        # Если гекс армии совпадает с зоной здания, разогрев не требуется
         army_hex_str = f"{squad_army.current_hex.q},{squad_army.current_hex.r}"
         needs_warmup = (
             constructed_building.zone_id != army_hex_str
@@ -110,7 +109,7 @@ class StationaryWorkerService:
 
         if self._event_bus is not None:
             await self._event_bus.publish(
-                "strategic.worker_assigned_stationary",
+                GameEvents.Economy.WORKER_ASSIGNED,
                 assignment_id=assignment.id,
                 squad_id=squad_id,
                 faction_id=faction_id,
@@ -149,7 +148,7 @@ class StationaryWorkerService:
 
         if self._event_bus is not None:
             await self._event_bus.publish(
-                "strategic.worker_unassigned",
+                GameEvents.Economy.WORKER_UNASSIGNED,
                 assignment_id=assignment.id,
                 squad_id=squad_id,
                 faction_id=assignment.faction_id,

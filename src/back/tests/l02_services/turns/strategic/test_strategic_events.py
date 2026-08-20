@@ -18,13 +18,14 @@ from src.back.l01_domain.world.models.battleground import BattlefieldLootSite
 from src.back.l01_domain.world.models.events import GlobalEvent
 from src.back.l01_domain.world.models.state import WorldState
 from src.back.l02_services.turns.strategic.events import StrategicEventsService
+from src.back.utils.event.registry import GameEvents
 
 
 class TestStrategicEventsService:
     @pytest.mark.asyncio
     async def test_time_advancement_and_phase_shift(self, fake_bus):
         world_state = WorldState()
-        world_state.time.current_hour = 12  # серые часы
+        world_state.time.current_hour = 12
         service = StrategicEventsService(event_bus=fake_bus)
 
         report = await service.process_world_events(world_state)
@@ -35,7 +36,7 @@ class TestStrategicEventsService:
         assert report.phase_changed is True
 
         event_names = [name for name, _ in fake_bus.events]
-        assert "strategic.neon_hours_started" in event_names
+        assert GameEvents.Strategic.NEON_HOURS_STARTED in event_names
 
     @pytest.mark.asyncio
     async def test_active_events_expiration(self, fake_bus):

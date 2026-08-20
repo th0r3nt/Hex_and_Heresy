@@ -5,11 +5,19 @@
 уникален и не тиражируется.
 """
 
-from typing import Optional
+from typing import Optional, Union
 from pydantic import BaseModel, Field, ConfigDict
 
-from src.back.l01_domain.army.constants import EquipmentSlot
+from src.back.l01_domain.army.constants import (
+    AccessoryCategory,
+    ArmorCategory,
+    EquipmentSlot,
+    EquipmentTag,
+    WeaponCategory,
+)
 from src.back.l01_domain.army.models.card.equipment import EquipmentStats
+
+EquipmentCategoryType = Union[WeaponCategory, ArmorCategory, AccessoryCategory]
 
 
 class HeroArtifact(BaseModel):
@@ -24,6 +32,8 @@ class HeroArtifact(BaseModel):
     lore: str = Field(..., min_length=1)
 
     slot: EquipmentSlot = Field(...)
+    category: Optional[EquipmentCategoryType] = Field(default=None)
+    tags: set[EquipmentTag] = Field(default_factory=set)
     tier: int = Field(..., ge=0, le=6)
 
     stats: EquipmentStats = Field(default_factory=EquipmentStats)
@@ -39,3 +49,6 @@ class HeroArtifact(BaseModel):
     cost_material: float = Field(default=0.0, ge=0)
 
     special_rules: Optional[str] = Field(default=None)
+
+    def has_tag(self, tag: EquipmentTag) -> bool:
+        return tag in self.tags

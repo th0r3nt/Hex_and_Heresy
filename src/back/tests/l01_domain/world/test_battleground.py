@@ -3,6 +3,7 @@
 """
 
 from src.back.l01_domain.army.constants import UnitSizeCategory
+from src.back.l01_domain.common import FactionRace
 from src.back.l01_domain.maps.models.strategic import HexCoordinates
 from src.back.l01_domain.world.models.battleground import (
     BattlefieldCorpsePile,
@@ -19,7 +20,7 @@ class TestBattlefieldLootSite:
             residual_resonite=50.0,
             corpses=[
                 BattlefieldCorpsePile(
-                    race_id="humans", size_category=UnitSizeCategory.MEDIUM, count=25
+                    race=FactionRace.HUMANS, size_category=UnitSizeCategory.MEDIUM, count=25
                 )
             ],
             ticks_remaining=3,

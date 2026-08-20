@@ -8,6 +8,7 @@ from src.back.l01_domain.army.constants import StrategicMovementPace
 from src.back.l01_domain.army.models.card.squad import Squad
 from src.back.l01_domain.army.models.card.unit import BaseUnitStats, UnitArchetype
 from src.back.l01_domain.army.models.strategic import StrategicArmy
+from src.back.l01_domain.common import FactionRace
 from src.back.l01_domain.factions.constants import BuildingCategory, ResourceType
 from src.back.l01_domain.factions.models.buildings import Building, ConstructedBuilding
 from src.back.l01_domain.maps.constants import TerritoryZoneType
@@ -96,6 +97,7 @@ class TestStrategicEconomyService:
     async def test_stationary_building_production(self, human_faction, fake_bus):
         peasant_archetype = UnitArchetype(
             id="unit_peasants",
+            race=FactionRace.HUMANS,
             faction_id=human_faction.id,
             name="Крепостные",
             tier=0,

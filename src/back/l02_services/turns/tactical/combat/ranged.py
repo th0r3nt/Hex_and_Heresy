@@ -11,6 +11,7 @@ from src.back.l01_domain.combat.constants import (
     TerrainType,
     WeatherCondition,
 )
+from src.back.l01_domain.army.constants import EquipmentTag
 from src.back.l01_domain.combat.models.effects import TerrainProfile
 from src.back.l01_domain.combat.models.reports import RangedCombatReport
 from src.back.l01_domain.combat.models.state import TacticalBattleState, TacticalCellState
@@ -81,8 +82,7 @@ class TacticalRangedService:
             if (
                 battle_state.weather == WeatherCondition.HEAVY_RAIN
                 and attacker.weapon is not None
-                and "arquebus"  # TODO: Сделать всё оружие/броню/аксессуары типизированными
-                in attacker.weapon.id.lower()
+                and attacker.weapon.has_tag(EquipmentTag.BLACKPOWDER)
             ):
                 reports.append(
                     RangedCombatReport(

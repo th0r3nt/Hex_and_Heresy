@@ -41,6 +41,79 @@ class EquipmentSlot(str, Enum):
     ACCESSORY = "accessory"
 
 
+class WeaponCategory(str, Enum):
+    """Категория и тип оружия."""
+
+    # Ближний бой
+    SWORD = "sword"
+    AXE = "axe"
+    POLEARM = "polearm"
+    SPEAR = "spear"
+    DAGGER = "dagger"
+    WHIP = "whip"
+    GREATSWORD = "greatsword"
+
+    # Дальний бой
+    BOW = "bow"
+    CROSSBOW = "crossbow"
+    FIREARM = "firearm"
+    THROWING = "throwing"
+    SIEGE_ENGINE = "siege_engine"
+
+    # Особое
+    MAGIC = "magic"
+    NATURAL = "natural" # Клыки, когти и т.п.
+
+
+class ArmorCategory(str, Enum):
+    """Категория и материал брони."""
+
+    UNARMORED = "unarmored"
+    CLOTH = "cloth"
+    PADDED = "padded"
+    LEATHER = "leather"
+    MAIL = "mail"
+    BRIGANDINE = "brigandine"
+    PLATE = "plate"
+    CARAPACE = "carapace"
+    FORCE_FIELD = "force_field" # Для магов
+
+
+class AccessoryCategory(str, Enum):
+    """Категория аксессуара."""
+
+    SHIELD = "shield"
+    BANNER = "banner"
+    AMMUNITION = "ammunition"
+    TRAP = "trap"
+    RELIC = "relic"
+    POTION = "potion"
+    INSTRUMENT = "instrument"
+    MISC = "misc"
+
+
+class EquipmentTag(str, Enum):
+    """Механические и лорные свойства предметов экипировки."""
+
+    # Погодные и физические свойства
+    BLACKPOWDER = "blackpowder"  # Черный порох (осечки при ливне)
+    STRING_BASED = "string_based"  # Тетива (намокает при ливне)
+    FLAMMABLE = "flammable"  # Легковоспламеняющийся предмет
+    HEAVY = "heavy"  # Повышенный расход выносливости
+
+    # Боевые свойства и хват
+    ONE_HANDED = "one_handed"
+    TWO_HANDED = "two_handed"
+    BRACEABLE = "braceable"  # Упор против натиска
+    SHIELD_BREAKER = "shield_breaker"  # Эффективно против щитов
+    ARMOR_PIERCING = "armor_piercing"
+
+    # Лорные и магические свойства
+    SILVER = "silver"  # Эффективно против нежити и мутантов
+    RESONITE_POWERED = "resonite_powered"  # Резонитовая природа
+    CURSED = "cursed"  # Проклятый предмет
+
+
 class UnitSizeCategory(str, Enum):
     """
     Габарит юнита. Влияет на бонус урона оружия против цели такого размера.
@@ -50,6 +123,7 @@ class UnitSizeCategory(str, Enum):
     MEDIUM = "medium"  # люди, орки, эльфы
     LARGE = "large"  # кавалерия, крупные звери
     HUGE = "huge"  # огры, драконы, монстры
+
 
 class StrategicMovementPace(str, Enum):
     """

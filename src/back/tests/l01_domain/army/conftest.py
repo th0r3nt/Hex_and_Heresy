@@ -1,13 +1,19 @@
 """
 Общие фикстуры для тестов src/back/l01_domain/army/.
-Лежит на уровне tests/l01_domain/army/ - доступен и card-, и characters-тестам.
 """
 
 import pytest
 
-from src.back.l01_domain.army.constants import EquipmentSlot
+from src.back.l01_domain.army.constants import (
+    AccessoryCategory,
+    ArmorCategory,
+    EquipmentSlot,
+    EquipmentTag,
+    WeaponCategory,
+)
 from src.back.l01_domain.army.models.card.equipment import Equipment, EquipmentStats
 from src.back.l01_domain.army.models.card.unit import BaseUnitStats, UnitArchetype
+from src.back.l01_domain.common import FactionRace
 
 
 @pytest.fixture
@@ -20,6 +26,7 @@ def base_unit_stats() -> BaseUnitStats:
 def unit_archetype(base_unit_stats: BaseUnitStats) -> UnitArchetype:
     return UnitArchetype(
         id="unit_test_infantry",
+        race=FactionRace.HUMANS,
         faction_id="humans",
         name="Тестовая пехота",
         tier=1,
@@ -37,6 +44,8 @@ def weapon() -> Equipment:
         name="Тестовый меч",
         lore="Обычный меч для теста.",
         slot=EquipmentSlot.WEAPON,
+        category=WeaponCategory.SWORD,
+        tags={EquipmentTag.ONE_HANDED},
         tier=1,
         stats=EquipmentStats(damage=10.0),
     )
@@ -49,6 +58,8 @@ def armor() -> Equipment:
         name="Тестовая кираса",
         lore="Обычная кираса для теста.",
         slot=EquipmentSlot.ARMOR,
+        category=ArmorCategory.PLATE,
+        tags={EquipmentTag.HEAVY},
         tier=1,
         stats=EquipmentStats(armor_bonus=5.0),
     )
@@ -61,6 +72,8 @@ def accessory() -> Equipment:
         name="Тестовый щит",
         lore="Обычный щит для теста.",
         slot=EquipmentSlot.ACCESSORY,
+        category=AccessoryCategory.SHIELD,
+        tags={EquipmentTag.ONE_HANDED},
         tier=1,
         stats=EquipmentStats(damage=2.0, armor_bonus=3.0),
     )

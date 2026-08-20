@@ -24,6 +24,7 @@ from src.back.l01_domain.world.models.battleground import (
 from src.back.l02_services.turns.tactical.combat.facade import TacticalCombatService
 from src.back.l02_services.turns.tactical.initiative import TacticalInitiativeService
 from src.back.l02_services.turns.tactical.movement import TacticalMovementService
+from src.back.utils.event.registry import GameEvents
 
 
 class TacticalTurnOrchestrator:
@@ -63,7 +64,7 @@ class TacticalTurnOrchestrator:
 
         if self._event_bus is not None:
             await self._event_bus.publish(
-                "tactical.turn_started",
+                GameEvents.Tactical.TURN_STARTED,
                 battle_id=battle_state.id,
                 tick=battle_state.current_tick,
             )
@@ -71,10 +72,7 @@ class TacticalTurnOrchestrator:
         deaths_by_squad: dict[str, int] = {}
         kills_by_squad: dict[str, int] = {}
 
-        # ===============================================================
-        # Расчет инициативы
-        # ===============================================================
-
+        # 1. Расчет инициативы
         turn_order = self._initiative_service.get_turn_order(
             squads=squads,
             battle_state=battle_state,
@@ -82,10 +80,7 @@ class TacticalTurnOrchestrator:
             heroes=heroes,
         )
 
-        # ===============================================================
-        # Фаза натиска
-        # ===============================================================
-
+        # 2. Фаза натиска
         charge_reports = self._combat_service.resolve_charges(
             battle_state=battle_state,
             squads=squads,
@@ -106,10 +101,7 @@ class TacticalTurnOrchestrator:
                 kills_by_squad.get(cr.defender_squad_id, 0) + cr.attacker_deaths
             )
 
-        # ===============================================================
-        # Пошаговое перемещение
-        # ===============================================================
-
+        # 3. Пошаговое перемещение
         movement_reports = self._movement_service.process_movement(
             battle_state=battle_state,
             squads=squads,
@@ -117,10 +109,7 @@ class TacticalTurnOrchestrator:
             terrain_profiles=terrain_profiles,
         )
 
-        # ===============================================================
-        # Дальний бой
-        # ===============================================================
-
+        # 4. Дальний бой
         ranged_reports = self._combat_service.resolve_ranged_combat(
             battle_state=battle_state,
             squads=squads,
@@ -140,10 +129,7 @@ class TacticalTurnOrchestrator:
                 kills_by_squad.get(rr.attacker_squad_id, 0) + rr.kills
             )
 
-        # ===============================================================
-        # Ближний бой
-        # ===============================================================
-
+        # 5. Ближний бой
         melee_reports = self._combat_service.resolve_melee_combat(
             battle_state=battle_state,
             squads=squads,
@@ -157,10 +143,13 @@ class TacticalTurnOrchestrator:
                 kills_by_squad.get(mr.attacker_squad_id, 0) + mr.kills
             )
 
-        # ===============================================================
-        # Мораль, цепная паника, горы трупов и ветеранство
-        # ===============================================================
+        # Аккумулируем потери текущего раунда в общую копилку сражения
+        for squad_id, count in deaths_by_squad.items():
+            battle_state.accumulated_deaths_by_squad[squad_id] = (
+                battle_state.accumulated_deaths_by_squad.get(squad_id, 0) + count
+            )
 
+        # 6. Мораль, цепная паника, горы трупов и ветеранство
         morale_report = self._combat_service.process_morale_environment_and_veterancy(
             battle_state=battle_state,
             squads=squads,
@@ -171,10 +160,7 @@ class TacticalTurnOrchestrator:
         battle_state.clear_orders()
         battle_state.advance_phase(BattlePhase.AFTERMATH)
 
-        # ===============================================================
-        # Проверка исхода боя и сборка трофеев
-        # ===============================================================
-
+        # 7. Проверка исхода боя и сборка трофеев
         attacker_alive = sum(
             1
             for s_id in battle_state.attacker_squad_ids
@@ -223,7 +209,10 @@ class TacticalTurnOrchestrator:
             salvageable_eq: dict[str, int] = {}
             corpses_list: list[BattlefieldCorpsePile] = []
 
-            for squad_id, total_deaths in deaths_by_squad.items():
+            # Генерируем трофеи на основе ВСЕХ потерь за весь бой
+            total_battle_deaths = sum(battle_state.accumulated_deaths_by_squad.values())
+
+            for squad_id, total_deaths in battle_state.accumulated_deaths_by_squad.items():
                 if total_deaths <= 0:
                     continue
                 squad = squads.get(squad_id)
@@ -244,7 +233,7 @@ class TacticalTurnOrchestrator:
 
                 corpses_list.append(
                     BattlefieldCorpsePile(
-                        race_id=squad.archetype.faction_id,
+                        race=squad.archetype.race,
                         size_category=squad.size_category,
                         count=total_deaths,
                     )
@@ -254,14 +243,14 @@ class TacticalTurnOrchestrator:
                 hex_coordinates=strategic_hex,
                 origin_battle_id=battle_state.id,
                 salvageable_equipment=salvageable_eq,
-                residual_resonite=float(sum(deaths_by_squad.values()) * 0.5),
+                residual_resonite=float(total_battle_deaths * 0.5),
                 corpses=corpses_list,
                 ticks_remaining=DEFAULT_BATTLEFIELD_DECAY_TICKS,
             )
 
             if self._event_bus is not None:
                 await self._event_bus.publish(
-                    "tactical.battle_completed", # TODO: типизировать все события в Event Bus
+                    GameEvents.Tactical.BATTLE_COMPLETED,
                     battle_id=battle_state.id,
                     victor_faction_id=victor_faction_id,
                     loot_site_id=loot_site.id,

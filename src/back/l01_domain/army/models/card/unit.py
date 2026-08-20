@@ -2,8 +2,11 @@
 Базовые схемы характеристик отдельного бойца и шаблона расового юнита.
 """
 
+from typing import Optional
 from pydantic import BaseModel, Field, ConfigDict
 from src.back.l01_domain.army.constants import UnitSizeCategory
+from src.back.l01_domain.common import FactionRace
+
 
 class BaseUnitStats(BaseModel):
     """Базовые физические и ментальные параметры одного бойца без экипировки."""
@@ -24,7 +27,8 @@ class BaseUnitStats(BaseModel):
     base_initiative: int = Field(default=10, description="Инициатива в очереди ходов")
 
     size_category: UnitSizeCategory = Field(
-        default=UnitSizeCategory.MEDIUM, description="Габарит бойца - влияет на урон по нему и на кучи трупов"
+        default=UnitSizeCategory.MEDIUM,
+        description="Габарит бойца - влияет на урон по нему и на кучи трупов",
     )
 
 
@@ -34,7 +38,10 @@ class UnitArchetype(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     id: str = Field(..., description="Уникальный ID шаблона (напр. unit_greenskins_boyz)")
-    faction_id: str = Field(..., description="ID фракции (например, greenskins, humans)")
+    race: FactionRace = Field(..., description="Расовая принадлежность шаблона юнита")
+    faction_id: Optional[str] = Field(
+        default=None, description="Опциональный ID конкретной политической фракции"
+    )
     name: str = Field(..., min_length=1, description="Название базового юнита")
     tier: int = Field(..., ge=0, le=6, description="Тир юнита (0-6)")
     default_unit_count: int = Field(

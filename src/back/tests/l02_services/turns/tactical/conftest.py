@@ -4,11 +4,17 @@
 
 import pytest
 
-from src.back.l01_domain.army.constants import EquipmentSlot, UnitSizeCategory
+from src.back.l01_domain.army.constants import (
+    EquipmentSlot,
+    EquipmentTag,
+    UnitSizeCategory,
+    WeaponCategory,
+)
 from src.back.l01_domain.army.models.card.equipment import Equipment, EquipmentStats
 from src.back.l01_domain.army.models.card.unit import BaseUnitStats, UnitArchetype
 from src.back.l01_domain.combat.constants import BattleMapSize
 from src.back.l01_domain.combat.models.state import TacticalBattleState, TacticalCellState
+from src.back.l01_domain.common import FactionRace
 from src.back.l01_domain.maps.models.tactical import CellCoordinates
 
 
@@ -41,8 +47,9 @@ def base_stats_human() -> BaseUnitStats:
 @pytest.fixture
 def archetype_human_sword(base_stats_human) -> UnitArchetype:
     return UnitArchetype(
-        id="unit_human_swordsmen", # TODO: типизировать
-        faction_id="humans", # TODO: типизировать
+        id="unit_human_swordsmen",
+        race=FactionRace.HUMANS,
+        faction_id="humans",
         name="Мечники",
         tier=1,
         default_unit_count=100,
@@ -57,6 +64,8 @@ def weapon_sword() -> Equipment:
         name="Меч",
         lore="...",
         slot=EquipmentSlot.WEAPON,
+        category=WeaponCategory.SWORD,
+        tags={EquipmentTag.ONE_HANDED},
         tier=1,
         stats=EquipmentStats(damage=5.0, armor_piercing=1.0, range_hexes=1),
     )
@@ -69,8 +78,24 @@ def weapon_bow() -> Equipment:
         name="Лук",
         lore="...",
         slot=EquipmentSlot.WEAPON,
+        category=WeaponCategory.BOW,
+        tags={EquipmentTag.STRING_BASED, EquipmentTag.TWO_HANDED},
         tier=1,
         stats=EquipmentStats(damage=4.0, range_hexes=6),
+    )
+
+
+@pytest.fixture
+def weapon_arquebus() -> Equipment:
+    return Equipment(
+        id="wpn_custom_gun_01",
+        name="Тяжелая аркебуза",
+        lore="...",
+        slot=EquipmentSlot.WEAPON,
+        category=WeaponCategory.FIREARM,
+        tags={EquipmentTag.BLACKPOWDER, EquipmentTag.TWO_HANDED},
+        tier=2,
+        stats=EquipmentStats(damage=15.0, armor_piercing=5.0, range_hexes=5),
     )
 
 

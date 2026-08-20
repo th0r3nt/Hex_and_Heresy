@@ -1,17 +1,13 @@
 """
 Чистая боевая математика: разрешение натиска и реакций на него,
 распространение цепной паники.
-
-Не знает о WorldState, БД или LLM - только домен и числа.
-
-Применение результата к состоянию отряда,
-поиск соседей на сетке и порядок обработки за такт - забота l02_services.
 """
 
 from dataclasses import dataclass
+from typing import Final
 
-from src.back.l01_domain.army.models.card.squad import Squad
 from src.back.l01_domain.army.constants import UnitSizeCategory
+from src.back.l01_domain.army.models.card.squad import Squad
 from src.back.l01_domain.combat.constants import (
     ACCEPT_CHARGE_DEFENDER_DAMAGE_RATIO,
     CHAIN_PANIC_MORALE_SHOCK,
@@ -19,12 +15,16 @@ from src.back.l01_domain.combat.constants import (
     DOWNHILL_CHARGE_DAMAGE_MULTIPLIER,
     FLEE_CATCH_DAMAGE_MULTIPLIER,
     MORALE_THRESHOLD_ACCEPT_CHARGE,
-    UPHILL_CHARGE_DAMAGE_PENALTY,
     UNIT_SIZE_CORPSE_WEIGHT,
+    UPHILL_CHARGE_DAMAGE_PENALTY,
     ReactionType,
     SurfaceIncline,
 )
 from src.back.l01_domain.combat.models.effects import TerrainProfile
+
+# Максимальный множитель превосходства в скорости при таране
+MAX_CHARGE_SPEED_RATIO: Final[float] = 3.0
+MIN_OPPOSING_SPEED_DENOMINATOR: Final[float] = 0.5
 
 
 @dataclass(frozen=True)
@@ -43,15 +43,20 @@ def calculate_charge_damage(
     elevation: SurfaceIncline = SurfaceIncline.FLAT,
 ) -> float:
     """
-    Базовый урон натиска одной стороны, до применения брони цели.
-
-    Зависит от: атакующего урона бойца, численности отряда, бонуса натиска,
-    относительной скорости атакующего к защищающемуся, рельефа и местности цели.
+    Базовый урон натиска одной стороны до применения брони цели.
     """
+    if (
+        charging_squad.total_effective_speed <= 0.0
+        or charging_squad.state.unit_count <= 0
+        or charging_squad.total_attack_damage <= 0.0
+    ):
+        return 0.0
 
-    speed_ratio = charging_squad.total_effective_speed / max(
-        opposing_squad.total_effective_speed, 0.01
+    raw_speed_ratio = charging_squad.total_effective_speed / max(
+        opposing_squad.total_effective_speed, MIN_OPPOSING_SPEED_DENOMINATOR
     )
+    speed_ratio = min(raw_speed_ratio, MAX_CHARGE_SPEED_RATIO)
+
     damage = (
         charging_squad.total_attack_damage
         * charging_squad.state.unit_count
@@ -78,41 +83,41 @@ def resolve_charge_reaction(
 ) -> ChargeResolution:
     """
     Разрешает один такт столкновения "Натиск" -> реакция защищающегося.
-    (см. fighting.md, "Механика реакций")
     """
-
     charge_damage = calculate_charge_damage(attacker, defender, defender_terrain, elevation)
 
-    # Убежать от врага
+    # Побег защищающегося
     if reaction == ReactionType.FLEE:
-        # Побег не удаётся: атакующий догоняет и вырезает бегущих почти без потерь.
         return ChargeResolution(
             damage_to_attacker=0.0,
             damage_to_defender=charge_damage * FLEE_CATCH_DAMAGE_MULTIPLIER,
         )
 
-    # Побежать вперед
+    # Встречный натиск
     if reaction == ReactionType.COUNTER_CHARGE:
-        # Обе стороны бегут навстречу - урон физики столкновения колоссален с обеих сторон.
+        # Инвертируем рельеф для встречного удара защитника
+        defender_elevation = SurfaceIncline.FLAT
+        if elevation == SurfaceIncline.DESCENT:
+            defender_elevation = SurfaceIncline.ASCENT
+        elif elevation == SurfaceIncline.ASCENT:
+            defender_elevation = SurfaceIncline.DESCENT
+
         counter_damage = calculate_charge_damage(
-            defender, attacker, attacker_terrain, elevation
+            defender, attacker, attacker_terrain, defender_elevation
         )
         return ChargeResolution(
             damage_to_attacker=counter_damage,
             damage_to_defender=charge_damage,
         )
 
-    # Принять натиск
+    # Принятие удара в строй (упор копий)
     if defender.state.morale >= MORALE_THRESHOLD_ACCEPT_CHARGE:
-        # Копья упёрты в землю - урон натиска оборачивается против атакующего,
-        # защитник получает лишь часть урона (передний ряд).
         return ChargeResolution(
             damage_to_attacker=charge_damage,
             damage_to_defender=charge_damage * ACCEPT_CHARGE_DEFENDER_DAMAGE_RATIO,
         )
 
-    # Духа не хватило держать строй - отряд ломается перед самым ударом
-    # и получает урон как небронированная толпа, плюс удар по морали.
+    # Не хватило морали удержать строй
     return ChargeResolution(
         damage_to_attacker=0.0,
         damage_to_defender=charge_damage,
@@ -125,14 +130,8 @@ def propagate_chain_panic(
     neighbor_squad_ids: list[str],
 ) -> dict[str, float]:
     """
-    Возвращает удар по морали для соседних (в радиусе CHAIN_PANIC_RADIUS_CELLS)
-    союзных отрядов, когда panicking_squad_id проваливает проверку морали.
-    (см. fighting.md, "Моральный шок и цепная паника")
-
-    Поиск соседей в радиусе на сетке - забота вызывающего кода
-    (TacticalBattleState уже знает геометрию клеток), здесь только формула шока.
+    Возвращает удар по морали для соседних союзных отрядов.
     """
-
     return {
         squad_id: CHAIN_PANIC_MORALE_SHOCK
         for squad_id in neighbor_squad_ids
@@ -142,8 +141,6 @@ def propagate_chain_panic(
 
 def calculate_effective_corpse_weight(deaths: int, size_category: UnitSizeCategory) -> float:
     """
-    Переводит число погибших бойцов конкретного размера в эффективный вес
-    для сравнения с CORPSE_PILE_UNIT_THRESHOLD (см. fighting.md, "Горы трупов").
+    Переводит число погибших бойцов конкретного размера в эффективный вес трупов.
     """
-
     return deaths * UNIT_SIZE_CORPSE_WEIGHT.get(size_category, 1.0)
