@@ -36,6 +36,13 @@ class StrategicArmy(BaseModel):
 
     pace: StrategicMovementPace = Field(default=StrategicMovementPace.MARCH)
     is_in_ambush: bool = Field(default=False)
+    is_in_tactical_battle: bool = Field(
+        default=False,
+        description=(
+            "Армия связана тактическим боем на текущий такт: не может работать, "
+            "маршировать или собирать ресурсы (см. turns/strategic/economy.py)"
+        ),
+    )
 
     @property
     def total_units_count(self) -> int:
@@ -121,3 +128,15 @@ class StrategicArmy(BaseModel):
                 wiped_squads.append(squad)
         self.squads = alive_squads
         return wiped_squads
+
+    def lock_in_tactical_battle(self) -> None:
+        """
+        Помечает армию как связанную боем — вызывается при входе в тактический бой.
+        """
+        self.is_in_tactical_battle = True
+
+    def release_from_tactical_battle(self) -> None:
+        """
+        Снимает пометку боя — вызывается при завершении тактического боя.
+        """
+        self.is_in_tactical_battle = False

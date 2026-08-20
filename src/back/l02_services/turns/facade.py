@@ -4,7 +4,6 @@
 
 from typing import Optional
 
-from src.back.l01_domain.factions.constants import WorkerRiskTier
 from src.back.l01_domain.protocols.events import EventBusProtocol
 from src.back.l01_domain.world.models.state import WorldState
 from src.back.l02_services.turns.strategic.orchestrator import (
@@ -32,13 +31,10 @@ class TurnsFacade:
     async def execute_strategic_turn(
         self,
         world_state: WorldState,
-        worker_assignments: Optional[dict[str, WorkerRiskTier]] = None,
     ) -> GlobalTurnReport:
         """
         Выполняет расчет глобального такта стратегической карты.
         """
-        return await self._strategic_orchestrator.execute_turn(
-            world_state=world_state, worker_assignments=worker_assignments
-        )
+        return await self._strategic_orchestrator.execute_turn(world_state=world_state)
 
     # TODO: написать логику тактических ходов

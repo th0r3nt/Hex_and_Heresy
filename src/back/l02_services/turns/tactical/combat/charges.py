@@ -15,13 +15,18 @@ from src.back.l01_domain.combat.models.effects import TerrainProfile
 from src.back.l01_domain.combat.models.reports import ChargeStepReport
 from src.back.l01_domain.combat.models.state import TacticalBattleState
 from src.back.l01_domain.combat.resolution import resolve_charge_reaction
-from src.back.l01_domain.maps.models.tactical import CellCoordinates
+from src.back.l01_domain.maps.models.tactical import (
+    CellCoordinates,
+    cell_distance_chebyshev,
+    cell_line,
+)
 
 
 class TacticalChargeService:
     """
-    Выявляет отряды в режиме натиска и рассчитывает встречный урон
-    в соответствии с выбранной защитником реакцией.
+    Выявляет отряды в режиме натиска, проверяет их досягаемость до цели
+    с учётом скорости отряда, физически подводит атакующего вплотную
+    и рассчитывает встречный урон в соответствии с реакцией защитника.
     """
 
     def resolve_charges(
@@ -52,22 +57,18 @@ class TacticalChargeService:
             if order.pace != SPEED_CHARGE_PACE:
                 continue
 
-            # Количество юнитов в отряде
             attacker = squads.get(order.squad_id)
             if attacker is None or attacker.state.unit_count <= 0:
                 continue
 
-            # Позиция отряда
             attacker_pos = squad_positions.get(order.squad_id)
             if attacker_pos is None:
                 continue
 
-            # Целевая клетка натиска
             target_cell_state = cell_map.get(order.target_cell.to_tuple())
             if target_cell_state is None or target_cell_state.occupant_squad_id is None:
                 continue
 
-            # Защитник от натиска
             defender_id = target_cell_state.occupant_squad_id
             defender = squads.get(defender_id)
             if defender is None or defender.state.unit_count <= 0:
@@ -81,6 +82,58 @@ class TacticalChargeService:
             is_defender_side = defender_id in battle_state.attacker_squad_ids
             if is_attacker_side == is_defender_side:
                 continue
+
+            # =======================================================================
+            # Проверка досягаемости: натиск ограничен скоростью отряда за такт
+            # =======================================================================
+
+            max_charge_steps = max(
+                1, int(round(attacker.total_effective_speed * SPEED_CHARGE_PACE))
+            )
+            distance_to_target = cell_distance_chebyshev(attacker_pos, order.target_cell)
+
+            # Нужно дойти вплотную (дистанция 1) — считаем путь без последнего шага на цель
+            if distance_to_target - 1 > max_charge_steps:
+                continue
+
+            # =======================================================================
+            # Физическое перемещение атакующего вплотную к цели
+            # =======================================================================
+
+            path = cell_line(attacker_pos, order.target_cell)
+            landing_cell = attacker_pos
+
+            for step_cell in path[1 : max_charge_steps + 1]:
+                if step_cell == order.target_cell:
+                    break  # на занятую клетку цели встать нельзя — останавливаемся перед ней
+
+                step_state = cell_map.get(step_cell.to_tuple())
+                if step_state is None or (
+                    step_state.occupant_squad_id is not None
+                    and step_state.occupant_squad_id != order.squad_id
+                ):
+                    break  # путь перекрыт чужим отрядом или уходит за пределы поля
+
+                landing_cell = step_cell
+
+            # Если натиск застрял по пути и не добежал вплотную — столкновения не будет
+            if cell_distance_chebyshev(landing_cell, order.target_cell) > 1:
+                continue
+
+            if landing_cell != attacker_pos:
+                old_cell_state = cell_map.get(attacker_pos.to_tuple())
+                if (
+                    old_cell_state is not None
+                    and old_cell_state.occupant_squad_id == order.squad_id
+                ):
+                    old_cell_state.occupant_squad_id = None
+
+                new_cell_state = cell_map.get(landing_cell.to_tuple())
+                if new_cell_state is not None:
+                    new_cell_state.occupant_squad_id = order.squad_id
+
+                squad_positions[order.squad_id] = landing_cell
+                attacker_pos = landing_cell
 
             # =======================================================================
             # Определение реакции защитника

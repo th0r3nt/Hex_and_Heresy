@@ -4,15 +4,19 @@
 
 import pytest
 
-from src.back.l01_domain.factions.constants import (
-    BuildingCategory,
-    ResourceType,
-    WorkerRiskTier,
-)
+from src.back.l01_domain.army.constants import StrategicMovementPace
+from src.back.l01_domain.army.models.card.squad import Squad
+from src.back.l01_domain.army.models.card.unit import BaseUnitStats, UnitArchetype
+from src.back.l01_domain.army.models.strategic import StrategicArmy
+from src.back.l01_domain.factions.constants import BuildingCategory, ResourceType
 from src.back.l01_domain.factions.models.buildings import Building, ConstructedBuilding
 from src.back.l01_domain.maps.constants import TerritoryZoneType
+from src.back.l01_domain.maps.models.strategic import HexCoordinates
 from src.back.l01_domain.world.models.state import WorldState
 from src.back.l02_services.turns.strategic.economy import StrategicEconomyService
+from src.back.l02_services.turns.strategic.workers.stationary import (
+    StationaryWorkerService,
+)
 
 
 class TestStrategicEconomyService:
@@ -48,9 +52,8 @@ class TestStrategicEconomyService:
     async def test_upkeep_deduction_and_deficit_handling(
         self, human_faction, sample_army, fake_bus
     ):
-        # 100 бойцов: золото 50.0, еда 100.0
-        human_faction.resources[ResourceType.GOLD] = 30.0  # дефицит 20.0
-        human_faction.resources[ResourceType.FOOD] = 200.0  # хватает
+        human_faction.resources[ResourceType.GOLD] = 30.0
+        human_faction.resources[ResourceType.FOOD] = 200.0
 
         world_state = WorldState()
         world_state.add_faction(human_faction)
@@ -67,7 +70,6 @@ class TestStrategicEconomyService:
         assert human_faction.resources[ResourceType.GOLD] == 0.0
         assert human_faction.resources[ResourceType.FOOD] == 100.0
 
-        # Проверяем штраф к морали за дефицит золота
         squad = sample_army.squads[0]
         assert squad.state.morale < 50.0
 
@@ -91,25 +93,54 @@ class TestStrategicEconomyService:
         assert len(sample_army.squads) == 0
 
     @pytest.mark.asyncio
-    async def test_worker_income_by_risk_tier(self, human_faction, sample_army, fake_bus):
-        # Превращаем отряд в рабочих (тир 0)
-        sample_army.squads[0] = sample_army.squads[0].model_copy(
-            update={
-                "archetype": sample_army.squads[0].archetype.model_copy(update={"tier": 0})
-            }
+    async def test_stationary_building_production(self, human_faction, fake_bus):
+        peasant_archetype = UnitArchetype(
+            id="unit_peasants",
+            faction_id=human_faction.id,
+            name="Крепостные",
+            tier=0,
+            default_unit_count=100,
+            base_stats=BaseUnitStats(max_hp=10.0),
         )
-        human_faction.resources[ResourceType.GOLD] = 0.0
-        human_faction.resources[ResourceType.FOOD] = 500.0
+        peasant_squad = Squad.create_new(archetype=peasant_archetype)
+
+        building_tmpl = Building(
+            id="b_wheat_fields",
+            faction_id=human_faction.id,
+            name="Пшеничные угодья",
+            category=BuildingCategory.ECONOMIC,
+            allowed_zone=TerritoryZoneType.BASE,
+            requires_workers=True,
+            resource_output_per_worker={ResourceType.FOOD: 60.0},
+        )
+        farm = ConstructedBuilding(
+            building=building_tmpl,
+            zone_id="base",
+            is_under_construction=False,
+        )
+        human_faction.add_building(farm)
+
+        army = StrategicArmy(
+            faction_id=human_faction.id,
+            current_hex=HexCoordinates.from_axial(0, 0),
+            pace=StrategicMovementPace.MARCH,
+        )
+        army.add_squad(peasant_squad)
 
         world_state = WorldState()
         world_state.add_faction(human_faction)
-        world_state.add_army(sample_army)
+        world_state.add_army(army)
 
-        service = StrategicEconomyService(event_bus=fake_bus)
-        assignments = {human_faction.id: WorkerRiskTier.HIGH}
-        reports = await service.process_factions_economy(
-            world_state, worker_assignments=assignments
+        worker_service = StationaryWorkerService(event_bus=fake_bus)
+        await worker_service.assign_squad_to_building(
+            world_state=world_state,
+            squad_id=peasant_squad.id,
+            faction_id=human_faction.id,
+            building_id=farm.id,
         )
 
+        econ_service = StrategicEconomyService(event_bus=fake_bus)
+        reports = await econ_service.process_factions_economy(world_state)
+
         report = reports[human_faction.id]
-        assert report.income_gold == 50.0
+        assert report.income_food == 60.0

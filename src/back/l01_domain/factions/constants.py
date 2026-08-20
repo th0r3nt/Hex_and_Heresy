@@ -86,6 +86,42 @@ WORKER_GOLD_YIELD_SAFE: Final[float] = 10.0
 WORKER_GOLD_YIELD_MODERATE: Final[float] = 20.0
 WORKER_GOLD_YIELD_HIGH: Final[float] = 50.0
 
+WORKER_GOLD_RATE_BY_TIER: dict[WorkerRiskTier, float] = {
+    WorkerRiskTier.SAFE: WORKER_GOLD_YIELD_SAFE,
+    WorkerRiskTier.MODERATE: WORKER_GOLD_YIELD_MODERATE,
+    WorkerRiskTier.HIGH: WORKER_GOLD_YIELD_HIGH,
+}
+
+
+class WorkerAssignmentType(str, Enum):
+    """Тип назначения отряда рабочих."""
+
+    STATIONARY = "stationary"  # Работа в здании (база или союзные земли)
+    EXPEDITION = "expedition"  # Экспедиция на нейтральный гекс
+
+
+class WorkerAssignmentStatus(str, Enum):
+    """Статус жизненного цикла назначения рабочих."""
+
+    # Стационарные статусы
+    WARMING_UP = "warming_up"  # Переход между зонами (задержка 1 такт)
+    WORKING = "working"  # Активная добыча в здании
+
+    # Статусы экспедиции
+    TRAVELING_OUT = "traveling_out"  # Марш к нейтральному гексу
+    MINING = "mining"  # Добыча на нейтральном гексе (N тактов)
+    TRAVELING_BACK = "traveling_back"  # Возвращение с ресурсами на базу
+
+    # Финальные статусы
+    COMPLETED = "completed"  # Экспедиция вернулась, груз сдан в казну
+    ABORTED = "aborted"  # Прервано из-за гибели отряда или сноса здания
+
+
+# Базовые значения для рабочих и экспедиций
+STATIONARY_WARMUP_TICKS: Final[int] = 1
+NEUTRAL_HEX_GOLD_BASE_YIELD_PER_UNIT: Final[float] = (
+    0.5  # 50 золота за полный отряд из 100 рабочих за такт
+)
 
 # ==================================================================
 # ДИПЛОМАТИЯ

@@ -8,9 +8,11 @@ from src.back.l01_domain.combat.models.state import TacticalBattleState
 from src.back.l01_domain.maps.models.strategic import HexCoordinates
 from src.back.l01_domain.protocols.events import EventBusProtocol
 from src.back.l01_domain.world.models.events import GlobalEvent
+from src.back.l01_domain.world.models.state import WorldState
 from src.back.l02_services.gameflow.fsm import GameFlowFSM
 from src.back.l02_services.gameflow.guards import (
     ActionForbiddenInCurrentStateError,
+    WorldStateNotBoundError,
     is_building_action_allowed,
     is_diplomacy_action_allowed,
     is_recruitment_action_allowed,
@@ -39,6 +41,7 @@ class GameFlowFacade:
         event_bus: Optional[EventBusProtocol] = None,
     ) -> None:
         self._fsm = fsm or GameFlowFSM(event_bus=event_bus)
+        self._world_state: Optional[WorldState] = None
 
     @property
     def current_state(self) -> GameState:
@@ -46,6 +49,24 @@ class GameFlowFacade:
         Текущий режим игры.
         """
         return self._fsm.current_state
+
+    # ==================================================================
+    # ПРИВЯЗКА АКТИВНОЙ ПАРТИИ
+    # ==================================================================
+
+    def bind_world_state(self, world_state: WorldState) -> None:
+        """
+        Привязывает WorldState активной партии к фасаду. Вызывается composition
+        root'ом сразу после start_new_game()/load_game() — до этого момента
+        WorldState ещё не существует, поэтому привязка не идёт через конструктор.
+        """
+        self._world_state = world_state
+
+    def unbind_world_state(self) -> None:
+        """
+        Отвязывает WorldState (например, при выходе в главное меню).
+        """
+        self._world_state = None
 
     # ==================================================================
     # ПРОВЕРКИ ДОПУСТИМОСТИ ДЕЙСТВИЙ
@@ -104,7 +125,12 @@ class GameFlowFacade:
     ) -> GameState:
         """
         Инициирует тактический бой между двумя фракциями.
+        При успешном переходе блокирует армии обеих сторон, стоящие на гексе боя,
+        от параллельной работы/движения на стратегическом такте.
         """
+
+        if self._world_state is None:
+            raise WorldStateNotBoundError("enter_tactical_combat")
 
         payload = CombatTransitionPayload(
             hex_coordinates=hex_coords,
@@ -112,7 +138,19 @@ class GameFlowFacade:
             defender_faction_id=defender_faction_id,
             battle_state=battle_state,
         )
-        return await self._fsm.trigger(GameFlowTrigger.ENGAGE_COMBAT, payload=payload)
+        new_state = await self._fsm.trigger(GameFlowTrigger.ENGAGE_COMBAT, payload=payload)
+
+        engaged_armies = [
+            army
+            for army in self._world_state.get_armies_at_hex(hex_coords)
+            if army.faction_id in (attacker_faction_id, defender_faction_id)
+        ]
+        self._world_state.lock_armies_for_battle(
+            battle_id=battle_state.id,
+            army_ids=[army.id for army in engaged_armies],
+        )
+
+        return new_state
 
     async def finish_tactical_combat(
         self,
@@ -121,14 +159,23 @@ class GameFlowFacade:
         is_base_destroyed: bool = False,
     ) -> GameState:
         """
-        Завершает тактический бой и возвращает игру на глобальную карту.
+        Завершает тактический бой, возвращает игру на глобальную карту
+        и снимает лок с армий, задействованных в этом бою.
         """
+        
+        if self._world_state is None:
+            raise WorldStateNotBoundError("finish_tactical_combat")
+
         payload = CombatResolutionPayload(
             battle_id=battle_id,
             victor_faction_id=victor_faction_id,
             is_base_destroyed=is_base_destroyed,
         )
-        return await self._fsm.trigger(GameFlowTrigger.RESOLVE_COMBAT, payload=payload)
+        new_state = await self._fsm.trigger(GameFlowTrigger.RESOLVE_COMBAT, payload=payload)
+
+        self._world_state.release_armies_from_battle(battle_id)
+
+        return new_state
 
     async def open_diplomatic_session(
         self,
@@ -204,6 +251,8 @@ class GameFlowFacade:
 
     async def quit_to_main_menu(self) -> GameState:
         """
-        Выходит в главное меню.
+        Выходит в главное меню и отвязывает WorldState завершённой сессии.
         """
-        return await self._fsm.trigger(GameFlowTrigger.QUIT_TO_MAIN_MENU)
+        new_state = await self._fsm.trigger(GameFlowTrigger.QUIT_TO_MAIN_MENU)
+        self.unbind_world_state()
+        return new_state

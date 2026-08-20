@@ -56,6 +56,19 @@ class ActionForbiddenInCurrentStateError(GameFlowError):
         )
 
 
+class WorldStateNotBoundError(GameFlowError):
+    """
+    Действие требует активного WorldState, но он не был привязан к фасаду.
+    """
+
+    def __init__(self, action_name: str) -> None:
+        self.action_name = action_name
+        super().__init__(
+            f"Действие '{action_name}' требует активного WorldState, но он не привязан "
+            f"к GameFlowFacade — вызови bind_world_state() после старта или загрузки партии."
+        )
+
+
 # ==================================================================
 # СТРАЖИ ПЕРЕХОДОВ (GUARD FUNCTIONS)
 # ==================================================================

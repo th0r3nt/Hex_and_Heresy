@@ -1,47 +1,46 @@
 """
-Сервис расчета экономики, добычи ресурсов рабочими, списания содержания,
-дефицита и прогресса строительства.
+Сервис расчета экономики, добычи ресурсов стационарными рабочими,
+списания содержания, дефицита и прогресса строительства.
 """
 
+from dataclasses import dataclass
 from typing import Optional
-from pydantic import BaseModel, Field
 
+from src.back.l01_domain.army.models.strategic import StrategicArmy
 from src.back.l01_domain.factions.constants import (
-    WORKER_GOLD_YIELD_HIGH,
-    WORKER_GOLD_YIELD_MODERATE,
-    WORKER_GOLD_YIELD_SAFE,
     ResourceType,
-    WorkerRiskTier,
+    WorkerAssignmentStatus,
 )
+from src.back.l01_domain.factions.models.economy import FactionEconomyReport
 from src.back.l01_domain.factions.models.faction import Faction
 from src.back.l01_domain.protocols.events import EventBusProtocol
 from src.back.l01_domain.world.models.state import WorldState
 
 
-class FactionEconomyReport(BaseModel):
-    """
-    Экономический отчет фракции за прошедший такт.
-    """
+@dataclass(frozen=True)
+class _ResourceIncome:
+    """Промежуточная сумма добытых за такт ресурсов, до зачисления в казну."""
 
-    faction_id: str = Field(...)
-    income_gold: float = Field(default=0.0)
-    income_material: float = Field(default=0.0)
-    income_food: float = Field(default=0.0)
+    gold: float = 0.0
+    material: float = 0.0
+    food: float = 0.0
 
-    upkeep_gold_required: float = Field(default=0.0)
-    upkeep_food_required: float = Field(default=0.0)
 
-    gold_deficit: float = Field(default=0.0)
-    food_deficit: float = Field(default=0.0)
+@dataclass(frozen=True)
+class _UpkeepSettlement:
+    """Итог списания содержания армий фракции за такт."""
 
-    deserted_squad_names: list[str] = Field(default_factory=list)
-    completed_building_names: list[str] = Field(default_factory=list)
+    gold_required: float
+    food_required: float
+    gold_deficit: float
+    food_deficit: float
 
 
 class StrategicEconomyService:
     """
-    Выполняет второй этап глобального такта: расчет добычи,
-    списание содержания, дезертирство при банкротстве и завершение строек.
+    Выполняет экономический этап глобального такта: продвижение разогрева рабочих,
+    расчет добычи работающих зданий, списание содержания, дезертирство при голоде
+    и завершение строек.
     """
 
     def __init__(self, event_bus: Optional[EventBusProtocol] = None) -> None:
@@ -50,111 +49,187 @@ class StrategicEconomyService:
     async def process_factions_economy(
         self,
         world_state: WorldState,
-        worker_assignments: Optional[dict[str, WorkerRiskTier]] = None,
     ) -> dict[str, FactionEconomyReport]:
         """
         Рассчитывает экономику для всех активных фракций в мире.
-        worker_assignments: словарь {faction_id: WorkerRiskTier} (по умолчанию SAFE).
         """
         reports: dict[str, FactionEconomyReport] = {}
-        assignments = worker_assignments or {}
 
+        # 1. Пофракционный расчет доходов, содержания и завершения строек
         for faction_id, faction in world_state.factions.items():
-            risk_tier = assignments.get(faction_id, WorkerRiskTier.SAFE)
             report = await self._process_single_faction_economy(
-                faction=faction, world_state=world_state, risk_tier=risk_tier
+                faction=faction, world_state=world_state
             )
             reports[faction_id] = report
 
+        # 2. Продвижение разогрева для всех стационарных рабочих в мире (для следующего такта)
+        await self._advance_worker_warmups(world_state)
+
         return reports
 
-    # TODO: распилить функцию
+    async def _advance_worker_warmups(self, world_state: WorldState) -> None:
+        """
+        Продвигает таймеры разогрева рабочих. При завершении разогрева
+        статус переходит в working, и отряд начинает приносить доход.
+        """
+        for assignment in world_state.worker_assignments.values():
+            if assignment.status == WorkerAssignmentStatus.WARMING_UP:
+                transitioned = assignment.advance_warmup()
+
+                if transitioned and self._event_bus is not None:
+                    await self._event_bus.publish(
+                        "strategic.worker_warmup_completed",  # TODO: типизировать
+                        assignment_id=assignment.id,
+                        squad_id=assignment.squad_id,
+                        faction_id=assignment.faction_id,
+                        building_id=assignment.target_building_id,
+                    )
+
     async def _process_single_faction_economy(
-        self, faction: Faction, world_state: WorldState, risk_tier: WorkerRiskTier
+        self,
+        faction: Faction,
+        world_state: WorldState,
     ) -> FactionEconomyReport:
         """
-        Рассчитывает экономику за 1 такт для одной фракции.
+        Рассчитывает экономику за 1 такт для одной конкретной фракции.
         """
 
-        # =============================================================
-        # Прогресс строительства
-        # =============================================================
+        # ========================================================================
+        # 1. Строительство
+        # ========================================================================
 
-        completed_buildings = []
-        for building in faction.buildings:
-            if building.is_under_construction:
-                if building.construction_ticks_remaining > 0:
-                    building.construction_ticks_remaining -= 1
+        completed_buildings = await self._advance_construction(faction)
 
-                if building.construction_ticks_remaining == 0:
-                    building.complete_construction()
-                    completed_buildings.append(building.building.name)
-                    if self._event_bus is not None:
-                        await self._event_bus.publish(
-                            "strategic.building_completed",
-                            faction_id=faction.id,
-                            building_id=building.building.id,
-                            building_name=building.building.name,
-                            zone_id=building.zone_id,
-                        )
+        # ========================================================================
+        # 2. Доход от зданий, где работают назначенные отряды
+        # ========================================================================
 
-        # =============================================================
-        # Расчет добычи со зданий
-        # =============================================================
+        building_income, working_workers_count = self._calculate_building_income(
+            faction=faction, world_state=world_state
+        )
 
-        income_gold = 0.0
-        income_material = 0.0
-        income_food = 0.0
+        total_income = _ResourceIncome(
+            gold=building_income.gold,
+            material=building_income.material,
+            food=building_income.food,
+        )
+        self._earn_income(faction, total_income)
+
+        # ========================================================================
+        # 3. Расходы на содержание, голод и дезертирство
+        # ========================================================================
+
+        faction_armies = world_state.get_faction_armies(faction.id)
+        upkeep = self._settle_upkeep(faction, faction_armies)
+
+        deserted_squad_names = await self._handle_deficit_consequences(
+            faction=faction,
+            faction_armies=faction_armies,
+            upkeep=upkeep,
+            world_state=world_state,
+        )
+
+        # ========================================================================
+
+        return FactionEconomyReport(
+            faction_id=faction.id,
+            income_gold=total_income.gold,
+            income_material=total_income.material,
+            income_food=total_income.food,
+            upkeep_gold_required=upkeep.gold_required,
+            upkeep_food_required=upkeep.food_required,
+            gold_deficit=upkeep.gold_deficit,
+            food_deficit=upkeep.food_deficit,
+            deserted_squad_names=deserted_squad_names,
+            completed_building_names=completed_buildings,
+            unavailable_worker_squad_ids=[],
+        )
+
+    async def _advance_construction(self, faction: Faction) -> list[str]:
+        """
+        Продвигает таймеры строек фракции на 1 такт и завершает готовые.
+        """
+        completed_buildings: list[str] = []
 
         for building in faction.buildings:
             if not building.is_under_construction:
-                workers_count = len(building.assigned_worker_squad_ids)
-                if workers_count > 0 and building.building.requires_workers:
-                    for (
-                        res_type,
-                        amount,
-                    ) in building.building.resource_output_per_worker.items():
-                        total_output = amount * workers_count
-                        if res_type == ResourceType.GOLD:
-                            income_gold += total_output
-                        elif res_type == ResourceType.MATERIAL:
-                            income_material += total_output
-                        elif res_type == ResourceType.FOOD:
-                            income_food += total_output
+                continue
 
-        # =============================================================
-        # Расчет добычи от свободных рабочих отрядов по уровням риска
-        # =============================================================
+            if building.construction_ticks_remaining > 0:
+                building.construction_ticks_remaining -= 1
 
-        worker_gold_rate = WORKER_GOLD_YIELD_SAFE
-        if risk_tier == WorkerRiskTier.MODERATE:
-            worker_gold_rate = WORKER_GOLD_YIELD_MODERATE
-        elif risk_tier == WorkerRiskTier.HIGH:
-            worker_gold_rate = WORKER_GOLD_YIELD_HIGH
+            if building.construction_ticks_remaining == 0:
+                building.complete_construction()
+                completed_buildings.append(building.building.name)
+                if self._event_bus is not None:
+                    await self._event_bus.publish(
+                        "strategic.building_completed",
+                        faction_id=faction.id,
+                        building_id=building.building.id,
+                        building_name=building.building.name,
+                        zone_id=building.zone_id,
+                    )
 
-        # =============================================================
-        # Считаем рабочих (тир 00), не привязанных к конкретным постройкам
-        # =============================================================
+        return completed_buildings
 
-        faction_armies = world_state.get_faction_armies(faction.id)
-        free_workers_units = 0
-        for army in faction_armies:
-            for squad in army.squads:
-                if squad.archetype.tier == 0:
-                    free_workers_units += squad.state.unit_count
+    def _calculate_building_income(
+        self, faction: Faction, world_state: WorldState
+    ) -> tuple[_ResourceIncome, int]:
+        """
+        Считает доход от зданий, учитывая только тех рабочих,
+        чье назначение находится в активном статусе WORKING.
+        """
+        income_gold = 0.0
+        income_material = 0.0
+        income_food = 0.0
+        total_working_squads = 0
 
-        # Каждый рабочий приносит часть базовой ставки за такт (1 рабочий = 1/100 отряда)
-        income_gold += (free_workers_units / 100.0) * worker_gold_rate
+        for building in faction.buildings:
+            if building.is_under_construction or not building.building.requires_workers:
+                continue
 
-        # Начисляем доходы в казну
-        faction.earn(ResourceType.GOLD, income_gold)
-        faction.earn(ResourceType.MATERIAL, income_material)
-        faction.earn(ResourceType.FOOD, income_food)
+            # Считаем только отряды в статусе WORKING
+            active_workers_count = 0
+            for sq_id in building.assigned_worker_squad_ids:
+                assignment = world_state.get_squad_assignment(sq_id)
+                if (
+                    assignment is not None
+                    and assignment.status == WorkerAssignmentStatus.WORKING
+                ):
+                    active_workers_count += 1
 
-        # =============================================================
-        # Расчет суммарного содержания войск
-        # =============================================================
+            if active_workers_count == 0:
+                continue
 
+            total_working_squads += active_workers_count
+
+            for res_type, amount in building.building.resource_output_per_worker.items():
+                total_output = amount * active_workers_count
+                if res_type == ResourceType.GOLD:
+                    income_gold += total_output
+                elif res_type == ResourceType.MATERIAL:
+                    income_material += total_output
+                elif res_type == ResourceType.FOOD:
+                    income_food += total_output
+
+        return (
+            _ResourceIncome(gold=income_gold, material=income_material, food=income_food),
+            total_working_squads,
+        )
+
+    @staticmethod
+    def _earn_income(faction: Faction, income: _ResourceIncome) -> None:
+        faction.earn(ResourceType.GOLD, income.gold)
+        faction.earn(ResourceType.MATERIAL, income.material)
+        faction.earn(ResourceType.FOOD, income.food)
+
+    @staticmethod
+    def _settle_upkeep(
+        faction: Faction, faction_armies: list[StrategicArmy]
+    ) -> _UpkeepSettlement:
+        """
+        Списывает доступное золото и провизию за содержание всех армий фракции.
+        """
         upkeep_gold_required = sum(army.total_upkeep_gold for army in faction_armies)
         upkeep_food_required = sum(army.total_upkeep_food for army in faction_armies)
 
@@ -164,68 +239,73 @@ class StrategicEconomyService:
         gold_deficit = max(0.0, upkeep_gold_required - available_gold)
         food_deficit = max(0.0, upkeep_food_required - available_food)
 
-        # Списываем сколько можем
         gold_to_spend = min(available_gold, upkeep_gold_required)
         food_to_spend = min(available_food, upkeep_food_required)
 
         faction.spend(ResourceType.GOLD, gold_to_spend)
         faction.spend(ResourceType.FOOD, food_to_spend)
 
-        # =============================================================
-        # Обработка штрафов дефицита и дезертирства
-        # =============================================================
-
-        deserted_squad_names = []
-        if gold_deficit > 0 or food_deficit > 0:
-            # Шок морали армии от невыплаты жалования или голода
-            morale_penalty = 10.0 * (1 if gold_deficit > 0 else 0) + 15.0 * (
-                1 if food_deficit > 0 else 0
-            )
-            for army in faction_armies:
-                for squad in army.squads:
-                    squad.apply_morale_shock(morale_penalty)
-
-            if self._event_bus is not None:
-                await self._event_bus.publish(
-                    "strategic.famine_occurred",
-                    faction_id=faction.id,
-                    gold_deficit=gold_deficit,
-                    food_deficit=food_deficit,
-                )
-
-            # Дезертирство: при критическом дефиците провизии (доступно < 50% от нормы)
-            if food_deficit > (upkeep_food_required * 0.5):
-                for army in faction_armies:
-                    # Ищем отряд с наименьшей моралью или паникой
-                    squad_to_desert = next(
-                        (
-                            s
-                            for s in army.squads
-                            if s.state.is_in_panic or s.state.morale < 30.0
-                        ),
-                        None,
-                    )
-                    if squad_to_desert is not None:
-                        army.remove_squad(squad_to_desert.id)
-                        deserted_squad_names.append(squad_to_desert.display_name)
-                        if self._event_bus is not None:
-                            await self._event_bus.publish(
-                                "strategic.squad_deserted",
-                                faction_id=faction.id,
-                                squad_name=squad_to_desert.display_name,
-                                army_id=army.id,
-                            )
-                        break
-
-        return FactionEconomyReport(
-            faction_id=faction.id,
-            income_gold=income_gold,
-            income_material=income_material,
-            income_food=income_food,
-            upkeep_gold_required=upkeep_gold_required,
-            upkeep_food_required=upkeep_food_required,
+        return _UpkeepSettlement(
+            gold_required=upkeep_gold_required,
+            food_required=upkeep_food_required,
             gold_deficit=gold_deficit,
             food_deficit=food_deficit,
-            deserted_squad_names=deserted_squad_names,
-            completed_building_names=completed_buildings,
         )
+
+    async def _handle_deficit_consequences(
+        self,
+        faction: Faction,
+        faction_armies: list[StrategicArmy],
+        upkeep: _UpkeepSettlement,
+        world_state: WorldState,
+    ) -> list[str]:
+        """
+        При дефиците бьет по морали всех отрядов и инициирует дезертирство при сильном голоде.
+        Если дезертирует рабочий отряд, его назначение автоматически аннулируется.
+        """
+        if upkeep.gold_deficit <= 0 and upkeep.food_deficit <= 0:
+            return []
+
+        morale_penalty = 10.0 * (1 if upkeep.gold_deficit > 0 else 0) + 15.0 * (
+            1 if upkeep.food_deficit > 0 else 0
+        )
+        for army in faction_armies:
+            for squad in army.squads:
+                squad.apply_morale_shock(morale_penalty)
+
+        if self._event_bus is not None:
+            await self._event_bus.publish(
+                "strategic.famine_occurred",
+                faction_id=faction.id,
+                gold_deficit=upkeep.gold_deficit,
+                food_deficit=upkeep.food_deficit,
+            )
+
+        deserted_squad_names: list[str] = []
+        if upkeep.food_deficit > (upkeep.food_required * 0.5):
+            for army in faction_armies:
+                squad_to_desert = next(
+                    (s for s in army.squads if s.state.is_in_panic or s.state.morale < 30.0),
+                    None,
+                )
+                if squad_to_desert is None:
+                    continue
+
+                # Снимаем назначение, если сбежал рабочий
+                assignment = world_state.get_squad_assignment(squad_to_desert.id)
+                if assignment is not None:
+                    assignment.abort()
+
+                army.remove_squad(squad_to_desert.id)
+                deserted_squad_names.append(squad_to_desert.display_name)
+
+                if self._event_bus is not None:
+                    await self._event_bus.publish(
+                        "strategic.squad_deserted",
+                        faction_id=faction.id,
+                        squad_name=squad_to_desert.display_name,
+                        army_id=army.id,
+                    )
+                break
+
+        return deserted_squad_names

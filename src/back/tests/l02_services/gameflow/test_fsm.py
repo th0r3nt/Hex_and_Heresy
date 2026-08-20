@@ -6,6 +6,7 @@ import pytest
 
 from src.back.l01_domain.combat.models.state import TacticalBattleState
 from src.back.l01_domain.maps.models.strategic import HexCoordinates
+from src.back.l01_domain.world.models.state import WorldState
 from src.back.l02_services.gameflow.facade import GameFlowFacade
 from src.back.l02_services.gameflow.fsm import GameFlowFSM
 from src.back.l02_services.gameflow.guards import (
@@ -134,6 +135,10 @@ class TestGameFlowFacade:
         # Старт игры
         await facade.start_new_game()
         assert facade.current_state == GameState.STRATEGIC_MAP
+
+        # Привязываем WorldState активной сессии
+        world = WorldState()
+        facade.bind_world_state(world)
 
         # На глобальной карте разрешено строительство и дипломатия
         facade.assert_can_build()
