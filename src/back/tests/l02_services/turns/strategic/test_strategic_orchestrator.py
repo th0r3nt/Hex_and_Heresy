@@ -50,3 +50,32 @@ class TestStrategicTurnOrchestrator:
 
         assert report.events_report.ticks_elapsed == 1
         assert human_faction.id in report.economy_reports
+
+    @pytest.mark.asyncio
+    async def test_full_turn_includes_service_veterancy_report(
+        self, human_faction, sample_army, fake_bus
+    ):
+        from src.back.l01_domain.army.models.characters.commanders import (
+            Commander,
+            CommanderArchetype,
+            CommanderGenerationType,
+            CommanderTrait,
+        )
+
+        sample_army.commander = Commander(
+            name="Полководец",
+            faction_id=human_faction.id,
+            generation_type=CommanderGenerationType.PROCEDURAL,
+            archetype=CommanderArchetype(id="arch_1", name="A", description="D"),
+            trait=CommanderTrait(id="trait_1", name="T", text_fragment="..."),
+        )
+
+        world_state = WorldState()
+        world_state.add_faction(human_faction)
+        world_state.add_army(sample_army)
+
+        orchestrator = StrategicTurnOrchestrator(event_bus=fake_bus)
+        report = await orchestrator.execute_turn(world_state)
+
+        assert isinstance(report.service_veterancy_candidate_ids, list)
+        assert sample_army.squads[0].veterancy.accumulated_service_days > 0.0

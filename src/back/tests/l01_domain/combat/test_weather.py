@@ -2,6 +2,7 @@ import pytest
 
 from src.back.l01_domain.combat.constants import WeatherCondition
 from src.back.l01_domain.combat.weather import get_weather_combat_effects
+from src.back.l01_domain.common import StatName
 
 
 class TestGetWeatherCombatEffects:
@@ -31,5 +32,5 @@ class TestGetWeatherCombatEffects:
         effects = get_weather_combat_effects(WeatherCondition.MAGNETIC_STORM)
         stat_names = {mod.stat_name for e in effects for mod in e.modifiers}
 
-        assert "magic_disabled" in stat_names
-        assert "morale" in stat_names
+        assert StatName.MAGIC_DISABLED in stat_names
+        assert StatName.MORALE in stat_names

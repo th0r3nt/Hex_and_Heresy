@@ -25,7 +25,7 @@ from src.back.l01_domain.army.models.characters.heroes import (
     Perk,
     Scar,
 )
-from src.back.l01_domain.common import MechanicalModifier
+from src.back.l01_domain.common import MechanicalModifier, StatName
 from src.back.l01_domain.exceptions import (
     HeroLevelTooLowError,
     NegativeExperienceError,
@@ -39,7 +39,7 @@ def sample_hero() -> Hero:
         name="Воин",
         description="...",
         special_rule="Ярость",
-        trigger_modifier=MechanicalModifier(stat_name="damage", value=5.0),
+        trigger_modifier=MechanicalModifier(stat_name=StatName.DAMAGE, value=5.0),
     )
     return Hero.create_new(
         name="Варг", faction_id="greenskins", archetype=archetype, max_hp=150.0
@@ -74,7 +74,7 @@ class TestHeroDamageAndScarsInvariants:
         scar1 = Scar(
             name="Разорванное плечо",
             description="...",
-            modifier=MechanicalModifier(stat_name="damage", value=-2.0),
+            modifier=MechanicalModifier(stat_name=StatName.DAMAGE, value=-2.0),
         )
         sample_hero.apply_scar(scar1, recovery_ticks=2)
 
@@ -88,7 +88,7 @@ class TestHeroDamageAndScarsInvariants:
         scar2 = Scar(
             name="Выбитый глаз",
             description="...",
-            modifier=MechanicalModifier(stat_name="initiative", value=-3.0),
+            modifier=MechanicalModifier(stat_name=StatName.INITIATIVE, value=-3.0),
         )
         sample_hero.apply_scar(scar2, recovery_ticks=4)
 
@@ -101,13 +101,13 @@ class TestHeroDamageAndScarsInvariants:
             name="Берсерк",
             description="...",
             level_required=1,
-            modifier=MechanicalModifier(stat_name="damage", value=10.0),
+            modifier=MechanicalModifier(stat_name=StatName.DAMAGE, value=10.0),
             text_fragment="...",
         )
         scar = Scar(
             name="Хромота",
             description="...",
-            modifier=MechanicalModifier(stat_name="speed", value=-0.5),
+            modifier=MechanicalModifier(stat_name=StatName.SPEED, value=-0.5),
         )
         sample_hero.learn_perk(perk)
         sample_hero.apply_scar(scar, recovery_ticks=1)
@@ -126,7 +126,7 @@ class TestHeroDamageAndScarsInvariants:
             name="Полководец",
             description="...",
             level_required=10,
-            modifier=MechanicalModifier(stat_name="morale", value=15.0),
+            modifier=MechanicalModifier(stat_name=StatName.MORALE, value=15.0),
             text_fragment="...",
         )
 

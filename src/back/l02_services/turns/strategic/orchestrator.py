@@ -12,6 +12,7 @@ from src.back.l02_services.turns.strategic.economy import (
     FactionEconomyReport,
     StrategicEconomyService,
 )
+from src.back.l02_services.turns.strategic.veterancy import StrategicVeterancyService
 from src.back.l02_services.turns.strategic.events import (
     EventsStepReport,
     StrategicEventsService,
@@ -34,6 +35,7 @@ class GlobalTurnReport(BaseModel):
     economy_reports: dict[str, FactionEconomyReport] = Field(default_factory=dict)
     movement_report: MovementStepReport = Field(...)
     completed_expedition_ids: list[str] = Field(default_factory=list)
+    service_veterancy_candidate_ids: list[str] = Field(default_factory=list)
 
 
 class StrategicTurnOrchestrator:
@@ -49,6 +51,7 @@ class StrategicTurnOrchestrator:
         economy_service: Optional[StrategicEconomyService] = None,
         movement_service: Optional[StrategicMovementService] = None,
         expedition_service: Optional[ExpeditionWorkerService] = None,
+        veterancy_service: Optional[StrategicVeterancyService] = None,
         event_bus: Optional[EventBusProtocol] = None,
     ) -> None:
         self._event_bus = event_bus
@@ -58,6 +61,9 @@ class StrategicTurnOrchestrator:
             event_bus=event_bus
         )
         self._expedition_service = expedition_service or ExpeditionWorkerService(
+            event_bus=event_bus
+        )
+        self._veterancy_service = veterancy_service or StrategicVeterancyService(
             event_bus=event_bus
         )
 
@@ -77,6 +83,13 @@ class StrategicTurnOrchestrator:
 
         # Шаг 1. Продвижение времени, условий мира и полей брани
         events_report = await self._events_service.process_world_events(world_state)
+
+        # Шаг 1.5. Учёт выслуги лет отрядов в армиях под командованием полководцев
+        service_veterancy_report = (
+            await self._veterancy_service.process_service_accumulation(  # noqa: F841
+                world_state
+            )
+        )
 
         # Шаг 2. Обработка экспедиций (добыча, разворот караванов, сдача груза в казну)
         completed_expeditions = await self._expedition_service.process_expeditions(world_state)
@@ -98,6 +111,7 @@ class StrategicTurnOrchestrator:
             economy_reports=economy_reports,
             movement_report=movement_report,
             completed_expedition_ids=completed_expeditions,
+            service_veterancy_candidate_ids=service_veterancy_report.veterancy_candidate_ids,
         )
 
         if self._event_bus is not None:

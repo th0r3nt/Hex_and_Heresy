@@ -18,9 +18,27 @@ class FactionRace(str, Enum):
     MERCENARIES = "mercenaries"
 
 
+class StatName(str, Enum):
+    """Характеристики, которые может задевать `MechanicalModifier`."""
+
+    MORALE = "morale"
+    ARMOR = "armor"
+    DAMAGE = "damage"
+    SPEED = "speed"
+    INITIATIVE = "initiative"
+    HP_REGEN = "hp_regen"
+    AMBUSH_RESISTANCE = "ambush_resistance"
+    RANGED_ACCURACY = "ranged_accuracy"
+    FIREARM_MISFIRE_CHANCE = "firearm_misfire_chance"
+    MOVEMENT_SPEED = "movement_speed"
+    VISIBILITY_RANGE_CELLS = "visibility_range_cells"
+    HP_DRAIN_PER_TICK = "hp_drain_per_tick"
+    MAGIC_DISABLED = "magic_disabled"
+
+
 class MechanicalModifier(BaseModel):
     """Математический бонус/штраф, полученный за подвиг/перк/архетип/вещь."""
 
-    stat_name: str = Field(..., description="Имя изменяемого стата (morale, armor, damage)")
+    stat_name: StatName = Field(..., description="Изменяемый стат (morale, armor, damage, ...)")
     value: float = Field(..., description="Значение (абсолютное или относительное)")
     is_percentage: bool = Field(default=False, description="Процентный ли модификатор")

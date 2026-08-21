@@ -46,7 +46,7 @@ class TacticalCombatService:
     # =======================================================================
     # Расчет натиска
     # =======================================================================
-    
+
     def resolve_charges(
         self,
         battle_state: TacticalBattleState,
@@ -99,10 +99,12 @@ class TacticalCombatService:
         squads: dict[str, Squad],
         all_deaths_by_squad: dict[str, int],
         all_kills_by_squad: dict[str, int],
+        all_weighted_kills_by_squad: dict[str, float],
     ) -> MoraleAndEnvironmentReport:
         return self._morale_service.process_morale_and_environment(
             battle_state=battle_state,
             squads=squads,
             all_deaths_by_squad=all_deaths_by_squad,
             all_kills_by_squad=all_kills_by_squad,
+            all_weighted_kills_by_squad=all_weighted_kills_by_squad,
         )

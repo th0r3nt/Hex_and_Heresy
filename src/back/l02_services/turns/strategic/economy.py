@@ -291,6 +291,5 @@ class StrategicEconomyService:
                         squad_name=squad_to_desert.display_name,
                         army_id=army.id,
                     )
-                break
 
         return deserted_squad_names

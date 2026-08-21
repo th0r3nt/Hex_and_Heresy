@@ -53,7 +53,7 @@ HQ_BUILDING_SLOTS_PER_LEVEL: Final[int] = 1
 # ==================================================================
 
 MIN_TOWNHALL_LEVEL: Final[int] = 0
-MAX_TOWNHALL_LEVEL: Final[int] = 2
+MAX_TOWNHALL_LEVEL: Final[int] = 3
 TOWNHALL_BASE_BUILDING_SLOTS: Final[int] = 1
 TOWNHALL_BUILDING_SLOTS_PER_LEVEL: Final[int] = 1
 TOWNHALL_MAX_BUILDING_SLOTS: Final[int] = 3
@@ -120,7 +120,7 @@ class WorkerAssignmentStatus(str, Enum):
 # Базовые значения для рабочих и экспедиций
 STATIONARY_WARMUP_TICKS: Final[int] = 1
 NEUTRAL_HEX_GOLD_BASE_YIELD_PER_UNIT: Final[float] = (
-    0.5  # 50 золота за полный отряд из 100 рабочих за такт
+    2.25  # 225 золота за такт добычи на отряд
 )
 
 # ==================================================================

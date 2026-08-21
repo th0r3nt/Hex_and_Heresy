@@ -7,6 +7,7 @@ from typing import Optional
 from src.back.l01_domain.army.models.card.squad import Squad
 from src.back.l01_domain.army.models.characters.commanders import Commander
 from src.back.l01_domain.army.models.characters.heroes import Hero
+from src.back.l01_domain.army.constants import VETERANCY_KILL_WEIGHT_BY_SIZE
 from src.back.l01_domain.combat.constants import BattlePhase, TerrainType
 from src.back.l01_domain.combat.models.effects import TerrainProfile
 from src.back.l01_domain.combat.models.reports import TacticalTurnReport
@@ -25,6 +26,31 @@ from src.back.l02_services.turns.tactical.combat.facade import TacticalCombatSer
 from src.back.l02_services.turns.tactical.initiative import TacticalInitiativeService
 from src.back.l02_services.turns.tactical.movement import TacticalMovementService
 from src.back.utils.event.registry import GameEvents
+
+
+def _accumulate_weighted_kills(
+    weighted_kills_by_squad: dict[str, float],
+    squads: dict[str, Squad],
+    killer_squad_id: str,
+    victim_squad_id: Optional[str],
+    victim_deaths: int,
+) -> None:
+    """
+    Прибавляет вклад в счётчик ветеранства killer_squad_id, взвешенный по
+    габариту жертвы (VETERANCY_KILL_WEIGHT_BY_SIZE). Отдельно от сырого
+    kills_by_squad, который остаётся как есть для остальной статистики отчёта.
+    """
+    if victim_squad_id is None or victim_deaths <= 0:
+        return
+
+    victim_squad = squads.get(victim_squad_id)
+    if victim_squad is None:
+        return
+
+    weight_per_unit = VETERANCY_KILL_WEIGHT_BY_SIZE.get(victim_squad.size_category, 1.0)
+    weighted_kills_by_squad[killer_squad_id] = (
+        weighted_kills_by_squad.get(killer_squad_id, 0.0) + weight_per_unit * victim_deaths
+    )
 
 
 class TacticalTurnOrchestrator:
@@ -59,8 +85,17 @@ class TacticalTurnOrchestrator:
         """
         Выполняет полный расчет одного тактического раунда (30 секунд).
         """
+
+        deaths_by_squad: dict[str, int] = {}
+        kills_by_squad: dict[str, int] = {}
+        weighted_kills_by_squad: dict[str, float] = {}
+
+        is_new_battle = battle_state.current_tick == 0
         battle_state.current_tick += 1
         battle_state.advance_phase(BattlePhase.RESOLUTION)
+
+        if is_new_battle:
+            self._combat_service.reset_battle_accumulators()
 
         if self._event_bus is not None:
             await self._event_bus.publish(
@@ -101,6 +136,21 @@ class TacticalTurnOrchestrator:
                 kills_by_squad.get(cr.defender_squad_id, 0) + cr.attacker_deaths
             )
 
+            _accumulate_weighted_kills(
+                weighted_kills_by_squad,
+                squads,
+                cr.attacker_squad_id,
+                cr.defender_squad_id,
+                cr.defender_deaths,
+            )
+            _accumulate_weighted_kills(
+                weighted_kills_by_squad,
+                squads,
+                cr.defender_squad_id,
+                cr.attacker_squad_id,
+                cr.attacker_deaths,
+            )
+
         # 3. Пошаговое перемещение
         movement_reports = self._movement_service.process_movement(
             battle_state=battle_state,
@@ -117,13 +167,27 @@ class TacticalTurnOrchestrator:
         )
 
         for rr in ranged_reports:
-            if rr.target_squad_id:
-                deaths_by_squad[rr.target_squad_id] = (
-                    deaths_by_squad.get(rr.target_squad_id, 0) + rr.kills
-                )
             if rr.friendly_fire_squad_id:
                 deaths_by_squad[rr.friendly_fire_squad_id] = (
                     deaths_by_squad.get(rr.friendly_fire_squad_id, 0) + rr.friendly_fire_kills
+                )
+                _accumulate_weighted_kills(
+                    weighted_kills_by_squad,
+                    squads,
+                    rr.attacker_squad_id,
+                    rr.friendly_fire_squad_id,
+                    rr.friendly_fire_kills,
+                )
+            elif rr.target_squad_id:
+                deaths_by_squad[rr.target_squad_id] = (
+                    deaths_by_squad.get(rr.target_squad_id, 0) + rr.kills
+                )
+                _accumulate_weighted_kills(
+                    weighted_kills_by_squad,
+                    squads,
+                    rr.attacker_squad_id,
+                    rr.target_squad_id,
+                    rr.kills,
                 )
             kills_by_squad[rr.attacker_squad_id] = (
                 kills_by_squad.get(rr.attacker_squad_id, 0) + rr.kills
@@ -143,6 +207,14 @@ class TacticalTurnOrchestrator:
                 kills_by_squad.get(mr.attacker_squad_id, 0) + mr.kills
             )
 
+            _accumulate_weighted_kills(
+                weighted_kills_by_squad,
+                squads,
+                mr.attacker_squad_id,
+                mr.defender_squad_id,
+                mr.kills,
+            )
+
         # Аккумулируем потери текущего раунда в общую копилку сражения
         for squad_id, count in deaths_by_squad.items():
             battle_state.accumulated_deaths_by_squad[squad_id] = (
@@ -155,6 +227,7 @@ class TacticalTurnOrchestrator:
             squads=squads,
             all_deaths_by_squad=deaths_by_squad,
             all_kills_by_squad=kills_by_squad,
+            all_weighted_kills_by_squad=weighted_kills_by_squad,
         )
 
         battle_state.clear_orders()

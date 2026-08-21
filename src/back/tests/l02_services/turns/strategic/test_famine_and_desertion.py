@@ -188,3 +188,56 @@ class TestFamineAndDeficitConsequences:
         report = reports[human_faction.id]
         assert report.upkeep_gold_required == pytest.approx(65.0)
         assert human_faction.resources[ResourceType.GOLD] == pytest.approx(35.0)
+
+
+class TestFamineAffectsAllArmiesNotJustFirst:
+    @pytest.mark.asyncio
+    async def test_critical_famine_causes_desertion_in_every_affected_army(
+        self, human_faction, fake_bus
+    ):
+        """
+        Баг: `break` в конце цикла по армиям прерывал обработку дезертирства
+        сразу после первой найденной армии с паникующим отрядом — остальные
+        армии той же фракции в этот такт не затрагивались вовсе, даже если
+        в них тоже были паникующие/деморализованные отряды.
+        """
+        human_faction.resources[ResourceType.GOLD] = 0.0
+        human_faction.resources[ResourceType.FOOD] = 0.0
+
+        def make_panicking_army(suffix: str) -> StrategicArmy:
+            archetype = UnitArchetype(
+                id=f"unit_peasants_{suffix}",
+                race=FactionRace.HUMANS,
+                name="Крепостные",
+                tier=0,
+                default_unit_count=100,
+                base_stats=BaseUnitStats(max_hp=10.0, base_morale=50.0),
+                base_upkeep_food=1.0,
+                base_upkeep_gold=0.0,
+            )
+            squad = Squad.create_new(archetype=archetype)
+            squad.state.morale = 15.0
+            squad.state.is_in_panic = True
+
+            army = StrategicArmy(
+                faction_id=human_faction.id, current_hex=HexCoordinates.from_axial(0, 0)
+            )
+            army.add_squad(squad)
+            return army
+
+        army_1 = make_panicking_army("a")
+        army_2 = make_panicking_army("b")
+
+        world = WorldState()
+        world.add_faction(human_faction)
+        world.add_army(army_1)
+        world.add_army(army_2)
+
+        service = StrategicEconomyService(event_bus=fake_bus)
+        reports = await service.process_factions_economy(world)
+
+        report = reports[human_faction.id]
+        # обе армии теряют по своему паникующему отряду, а не только первая
+        assert len(report.deserted_squad_names) == 2
+        assert len(army_1.squads) == 0
+        assert len(army_2.squads) == 0

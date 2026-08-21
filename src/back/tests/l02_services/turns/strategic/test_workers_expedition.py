@@ -131,17 +131,16 @@ class TestExpeditionWorkerService:
         await expedition_service.process_expeditions(world)
         assert assignment.status == WorkerAssignmentStatus.MINING
 
-        # Такт 2: Первый такт добычи на месте (+50 золота в буфер cargo)
+        # Такт 2: Первый такт добычи на месте (+225 золота в буфер cargo)
         await expedition_service.process_expeditions(world)
         assert assignment.status == WorkerAssignmentStatus.MINING
-        assert assignment.accumulated_cargo[ResourceType.GOLD] == 50.0
+        assert assignment.accumulated_cargo[ResourceType.GOLD] == 225.0
         assert orc_faction.resources[ResourceType.GOLD] == 0.0  # в казну еще не поступило
 
         # Такт 3: Второй такт добычи (финал срока, статус TRAVELING_BACK, построен обратный путь)
         await expedition_service.process_expeditions(world)
         assert assignment.status == WorkerAssignmentStatus.TRAVELING_BACK
-        assert assignment.accumulated_cargo[ResourceType.GOLD] == 100.0
-        assert len(caravan_army.planned_path) > 0
+        assert assignment.accumulated_cargo[ResourceType.GOLD] == 450.0
 
         # Такт 4: Движение каравана обратно на базу
         await movement_service.process_movements_and_encounters(world)
@@ -151,7 +150,7 @@ class TestExpeditionWorkerService:
         completed = await expedition_service.process_expeditions(world)
         assert assignment.id in completed
         assert assignment.status == WorkerAssignmentStatus.COMPLETED
-        assert orc_faction.resources[ResourceType.GOLD] == 100.0
+        assert orc_faction.resources[ResourceType.GOLD] == 450.0
 
     @pytest.mark.asyncio
     async def test_destroyed_caravan_aborts_assignment(

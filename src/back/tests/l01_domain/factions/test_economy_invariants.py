@@ -11,7 +11,7 @@ from src.back.l01_domain.exceptions import (
     InsufficientResourcesError,
     NegativeResourceAmountError,
 )
-from src.back.l01_domain.factions.constants import ResourceType
+from src.back.l01_domain.factions.constants import ResourceType, TOWNHALL_MAX_BUILDING_SLOTS
 from src.back.l01_domain.factions.models.buildings import (
     Headquarters,
     RegionalHall,
@@ -81,7 +81,7 @@ class TestBuildingLevelAndSlotsInvariants:
         assert exc_info.value.building_name == "Цитадель"
         assert exc_info.value.max_level == 6
 
-    def test_regional_hall_slots_and_max_level_two(self):
+    def test_regional_hall_slots_and_max_level_three(self):
         hall = RegionalHall(faction_id="f1", zone_id="zone_01", name="Ратуша", level=1)
         # Уровень 1: 1 слот
         assert hall.building_slots == 1
@@ -91,6 +91,14 @@ class TestBuildingLevelAndSlotsInvariants:
         assert hall.level == 2
         assert hall.building_slots == 2
 
-        # Попытка улучшить выше максимального 2 уровня
-        with pytest.raises(BuildingMaxLevelReachedError):
+        hall.upgrade()
+        # Уровень 3: 3 слота — заявленный в building.md максимум теперь достижим
+        assert hall.level == 3
+        assert hall.building_slots == 3
+        assert hall.building_slots == TOWNHALL_MAX_BUILDING_SLOTS
+
+        # Попытка улучшить выше максимального 3 уровня
+        with pytest.raises(BuildingMaxLevelReachedError) as exc_info:
             hall.upgrade()
+
+        assert exc_info.value.max_level == 3

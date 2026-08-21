@@ -10,7 +10,7 @@
 
 from src.back.l01_domain.combat.constants import CombatEffectCategory, EffectStackingRule, WeatherCondition
 from src.back.l01_domain.combat.models.effects import CombatEffect
-from src.back.l01_domain.common import MechanicalModifier
+from src.back.l01_domain.common import MechanicalModifier, StatName
 
 
 def get_weather_combat_effects(condition: WeatherCondition) -> list[CombatEffect]:
@@ -23,14 +23,14 @@ def get_weather_combat_effects(condition: WeatherCondition) -> list[CombatEffect
                 name="Мокрая тетива",
                 category=CombatEffectCategory.WEATHER,
                 stacking_rule=EffectStackingRule.IGNORE,
-                modifiers=[MechanicalModifier(stat_name="ranged_accuracy", value=-0.15, is_percentage=True)],
+                modifiers=[MechanicalModifier(stat_name=StatName.RANGED_ACCURACY, value=-0.15, is_percentage=True)],
             ),
             CombatEffect(
                 id="weather_rain_firearm_misfire",
                 name="Отсыревший порох",
                 category=CombatEffectCategory.WEATHER,
                 stacking_rule=EffectStackingRule.IGNORE,
-                modifiers=[MechanicalModifier(stat_name="firearm_misfire_chance", value=0.20, is_percentage=True)],
+                modifiers=[MechanicalModifier(stat_name=StatName.FIREARM_MISFIRE_CHANCE, value=0.20, is_percentage=True)],
             ),
         ]
 
@@ -41,14 +41,14 @@ def get_weather_combat_effects(condition: WeatherCondition) -> list[CombatEffect
                 name="Снежные заносы",
                 category=CombatEffectCategory.WEATHER,
                 stacking_rule=EffectStackingRule.IGNORE,
-                modifiers=[MechanicalModifier(stat_name="movement_speed", value=-0.20, is_percentage=True)],
+                modifiers=[MechanicalModifier(stat_name=StatName.MOVEMENT_SPEED, value=-0.20, is_percentage=True)],
             ),
             CombatEffect(
                 id="weather_snow_visibility",
                 name="Снегопад",
                 category=CombatEffectCategory.WEATHER,
                 stacking_rule=EffectStackingRule.IGNORE,
-                modifiers=[MechanicalModifier(stat_name="visibility_range_cells", value=-2.0)],
+                modifiers=[MechanicalModifier(stat_name=StatName.VISIBILITY_RANGE_CELLS, value=-2.0)],
             ),
         ]
 
@@ -59,7 +59,7 @@ def get_weather_combat_effects(condition: WeatherCondition) -> list[CombatEffect
                 name="Пасмурно",
                 category=CombatEffectCategory.WEATHER,
                 stacking_rule=EffectStackingRule.IGNORE,
-                modifiers=[MechanicalModifier(stat_name="visibility_range_cells", value=-1.0)],
+                modifiers=[MechanicalModifier(stat_name=StatName.VISIBILITY_RANGE_CELLS, value=-1.0)],
             ),
         ]
 
@@ -70,14 +70,14 @@ def get_weather_combat_effects(condition: WeatherCondition) -> list[CombatEffect
                 name="Пепельная буря",
                 category=CombatEffectCategory.WEATHER,
                 stacking_rule=EffectStackingRule.IGNORE,
-                modifiers=[MechanicalModifier(stat_name="visibility_range_cells", value=-3.0)],
+                modifiers=[MechanicalModifier(stat_name=StatName.VISIBILITY_RANGE_CELLS, value=-3.0)],
             ),
             CombatEffect(
                 id="weather_ash_storm_choking",
                 name="Удушье пеплом",
                 category=CombatEffectCategory.WEATHER,
                 stacking_rule=EffectStackingRule.IGNORE,
-                modifiers=[MechanicalModifier(stat_name="morale", value=-5.0)],
+                modifiers=[MechanicalModifier(stat_name=StatName.MORALE, value=-5.0)],
             ),
         ]
 
@@ -88,14 +88,14 @@ def get_weather_combat_effects(condition: WeatherCondition) -> list[CombatEffect
                 name="Токсичный туман",
                 category=CombatEffectCategory.WEATHER,
                 stacking_rule=EffectStackingRule.IGNORE,
-                modifiers=[MechanicalModifier(stat_name="visibility_range_cells", value=-3.0)],
+                modifiers=[MechanicalModifier(stat_name=StatName.VISIBILITY_RANGE_CELLS, value=-3.0)],
             ),
             CombatEffect(
                 id="weather_toxic_mist_dot",
                 name="Испарения Ничьей земли",
                 category=CombatEffectCategory.WEATHER,
                 stacking_rule=EffectStackingRule.IGNORE,
-                modifiers=[MechanicalModifier(stat_name="hp_drain_per_tick", value=2.0)],
+                modifiers=[MechanicalModifier(stat_name=StatName.HP_DRAIN_PER_TICK, value=2.0)],
                 removal_condition="не действует на носителей проклятых генов и существ с резонитовым иммунитетом",
             ),
         ]
@@ -107,14 +107,14 @@ def get_weather_combat_effects(condition: WeatherCondition) -> list[CombatEffect
                 name="Магнитная буря",
                 category=CombatEffectCategory.WEATHER,
                 stacking_rule=EffectStackingRule.IGNORE,
-                modifiers=[MechanicalModifier(stat_name="magic_disabled", value=1.0)],
+                modifiers=[MechanicalModifier(stat_name=StatName.MAGIC_DISABLED, value=1.0)],
             ),
             CombatEffect(
                 id="weather_magnetic_storm_human_morale",
                 name="Небеса горят к добру",
                 category=CombatEffectCategory.WEATHER,
                 stacking_rule=EffectStackingRule.IGNORE,
-                modifiers=[MechanicalModifier(stat_name="morale", value=10.0)],
+                modifiers=[MechanicalModifier(stat_name=StatName.MORALE, value=10.0)],
                 removal_condition="действует только на карточки расы людей",
             ),
         ]

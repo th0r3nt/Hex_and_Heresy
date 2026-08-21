@@ -9,16 +9,17 @@ from src.back.l01_domain.army.models.card.veterancy import (
     MechanicalModifier,
     VeterancyStatus,
 )
+from src.back.l01_domain.common import StatName
 
 
 class TestMechanicalModifier:
     def test_percentage_flag_defaults_to_false(self):
-        modifier = MechanicalModifier(stat_name="morale", value=2.0)
+        modifier = MechanicalModifier(stat_name=StatName.MORALE, value=2.0)
 
         assert modifier.is_percentage is False
 
     def test_can_represent_percentage_bonus(self):
-        modifier = MechanicalModifier(stat_name="damage", value=15.0, is_percentage=True)
+        modifier = MechanicalModifier(stat_name=StatName.DAMAGE, value=15.0, is_percentage=True)
 
         assert modifier.is_percentage is True
         assert modifier.value == 15.0
@@ -41,7 +42,7 @@ class TestVeterancyStatus:
     def test_promote_marks_squad_as_named(self):
         # Сценарий "Давид и Голиаф" из veterancy.md
         status = VeterancyStatus()
-        modifier = MechanicalModifier(stat_name="morale", value=2.0)
+        modifier = MechanicalModifier(stat_name=StatName.MORALE, value=2.0)
 
         status.promote(
             commander_name="Маркус",
@@ -70,3 +71,59 @@ class TestVeterancyStatus:
 
         assert status.is_named is True
         assert status.modifier is None
+
+
+class TestAccumulateKills:
+    def test_accumulation_below_threshold_returns_false(self):
+        status = VeterancyStatus()
+
+        crossed = status.accumulate_kills(100.0)
+
+        assert crossed is False
+        assert status.accumulated_kill_weight == 100.0
+
+    def test_crossing_threshold_returns_true_exactly_once(self):
+        status = VeterancyStatus()
+        status.accumulate_kills(499.0)
+
+        crossed_now = status.accumulate_kills(1.0)  # ровно 500.0
+        assert crossed_now is True
+        assert status.accumulated_kill_weight == 500.0
+
+        # Повторный вызов после пересечения порога больше не сигналит
+        crossed_again = status.accumulate_kills(50.0)
+        assert crossed_again is False
+
+    def test_zero_or_negative_weight_is_noop(self):
+        status = VeterancyStatus()
+
+        assert status.accumulate_kills(0.0) is False
+        assert status.accumulate_kills(-10.0) is False
+        assert status.accumulated_kill_weight == 0.0
+
+
+class TestAccumulateService:
+    def test_accumulation_below_threshold_returns_false(self):
+        status = VeterancyStatus()
+
+        crossed = status.accumulate_service(30.0)
+
+        assert crossed is False
+        assert status.accumulated_service_days == 30.0
+
+    def test_zero_or_negative_days_is_noop(self):
+        status = VeterancyStatus()
+
+        assert status.accumulate_service(0.0) is False
+        assert status.accumulate_service(-1.0) is False
+        assert status.accumulated_service_days == 0.0
+
+
+class TestVeterancyAccumulatorsAreIndependent:
+    def test_crossing_kill_threshold_does_not_affect_service_accumulator(self):
+        """Два триггера повышения не должны влиять друг на друга."""
+        status = VeterancyStatus()
+        status.accumulate_kills(600.0)  # сразу за порогом убийств
+
+        assert status.accumulated_service_days == 0.0
+        assert status.accumulate_service(60.0) is True  # служба считается с нуля

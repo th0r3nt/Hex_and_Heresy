@@ -32,6 +32,7 @@ class TacticalMoraleEnvironmentService:
         squads: dict[str, Squad],
         all_deaths_by_squad: dict[str, int],
         all_kills_by_squad: dict[str, int],
+        all_weighted_kills_by_squad: dict[str, float],
     ) -> MoraleAndEnvironmentReport:
         """
         Проводит психологический аудит и проверяет трансформацию окружения.
@@ -127,9 +128,8 @@ class TacticalMoraleEnvironmentService:
             if squad.state.unit_count <= 0 or squad.veterancy.is_named:
                 continue
 
-            # TODO: слишком примитивно, нужно сделать гибче
-            kills = all_kills_by_squad.get(squad_id, 0)
-            if kills >= 100:
+            weighted_kills = all_weighted_kills_by_squad.get(squad_id, 0.0)
+            if squad.veterancy.accumulate_kills(weighted_kills):
                 veterancy_candidate_ids.append(squad_id)
                 continue
 

@@ -8,7 +8,7 @@ from pydantic import ValidationError
 from src.back.l01_domain.army.constants import EquipmentSlot
 from src.back.l01_domain.army.models.card.equipment import EquipmentStats
 from src.back.l01_domain.army.models.characters.artifacts import HeroArtifact
-from src.back.l01_domain.common import MechanicalModifier
+from src.back.l01_domain.common import MechanicalModifier, StatName
 from src.back.l01_domain.army.models.characters.heroes import (
     Hero,
     HeroArchetype,
@@ -36,7 +36,7 @@ def resilience_perk() -> Perk:
         name="Железное брюхо",
         description="Ещё немного брони на пустое место.",
         level_required=5,
-        modifier=MechanicalModifier(stat_name="armor", value=2.0),
+        modifier=MechanicalModifier(stat_name=StatName.ARMOR, value=2.0),
         text_fragment="Ты хвастаешься шрамом от ядра при каждой возможности.",
     )
 
@@ -46,7 +46,7 @@ def limp_scar() -> Scar:
     return Scar(
         name="Хромота",
         description="-1 к скорости перемещения после тяжёлого ранения в ногу.",
-        modifier=MechanicalModifier(stat_name="speed", value=-1.0),
+        modifier=MechanicalModifier(stat_name=StatName.SPEED, value=-1.0),
     )
 
 
@@ -79,7 +79,7 @@ class TestPerk:
                 name="Сломанный перк",
                 description="...",
                 level_required=21,
-                modifier=MechanicalModifier(stat_name="damage", value=1.0),
+                modifier=MechanicalModifier(stat_name=StatName.DAMAGE, value=1.0),
                 text_fragment="...",
             )
 
@@ -129,7 +129,7 @@ class TestHero:
             description="...",
             special_rule="При падении ХП до 0 автоматически исцеляется на 10%.",
             trigger_modifier=MechanicalModifier(
-                stat_name="hp_regen", value=0.1, is_percentage=True
+                stat_name=StatName.HP_REGEN, value=0.1, is_percentage=True
             ),
         )
         hero = Hero.create_new(
@@ -139,7 +139,7 @@ class TestHero:
         modifiers = hero.get_active_modifiers()
 
         assert len(modifiers) == 1
-        assert modifiers[0].stat_name == "hp_regen"
+        assert modifiers[0].stat_name == StatName.HP_REGEN
 
     def test_take_damage_ignores_armor_absorbed_hits(self, unkillable_archetype, hero_armor):
         hero = Hero.create_new(

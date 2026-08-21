@@ -169,3 +169,78 @@ class TestFSMDeepModalStacksAndTransitions:
                 defender_faction_id="greenskins",
                 battle_state=battle_state,
             )
+
+
+class TestModalTransitionsFromDiplomacyAndGlobalEvents:
+    @pytest.mark.asyncio
+    async def test_settings_and_resume_from_diplomatic_session(self, fake_bus):
+        """
+        Баг: (DIPLOMATIC_SESSION, OPEN_SETTINGS) отсутствовал в матрице —
+        попытка открыть настройки во время аудиенции падала с
+        InvalidStateTransitionError, хотя пауза из того же состояния работала.
+        """
+        fsm = GameFlowFSM(initial_state=GameState.MAIN_MENU, event_bus=fake_bus)
+        facade = GameFlowFacade(fsm=fsm, event_bus=fake_bus)
+        facade.bind_world_state(WorldState())
+
+        await facade.start_new_game()
+        await facade.open_diplomatic_session(
+            initiator_faction_id="humans", target_faction_id="elfs"
+        )
+        assert facade.current_state == GameState.DIPLOMATIC_SESSION
+
+        await facade.open_settings()
+        assert facade.current_state == GameState.SETTINGS
+
+        await facade.close_settings()
+        # возврат строго в DIPLOMATIC_SESSION, а не в MAIN_MENU/STRATEGIC_MAP по умолчанию
+        assert facade.current_state == GameState.DIPLOMATIC_SESSION
+
+    @pytest.mark.asyncio
+    async def test_pause_and_resume_from_global_event_resolution(self, fake_bus):
+        """
+        Баг: (GLOBAL_EVENT_RESOLUTION, PAUSE_GAME) отсутствовал в матрице.
+        """
+        fsm = GameFlowFSM(initial_state=GameState.MAIN_MENU, event_bus=fake_bus)
+        facade = GameFlowFacade(fsm=fsm, event_bus=fake_bus)
+        facade.bind_world_state(WorldState())
+
+        await facade.start_new_game()
+        crisis_event = GlobalEvent(
+            id="event_test_ash_storm",
+            name="Пепельная буря",
+            description="...",
+            category=GlobalEventCategory.WEATHER,
+        )
+        await facade.show_global_event(crisis_event)
+        assert facade.current_state == GameState.GLOBAL_EVENT_RESOLUTION
+
+        await facade.pause_game()
+        assert facade.current_state == GameState.PAUSE
+
+        await facade.resume_game()
+        assert facade.current_state == GameState.GLOBAL_EVENT_RESOLUTION
+
+    @pytest.mark.asyncio
+    async def test_settings_and_resume_from_global_event_resolution(self, fake_bus):
+        """
+        Баг: (GLOBAL_EVENT_RESOLUTION, OPEN_SETTINGS) отсутствовал в матрице.
+        """
+        fsm = GameFlowFSM(initial_state=GameState.MAIN_MENU, event_bus=fake_bus)
+        facade = GameFlowFacade(fsm=fsm, event_bus=fake_bus)
+        facade.bind_world_state(WorldState())
+
+        await facade.start_new_game()
+        crisis_event = GlobalEvent(
+            id="event_test_famine",
+            name="Голодный бунт",
+            description="...",
+            category=GlobalEventCategory.ECONOMIC,
+        )
+        await facade.show_global_event(crisis_event)
+
+        await facade.open_settings()
+        assert facade.current_state == GameState.SETTINGS
+
+        await facade.close_settings()
+        assert facade.current_state == GameState.GLOBAL_EVENT_RESOLUTION

@@ -216,7 +216,7 @@ class TestStrategicLifecycleE2E:
 
         # Караван орков ведет 1-й такт добычи
         assert expedition.status.value == "mining"
-        assert expedition.accumulated_cargo[ResourceType.GOLD] == 50.0
+        assert expedition.accumulated_cargo[ResourceType.GOLD] == 225.0
 
         # =========================================================================
         # ТАКТ 4: 2-й такт добычи, завершение работ и марш каравана обратно на базу
@@ -226,11 +226,11 @@ class TestStrategicLifecycleE2E:
 
         # Караван орков закончил добычу, развернулся и вернулся на базу
         assert expedition.status.value == "traveling_back"
-        assert expedition.accumulated_cargo[ResourceType.GOLD] == 100.0
+        assert expedition.accumulated_cargo[ResourceType.GOLD] == 450.0
         assert caravan_army.current_hex == orc_home_hex
 
         # =========================================================================
-        # ТАКТ 5: Разгрузка 100 золота в казну Орды, мародерство и деградация трофеев
+        # ТАКТ 5: Разгрузка 450 золота в казну Орды, мародерство и деградация трофеев
         # =========================================================================
 
         loot_site = BattlefieldLootSite(
@@ -248,7 +248,7 @@ class TestStrategicLifecycleE2E:
         assert expedition.id in report_t5.completed_expedition_ids
         assert expedition.status.value == "completed"
         assert orc_faction.resources[ResourceType.GOLD] == pytest.approx(
-            orc_gold_before + 100.0
+            orc_gold_before + 450.0
         )
 
         # Трофеи истлели за 1 такт и были удалены из реестра мира

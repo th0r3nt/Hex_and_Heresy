@@ -43,14 +43,21 @@ class TacticalMeleeService:
             if attacker is None or attacker.state.unit_count <= 0:
                 continue
 
+            attacker_weapon_range = (
+                attacker.weapon.stats.range_hexes if attacker.weapon is not None else 1
+            )
+            if attacker_weapon_range > MELEE_LONG_RANGE_CELLS:
+                continue
+
             # Позиция отряда
             attacker_pos = squad_positions.get(order.squad_id)
             if attacker_pos is None:
                 continue
 
-            # Дистанция от атакуещего до защищающегося
+            # Дистанция от атакующего до защищающегося: ограничена дальностью
+            # конкретно этого оружия, а не глобальным потолком ближнего боя
             distance = cell_distance_chebyshev(attacker_pos, order.target_cell)
-            if distance > MELEE_LONG_RANGE_CELLS:
+            if distance > attacker_weapon_range:
                 continue
 
             # Целевая клетка для атаки

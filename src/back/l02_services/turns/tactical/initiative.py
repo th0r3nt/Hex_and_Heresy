@@ -8,6 +8,7 @@ from src.back.l01_domain.army.models.card.squad import Squad
 from src.back.l01_domain.army.models.characters.commanders import Commander
 from src.back.l01_domain.army.models.characters.heroes import Hero
 from src.back.l01_domain.combat.models.state import TacticalBattleState
+from src.back.l01_domain.common import StatName
 
 
 class TacticalInitiativeService:
@@ -46,7 +47,7 @@ class TacticalInitiativeService:
         # Влияние прикрепленного героя
         if hero is not None and hero.state.attached_squad_id == squad.id:
             for modifier in hero.get_active_modifiers():
-                if modifier.stat_name == "initiative": # TODO: сделать статы героев типизированными
+                if modifier.stat_name == StatName.INITIATIVE:
                     total_initiative += int(modifier.value)
 
         # Штрафы за истощение и панику

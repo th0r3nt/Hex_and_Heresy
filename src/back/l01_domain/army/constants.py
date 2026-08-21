@@ -22,6 +22,11 @@ EXHAUSTION_THRESHOLD_STAMINA: Final[float] = 15.0
 MAX_HERO_LEVEL: Final[int] = 20
 
 
+VETERANCY_KILL_WEIGHT_THRESHOLD: Final[float] = 500.0
+
+# Служба в армии полководца (50 дней, два месяца (300/12=25x2=50))
+VETERANCY_SERVICE_DAYS_THRESHOLD: Final[float] = 50.0
+
 class DamageType(str, Enum):
     """Тип наносимого урона."""
 
@@ -124,7 +129,15 @@ class UnitSizeCategory(str, Enum):
     LARGE = "large"  # кавалерия, крупные звери
     HUGE = "huge"  # огры, драконы, монстры
 
-
+# Вес одного убитого юнита данного габарита для VETERANCY_KILL_WEIGHT_THRESHOLD.
+# Прогрессия удвоением: убийство HUGE-цели значимее для повышения отряда,
+# чем убийство восьми SMALL-целей суммарно по одному весу за штуку
+VETERANCY_KILL_WEIGHT_BY_SIZE: Final[dict[UnitSizeCategory, float]] = {
+    UnitSizeCategory.SMALL: 1.0,
+    UnitSizeCategory.MEDIUM: 2.0,
+    UnitSizeCategory.LARGE: 4.0,
+    UnitSizeCategory.HUGE: 8.0,
+}
 class StrategicMovementPace(str, Enum):
     """
     Темп марша армии на глобальной карте (в гексах за один такт).

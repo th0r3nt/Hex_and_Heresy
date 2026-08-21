@@ -96,11 +96,23 @@ TRANSITION_MATRIX: dict[tuple[GameState, GameFlowTrigger], TransitionRule] = {
         target_state=GameState.PAUSE,
         saves_to_history=True,
     ),
+    (GameState.DIPLOMATIC_SESSION, GameFlowTrigger.OPEN_SETTINGS): TransitionRule(
+        target_state=GameState.SETTINGS,
+        saves_to_history=True,
+    ),
     # ====================================================
     # Из окна разрешения глобального события
     # ====================================================
     (GameState.GLOBAL_EVENT_RESOLUTION, GameFlowTrigger.RESOLVE_GLOBAL_EVENT): TransitionRule(
         target_state=GameState.STRATEGIC_MAP
+    ),
+    (GameState.GLOBAL_EVENT_RESOLUTION, GameFlowTrigger.PAUSE_GAME): TransitionRule(
+        target_state=GameState.PAUSE,
+        saves_to_history=True,
+    ),
+    (GameState.GLOBAL_EVENT_RESOLUTION, GameFlowTrigger.OPEN_SETTINGS): TransitionRule(
+        target_state=GameState.SETTINGS,
+        saves_to_history=True,
     ),
     # ====================================================
     # Из паузы и настроек

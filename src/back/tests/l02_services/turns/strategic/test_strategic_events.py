@@ -11,7 +11,7 @@ from src.back.l01_domain.army.models.characters.heroes import (
 )
 from src.back.l01_domain.army.models.strategic import StrategicArmy
 from src.back.l01_domain.combat.constants import TimeOfDay
-from src.back.l01_domain.common import MechanicalModifier
+from src.back.l01_domain.common import MechanicalModifier, StatName
 from src.back.l01_domain.maps.models.strategic import HexCoordinates
 from src.back.l01_domain.world.constants import GlobalEventCategory
 from src.back.l01_domain.world.models.battleground import BattlefieldLootSite
@@ -86,7 +86,7 @@ class TestStrategicEventsService:
         scar = Scar(
             name="Шрам",
             description="...",
-            modifier=MechanicalModifier(stat_name="armor", value=1.0),
+            modifier=MechanicalModifier(stat_name=StatName.ARMOR, value=1.0),
         )
         hero.apply_scar(scar, recovery_ticks=1)
 

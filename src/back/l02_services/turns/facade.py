@@ -38,3 +38,18 @@ class TurnsFacade:
         return await self._strategic_orchestrator.execute_turn(world_state=world_state)
 
     # TODO: написать логику тактических ходов
+    #
+    # ВАЖНО (см. VeterancyStatus.accumulate_kills): TacticalTurnOrchestrator.
+    # execute_turn принимает squads: dict[str, Squad] и мутирует
+    # Squad.veterancy напрямую по ссылке. Когда здесь появится связка
+    # стратегия -> тактика, критично передавать в тактический оркестратор
+    # ТЕ ЖЕ САМЫЕ объекты Squad, что лежат в StrategicArmy.squads — не
+    # копии и не пересозданные заново из сериализованного состояния
+    # (например, после круга через WebSocket/API). Если тактический слой
+    # будет работать с копией, accumulated_kill_weight будет неявно
+    # обнуляться после каждого боя, и вся механика персистентного счётчика
+    # ветеранства сломается молча, без единой ошибки или упавшего теста —
+    # существующие тесты на это свойство (см.
+    # test_kill_weight_accumulates_across_separate_battle_calls) проверяют
+    # только сам сервис в изоляции и не могут поймать баг на уровне
+    # интеграции, которой здесь ещё нет.

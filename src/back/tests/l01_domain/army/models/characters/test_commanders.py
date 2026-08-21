@@ -5,7 +5,7 @@
 import pytest
 from pydantic import ValidationError
 
-from src.back.l01_domain.common import MechanicalModifier
+from src.back.l01_domain.common import MechanicalModifier, StatName
 from src.back.l01_domain.army.models.characters.commanders import (
     Commander,
     CommanderArchetype,
@@ -85,10 +85,10 @@ class TestCommanderTrait:
             id="trait_craven",
             name="Труслив",
             text_fragment="Ты избегаешь прямых столкновений любой ценой.",
-            modifier=MechanicalModifier(stat_name="ambush_resistance", value=-0.1),
+            modifier=MechanicalModifier(stat_name=StatName.AMBUSH_RESISTANCE, value=-0.1),
         )
 
-        assert trait.modifier.stat_name == "ambush_resistance"
+        assert trait.modifier.stat_name == StatName.AMBUSH_RESISTANCE
 
 
 class TestCommanderCharacteristics:
