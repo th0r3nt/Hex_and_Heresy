@@ -25,6 +25,7 @@ class GameState(str, Enum):
     )
     PAUSE = "pause"  # Внутриигровая пауза
     SETTINGS = "settings"  # Экран настроек
+    CREDITS = "credits"  # Экран авторов/титров разработки
     GAME_OVER = "game_over"  # Экран финала партии (победа или поражение)
 
 
@@ -43,6 +44,8 @@ class GameFlowTrigger(str, Enum):
     RESUME_GAME = "resume_game"
     OPEN_SETTINGS = "open_settings"
     CLOSE_SETTINGS = "close_settings"
+    OPEN_CREDITS = "open_credits"
+    CLOSE_CREDITS = "close_credits"
     DECLARE_GAME_OVER = "declare_game_over"
     QUIT_TO_MAIN_MENU = "quit_to_main_menu"
 

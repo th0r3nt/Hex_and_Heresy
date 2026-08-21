@@ -13,6 +13,7 @@ from src.back.l01_domain.army.constants import (
 )
 from src.back.l01_domain.army.models.card.equipment import Equipment, EquipmentStats
 from src.back.l01_domain.army.models.card.squad import Squad
+from src.back.l01_domain.combat.constants import FacingAngle
 from src.back.l01_domain.combat.models.state import SquadOrder
 from src.back.l01_domain.maps.models.tactical import CellCoordinates
 from src.back.l02_services.turns.tactical.combat.melee import TacticalMeleeService
@@ -73,7 +74,7 @@ class TestMeleeFlankingAndFacingGeometry:
 
         assert len(reports) == 1
         report = reports[0]
-        assert report.flank_angle == "front"
+        assert report.flank_angle == FacingAngle.FRONT
         # Мораль защитника осталась нетронутой шоком спины
         assert sq_def.state.morale == 50.0
 
@@ -102,7 +103,7 @@ class TestMeleeFlankingAndFacingGeometry:
 
         assert len(reports) == 1
         report = reports[0]
-        assert report.flank_angle == "flank"
+        assert report.flank_angle == FacingAngle.FLANK
         # Моральный шок за фланг: 50.0 - 5.0 = 45.0
         assert sq_def.state.morale == 45.0
 
@@ -131,7 +132,7 @@ class TestMeleeFlankingAndFacingGeometry:
 
         assert len(reports) == 1
         report = reports[0]
-        assert report.flank_angle == "rear"
+        assert report.flank_angle == FacingAngle.REAR
         # Моральный шок за тыл: 50.0 - 15.0 = 35.0
         assert sq_def.state.morale == 35.0
 

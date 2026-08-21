@@ -41,7 +41,9 @@ TRANSITION_MATRIX: dict[tuple[GameState, GameFlowTrigger], TransitionRule] = {
         target_state=GameState.SETTINGS,
         saves_to_history=True,
     ),
-    # TODO: меню экрана разработчиков ("Авторы")?
+    (GameState.MAIN_MENU, GameFlowTrigger.OPEN_CREDITS): TransitionRule(
+        target_state=GameState.CREDITS,
+    ),
     # ====================================================
     # Из режима глобальной карты
     # ====================================================
@@ -129,6 +131,12 @@ TRANSITION_MATRIX: dict[tuple[GameState, GameFlowTrigger], TransitionRule] = {
     ),
     (GameState.SETTINGS, GameFlowTrigger.CLOSE_SETTINGS): TransitionRule(
         target_state=GameState.MAIN_MENU  # переопределяется возвратом из стека в FSM
+    ),
+    # ====================================================
+    # Из экрана авторов
+    # ====================================================
+    (GameState.CREDITS, GameFlowTrigger.CLOSE_CREDITS): TransitionRule(
+        target_state=GameState.MAIN_MENU
     ),
     # ====================================================
     # Из экрана окончания игры

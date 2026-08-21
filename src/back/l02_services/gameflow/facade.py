@@ -236,6 +236,18 @@ class GameFlowFacade:
         """
         return await self._fsm.trigger(GameFlowTrigger.CLOSE_SETTINGS)
 
+    async def open_credits(self) -> GameState:
+        """
+        Открывает экран авторов из главного меню.
+        """
+        return await self._fsm.trigger(GameFlowTrigger.OPEN_CREDITS)
+
+    async def close_credits(self) -> GameState:
+        """
+        Закрывает экран авторов и возвращает в главное меню.
+        """
+        return await self._fsm.trigger(GameFlowTrigger.CLOSE_CREDITS)
+
     async def trigger_game_over(
         self, is_player_victorious: bool, reason: str, total_ticks: int = 0
     ) -> GameState:

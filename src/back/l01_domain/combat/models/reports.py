@@ -5,7 +5,7 @@
 from typing import Optional
 from pydantic import BaseModel, ConfigDict, Field
 
-from src.back.l01_domain.combat.constants import BattlePhase, ReactionType
+from src.back.l01_domain.combat.constants import BattlePhase, FacingAngle, ReactionType
 from src.back.l01_domain.maps.models.strategic import HexCoordinates
 from src.back.l01_domain.maps.models.tactical import CellCoordinates
 from src.back.l01_domain.world.models.battleground import BattlefieldLootSite
@@ -113,7 +113,7 @@ class MeleeCombatReport(BaseModel):
     defender_squad_id: str = Field(...)
     damage_dealt: float = Field(default=0.0)
     kills: int = Field(default=0)
-    flank_angle: str = Field(default="front")  # "front", "flank", "rear"
+    flank_angle: FacingAngle = Field(default=FacingAngle.FRONT)
 
 
 class MoraleAndEnvironmentReport(BaseModel):

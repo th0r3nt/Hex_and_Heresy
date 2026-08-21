@@ -3,6 +3,7 @@
 """
 
 from src.back.l01_domain.army.models.card.squad import Squad
+from src.back.l01_domain.combat.constants import FacingAngle
 from src.back.l01_domain.combat.models.state import SquadOrder
 from src.back.l01_domain.maps.models.tactical import CellCoordinates
 from src.back.l01_domain.army.constants import EquipmentSlot, EquipmentTag, WeaponCategory
@@ -36,7 +37,7 @@ class TestTacticalMeleeService:
 
         assert len(reports) == 1
         assert (
-            reports[0].flank_angle == "front"
+            reports[0].flank_angle == FacingAngle.FRONT
         )  # Атака 2-1 = 1. Направление защитника -1. Лобовая.
 
     def test_melee_attack_rear_angle_causes_morale_shock(
@@ -63,7 +64,7 @@ class TestTacticalMeleeService:
         reports = service.resolve_melee_clashes(empty_battle_state, squads)
 
         assert len(reports) == 1
-        assert reports[0].flank_angle == "rear"  # 2 - 3 = -1 == -1. Тыл.
+        assert reports[0].flank_angle == FacingAngle.REAR  # 2 - 3 = -1 == -1. Тыл.
         assert sq_def.state.morale < 50.0  # Штраф за спину
 
 

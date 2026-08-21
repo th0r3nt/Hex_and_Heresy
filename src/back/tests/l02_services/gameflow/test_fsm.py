@@ -112,6 +112,22 @@ class TestGameFlowFSM:
         assert fsm.current_state == GameState.TACTICAL_COMBAT
 
     @pytest.mark.asyncio
+    async def test_credits_screen_transition_and_close(self, fsm):
+        credits_state = await fsm.trigger(GameFlowTrigger.OPEN_CREDITS)
+        assert credits_state == GameState.CREDITS
+        assert fsm.current_state == GameState.CREDITS
+
+        main_menu_state = await fsm.trigger(GameFlowTrigger.CLOSE_CREDITS)
+        assert main_menu_state == GameState.MAIN_MENU
+
+    @pytest.mark.asyncio
+    async def test_credits_not_reachable_outside_main_menu(self, fsm):
+        await fsm.trigger(GameFlowTrigger.START_NEW_GAME)
+
+        with pytest.raises(InvalidStateTransitionError):
+            await fsm.trigger(GameFlowTrigger.OPEN_CREDITS)
+
+    @pytest.mark.asyncio
     async def test_event_bus_notified_on_transition(self):
         bus = FakeEventBus()
         fsm_with_bus = GameFlowFSM(initial_state=GameState.MAIN_MENU, event_bus=bus)
@@ -167,4 +183,10 @@ class TestGameFlowFacade:
         assert facade.current_state == GameState.GAME_OVER
 
         await facade.quit_to_main_menu()
+        assert facade.current_state == GameState.MAIN_MENU
+
+        await facade.open_credits()
+        assert facade.current_state == GameState.CREDITS
+
+        await facade.close_credits()
         assert facade.current_state == GameState.MAIN_MENU

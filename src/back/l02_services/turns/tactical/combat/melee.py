@@ -3,7 +3,7 @@
 """
 
 from src.back.l01_domain.army.models.card.squad import Squad
-from src.back.l01_domain.combat.constants import MELEE_LONG_RANGE_CELLS
+from src.back.l01_domain.combat.constants import MELEE_LONG_RANGE_CELLS, FacingAngle
 from src.back.l01_domain.combat.models.reports import MeleeCombatReport
 from src.back.l01_domain.combat.models.state import TacticalBattleState
 from src.back.l01_domain.maps.models.tactical import CellCoordinates, cell_distance_chebyshev
@@ -88,15 +88,15 @@ class TacticalMeleeService:
             attack_dx = target_cell_state.coordinates.x - attacker_pos.x
 
             if attack_dx == defender_facing_dx:
-                flank_angle = "rear"  # TODO: типизировать
+                flank_angle = FacingAngle.REAR
                 extra_ap = defender.total_effective_armor
                 morale_penalty = 15.0
             elif attack_dx == 0:
-                flank_angle = "flank"
+                flank_angle = FacingAngle.FLANK
                 extra_ap = defender.total_effective_armor * 0.5
                 morale_penalty = 5.0
             else:
-                flank_angle = "front"
+                flank_angle = FacingAngle.FRONT
                 extra_ap = 0.0
                 morale_penalty = 0.0
 

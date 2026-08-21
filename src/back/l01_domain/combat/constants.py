@@ -185,6 +185,17 @@ class ReactionType(str, Enum):
     FLEE = "flee"
 
 
+class FacingAngle(str, Enum):
+    """
+    Угол атаки в рукопашной схватке относительно направления,
+    куда смотрит защищающийся отряд.
+    """
+
+    FRONT = "front"
+    FLANK = "flank"
+    REAR = "rear"
+
+
 class WeatherCondition(str, Enum):
     """
     Погодные условия боя. Конкретные игровые эффекты каждого условия -
