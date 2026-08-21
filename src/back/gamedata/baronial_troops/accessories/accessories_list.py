@@ -1,0 +1,146 @@
+"""
+Реестр аксессуаров фракции баронских войск.
+"""
+
+from typing import Any
+
+from src.back.l01_domain.army.constants import (
+    AccessoryCategory,
+    EquipmentSlot,
+    EquipmentTag,
+)
+from src.back.l01_domain.army.models.card.equipment import EquipmentStats
+from src.back.gamedata.baronial_troops.common import BaronialAccessoryId
+
+_SLOT = EquipmentSlot.ACCESSORY
+
+ACCESSORIES_LIST: dict[str, dict[str, Any]] = {
+    BaronialAccessoryId.CHEAP_SWILL_MUG_00.value: {
+        "id": BaronialAccessoryId.CHEAP_SWILL_MUG_00.value,
+        "name": "Жбан с дешевым пойлом",
+        "lore": "Дает временную храбрость, пока пойло не кончится (затем приходит похмелье и паника).",
+        "slot": _SLOT,
+        "category": AccessoryCategory.POTION,
+        "tier": 0,
+        "cost_gold": 0.5,
+        "cost_material": 0.0,
+        "stats": EquipmentStats(),
+        "special_rules": "Пьяная храбрость: дает +10 к морали в первые три такта боя, затем накладывает штраф -15 к морали.",
+    },
+    BaronialAccessoryId.PAVISE_SHIELD_01.value: {
+        "id": BaronialAccessoryId.PAVISE_SHIELD_01.value,
+        "name": "Ростовая павеза",
+        "lore": "Втыкается в землю перед арбалетчиками. За ней можно спокойно стоять и крутить лебедку, пока враг тратит стрелы.",
+        "slot": _SLOT,
+        "category": AccessoryCategory.SHIELD,
+        "tier": 1,
+        "tags": {EquipmentTag.HEAVY},
+        "cost_gold": 1.0,
+        "cost_material": 3.0,
+        "stats": EquipmentStats(
+            armor_bonus=3.0,
+            speed_modifier=-0.1,
+        ),
+        "special_rules": "Укрытие арбалетчика: полностью блокирует первую дальнюю атаку противника по отряду в каждом бою (если отряд не двигался).",
+    },
+    BaronialAccessoryId.TORCH_AND_OIL_01.value: {
+        "id": BaronialAccessoryId.TORCH_AND_OIL_01.value,
+        "name": "Факел и масло",
+        "lore": "Годится для того, чтобы поджечь соседний стог сена или лицо неосторожного врага в темноте.",
+        "slot": _SLOT,
+        "category": AccessoryCategory.MISC,
+        "tier": 1,
+        "tags": {EquipmentTag.FLAMMABLE, EquipmentTag.ONE_HANDED},
+        "cost_gold": 0.5,
+        "cost_material": 1.0,
+        "stats": EquipmentStats(damage=1.0),
+        "special_rules": "Освещение и поджог: увеличивает видимость ночью и позволяет поджигать лесные гексы.",
+    },
+    BaronialAccessoryId.HOOKS_ON_ROPE_02.value: {
+        "id": BaronialAccessoryId.HOOKS_ON_ROPE_02.value,
+        "name": "Крюки на длинной веревке",
+        "lore": "Пехота бросает их в несущуюся кавалерию. Если крюк цепляется, он вырывает куски плоти, а конница теряет инерцию.",
+        "slot": _SLOT,
+        "category": AccessoryCategory.TRAP,
+        "tier": 2,
+        "cost_gold": 2.0,
+        "cost_material": 3.0,
+        "stats": EquipmentStats(),
+        "special_rules": "Срыв натиска: при реакции 'Принять удар' полностью отменяет бонусный урон от вражеского Натиска.",
+    },
+    BaronialAccessoryId.ALE_BARREL_02.value: {
+        "id": BaronialAccessoryId.ALE_BARREL_02.value,
+        "name": "Бочонок с элем",
+        "lore": "Крепится на обозную телегу. Поднимает боевой дух уставших наемников, заставляя их быстрее шевелить ногами.",
+        "slot": _SLOT,
+        "category": AccessoryCategory.MISC,
+        "tier": 2,
+        "cost_gold": 3.0,
+        "cost_material": 2.0,
+        "stats": EquipmentStats(),
+        "special_rules": "Снабжение: пассивно восстанавливает выносливость соседним союзным отрядам.",
+    },
+    BaronialAccessoryId.PACK_OF_WOLFHOUNDS_03.value: {
+        "id": BaronialAccessoryId.PACK_OF_WOLFHOUNDS_03.value,
+        "name": "Свора волкодавов",
+        "lore": "Используются для добивания отступающих и срывания вражеского строя на флангах.",
+        "slot": _SLOT,
+        "category": AccessoryCategory.MISC,  # Считается спутником отряда
+        "tier": 3,
+        "cost_gold": 6.0,
+        "cost_material": 2.0,
+        "stats": EquipmentStats(
+            damage=5.0,
+            initiative_modifier=2,
+        ),
+        "special_rules": "Добивание: наносит двойной урон отрядам, находящимся в состоянии 'Паники' (бегства).",
+    },
+    BaronialAccessoryId.BARONY_CODE_BOOK_03.value: {
+        "id": BaronialAccessoryId.BARONY_CODE_BOOK_03.value,
+        "name": "Свод законов баронства",
+        "lore": "Тяжелая книга в железном переплете. Напоминает солдатам о том, что за дезертирство их ждет казнь без суда.",
+        "slot": _SLOT,
+        "category": AccessoryCategory.RELIC,
+        "tier": 3,
+        "cost_gold": 8.0,
+        "cost_material": 4.0,
+        "stats": EquipmentStats(),
+        "special_rules": "Железная дисциплина: отряд не может впасть в Панику, но при падении морали ниже порога командир автоматически убивает 1 своего бойца каждый такт для устрашения.",
+    },
+    BaronialAccessoryId.RAW_MEAT_LURE_04.value: {
+        "id": BaronialAccessoryId.RAW_MEAT_LURE_04.value,
+        "name": "Кусок сырого мяса",
+        "lore": "Надсмотрщик машет им перед огром. Голодный огр побежит за мясом сквозь любую грязь и болота.",
+        "slot": _SLOT,
+        "category": AccessoryCategory.POTION,
+        "tier": 4,
+        "cost_gold": 2.0,
+        "cost_material": 1.0,
+        "stats": EquipmentStats(speed_modifier=0.1),
+        "special_rules": "Игнорирование грязи: дает огру кратковременный иммунитет к замедлению от труднопроходимого ландшафта.",
+    },
+    BaronialAccessoryId.ENEMY_DEBT_RECEIPTS_05.value: {
+        "id": BaronialAccessoryId.ENEMY_DEBT_RECEIPTS_05.value,
+        "name": "Долговые расписки врага",
+        "lore": "Бумаги с печатями, подтверждающие, что враг должен Барону золото. Осознание будущей прибыли греет душу наемника.",
+        "slot": _SLOT,
+        "category": AccessoryCategory.MISC,
+        "tier": 5,
+        "cost_gold": 15.0,
+        "cost_material": 0.0,
+        "stats": EquipmentStats(),
+        "special_rules": "Мотивация жадностью: если отряд вступает в ближний бой, он пассивно восстанавливает себе мораль каждый ход.",
+    },
+    BaronialAccessoryId.HOSTAGE_CAGE_06.value: {
+        "id": BaronialAccessoryId.HOSTAGE_CAGE_06.value,
+        "name": "Клетка с ценным заложником",
+        "lore": "Устанавливается на крышу кареты. Внутри сидит сын имперского генерала или эльфийский принц.",
+        "slot": _SLOT,
+        "category": AccessoryCategory.RELIC,
+        "tier": 6,
+        "cost_gold": 50.0,
+        "cost_material": 50.0,
+        "stats": EquipmentStats(),
+        "special_rules": "Щит из плоти: вражеская фракция (к которой принадлежит заложник) не может применять масштабную магию или стрелять из пушек по гексу с этим отрядом.",
+    },
+}

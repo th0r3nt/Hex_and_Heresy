@@ -1,62 +1,191 @@
-# В JSON файлах геймдаты не должно быть «магических строк». Там должны быть уникальные строковые идентификаторы (ID).
+"""
+Загрузчик статической геймдаты.
+Считывает словари из пакета src.back.gamedata, валидирует их через Pydantic
+и предоставляет in-memory реестр, реализующий GameDataRepositoryProtocol.
+Также содержит SessionGameDataRepository для объединения статики и кастомных предметов сессии.
+"""
 
-# При запуске игры твой бэкенд (в слое `l03_infrastructure/gamedata/loader.py`) делает следующее:
-# 1. Читает все файлы `weapons.json`, `armor.json` и валидирует их через Pydantic. Сохраняет в словарь (Registry) в памяти: `{"wpn_hum_halberd_02": WeaponModel(...)}`.
-# 2. Читает `units.json`. Видит там ID оружия.
-# 3. Проверяет, есть ли такой ID в реестре оружия. Если нет - бросает ошибку при запуске сервера (FastAPI падает с понятным логом "Weapon ID not found").
+import importlib
+from typing import Optional
 
-# Вот как должны выглядеть эти файлы по-хорошему.
-
-# 1. Файл экипировки (например: `gamedata/factions/humans/equipment/weapons.json`)
-# Здесь мы описываем сами объекты как самостоятельные сущности.
-
-# [
-#   {
-#     "id": "weapon_human_halberd_02",
-#     "type": "melee_2h",
-#     "name": "Стальная алебарда",
-#     "tier": 2,
-#     "stats": {
-#       "damage": 15,
-#       "armor_piercing": 5,
-#       "initiative_penalty": 1
-#     },
-#     "lore_description": "Тяжелое оружие городской стражи."
-#   },
-#   {
-#     "id": "weapon_human_arquebus_02",
-#     "type": "ranged_2h",
-#     "name": "Тяжелая аркебуза",
-#     "tier": 2,
-#     "stats": {
-#       "damage": 30,
-#       "armor_piercing": 50,
-#       "range": 5
-#     },
-#     "lore_description": "Громко, больно. Пахнет серой."
-#   }
-# ]
+from src.back.l01_domain.army.models.card.equipment import Equipment
+from src.back.l01_domain.army.models.card.unit import UnitArchetype
+from src.back.l01_domain.army.models.characters.commanders import (
+    CommanderArchetype,
+    CommanderTrait,
+)
+from src.back.l01_domain.factions.models.buildings import Building
+from src.back.l01_domain.protocols.gamedata import GameDataRepositoryProtocol
+from src.back.utils.logger import main_logger
 
 
-# 2. Файл юнитов (например: `gamedata/factions/humans/units/classic.json`)
-# А вот тут мы используем только ID для связи. Никакого хардкода свойств оружия.
+class StaticGameDataRegistry(GameDataRepositoryProtocol):
+    """
+    Read-only реестр статических данных игры.
+    Инициализируется один раз при старте сервера.
+    """
 
-# [
-#   {
-#     "id": "unit_human_ironsides",
-#     "name": "Железнобокие",
-#     "tier": 2,
-#     "base_stats": {
-#       "unit_count": 80,
-#       "hp_per_unit": 20,
-#       "morale": 75,
-#       "movement_speed": 1
-#     },
-#     "default_equipment": {
-#       "weapon_id": "weapon_human_halberd_02",
-#       "armor_id": "armor_human_cuirass_02",
-#       "accessory_id": null
-#     },
-#     "lore_description": "Универсальная тяжелая пехота Империи."
-#   }
-# ]
+    def __init__(self) -> None:
+        self._units: dict[str, UnitArchetype] = {}
+        self._equipment: dict[str, Equipment] = {}
+        self._buildings: dict[str, Building] = {}
+        self._commander_archetypes: dict[str, CommanderArchetype] = {}
+        self._commander_traits: dict[str, CommanderTrait] = {}
+
+        self._faction_units_index: dict[str, list[UnitArchetype]] = {}
+        self._faction_equipment_index: dict[str, list[Equipment]] = {}
+        self._faction_buildings_index: dict[str, list[Building]] = {}
+
+    def get_unit_archetype(self, unit_id: str) -> Optional[UnitArchetype]:
+        return self._units.get(unit_id)
+
+    def get_equipment(self, equipment_id: str) -> Optional[Equipment]:
+        return self._equipment.get(equipment_id)
+
+    def get_building(self, building_id: str) -> Optional[Building]:
+        return self._buildings.get(building_id)
+
+    def get_commander_archetype(self, archetype_id: str) -> Optional[CommanderArchetype]:
+        return self._commander_archetypes.get(archetype_id)
+
+    def get_commander_trait(self, trait_id: str) -> Optional[CommanderTrait]:
+        return self._commander_traits.get(trait_id)
+
+    def list_faction_units(self, faction_id: str) -> list[UnitArchetype]:
+        return self._faction_units_index.get(faction_id, [])
+
+    def list_faction_equipment(self, faction_id: str) -> list[Equipment]:
+        return self._faction_equipment_index.get(faction_id, [])
+
+    def list_faction_buildings(self, faction_id: str) -> list[Building]:
+        return self._faction_buildings_index.get(faction_id, [])
+
+    # Методы для заполнения реестра при загрузке
+    def _add_unit(self, unit: UnitArchetype) -> None:
+        self._units[unit.id] = unit
+        if unit.faction_id:
+            self._faction_units_index.setdefault(unit.faction_id, []).append(unit)
+
+    def _add_equipment(self, eq: Equipment, faction_id: str) -> None:
+        self._equipment[eq.id] = eq
+        self._faction_equipment_index.setdefault(faction_id, []).append(eq)
+
+    def _add_building(self, building: Building) -> None:
+        self._buildings[building.id] = building
+        self._faction_buildings_index.setdefault(building.faction_id, []).append(building)
+
+
+class SessionGameDataRepository(GameDataRepositoryProtocol):
+    """
+    Репозиторий, объединяющий статические данные и кастомные предметы
+    (созданные Оружейником), которые принадлежат конкретной игровой сессии.
+    Именно этот класс будет инжектироваться в сервисы при активной игре.
+    """
+
+    def __init__(
+        self, static_registry: StaticGameDataRegistry, custom_equipment: list[Equipment]
+    ) -> None:
+        self._static = static_registry
+        self._custom_equipment = {eq.id: eq for eq in custom_equipment}
+
+    def get_unit_archetype(self, unit_id: str) -> Optional[UnitArchetype]:
+        return self._static.get_unit_archetype(unit_id)
+
+    def get_equipment(self, equipment_id: str) -> Optional[Equipment]:
+        # Сначала проверяем сессионные кастомные чертежи, затем статику
+        if equipment_id in self._custom_equipment:
+            return self._custom_equipment[equipment_id]
+        return self._static.get_equipment(equipment_id)
+
+    def get_building(self, building_id: str) -> Optional[Building]:
+        return self._static.get_building(building_id)
+
+    def get_commander_archetype(self, archetype_id: str) -> Optional[CommanderArchetype]:
+        return self._static.get_commander_archetype(archetype_id)
+
+    def get_commander_trait(self, trait_id: str) -> Optional[CommanderTrait]:
+        return self._static.get_commander_trait(trait_id)
+
+    def list_faction_units(self, faction_id: str) -> list[UnitArchetype]:
+        return self._static.list_faction_units(faction_id)
+
+    def list_faction_equipment(self, faction_id: str) -> list[Equipment]:
+        # Смешиваем статическую экипировку фракции с кастомной сессионной
+        static_eq = self._static.list_faction_equipment(faction_id)
+        custom_eq = [eq for eq in self._custom_equipment.values() if eq.is_custom]
+        return static_eq + custom_eq
+
+    def list_faction_buildings(self, faction_id: str) -> list[Building]:
+        return self._static.list_faction_buildings(faction_id)
+
+
+def build_static_registry() -> StaticGameDataRegistry:
+    """
+    Сканирует пакеты геймдаты, собирает все словари, валидирует их
+    и формирует итоговый статический реестр. Вызывается при запуске приложения.
+    """
+    registry = StaticGameDataRegistry()
+    factions = [  # TODO: типизировать
+        "humans",
+        "greenskins",
+        "elfs",
+        "baronial_troops",
+        "congregation_of_the_meteorite",
+        "mercenaries",
+    ]
+
+    for faction in factions:
+        _load_faction_module(registry, faction, "units.units_list", "UNITS_LIST", _loader_unit)
+        _load_faction_module(registry, faction, "armor.armor_list", "ARMOR_LIST", _loader_eq)
+        _load_faction_module(
+            registry, faction, "accessories.accessories_list", "ACCESSORIES_LIST", _loader_eq
+        )
+        _load_faction_module(
+            registry, faction, "weapon.melee_list", "MELEE_WEAPONS", _loader_eq
+        )
+        _load_faction_module(
+            registry, faction, "weapon.ranged_list", "RANGED_WEAPONS", _loader_eq
+        )
+        _load_faction_module(
+            registry, faction, "buildings.buildings_list", "BUILDINGS_LIST", _loader_bld
+        )
+
+    main_logger.info("Статическая геймдата успешно загружена и провалидирована.")
+    return registry
+
+
+def _load_faction_module(
+    registry: StaticGameDataRegistry,
+    faction: str,
+    module_suffix: str,
+    dict_name: str,
+    loader_func,
+) -> None:
+    """
+    Безопасно импортирует модуль геймдаты и передает его парсеру.
+    """
+    
+    module_path = f"src.back.gamedata.{faction}.{module_suffix}"
+    try:
+        mod = importlib.import_module(module_path)
+        data_dict = getattr(mod, dict_name, {})
+        for raw_data in data_dict.values():
+            loader_func(registry, faction, raw_data)
+    except ModuleNotFoundError:
+        # Для некоторых фракций модуль может отсутствовать (например, buildings у наемников)
+        pass
+    except Exception as e:
+        main_logger.error(f"Ошибка при загрузке {module_path}: {e}")
+        raise
+
+
+def _loader_unit(registry: StaticGameDataRegistry, faction: str, raw: dict) -> None:
+    registry._add_unit(UnitArchetype(**raw))
+
+
+def _loader_eq(registry: StaticGameDataRegistry, faction: str, raw: dict) -> None:
+    registry._add_equipment(Equipment(**raw), faction_id=faction)
+
+
+def _loader_bld(registry: StaticGameDataRegistry, faction: str, raw: dict) -> None:
+    registry._add_building(Building(**raw))

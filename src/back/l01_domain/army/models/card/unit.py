@@ -51,7 +51,8 @@ class UnitArchetype(BaseModel):
     base_stats: BaseUnitStats = Field(..., description="Базовые статы одного бойца архетипа")
 
     # Требования к содержанию за 1 бойца в такт
-    base_upkeep_food: float = Field(default=1.0, ge=0)
-    base_upkeep_gold: float = Field(default=0.0, ge=0)
+    # Может быть отрицательным (например, обоз с провизией генерирует еду)
+    base_upkeep_food: float = Field(default=1.0)
+    base_upkeep_gold: float = Field(default=0.0)
 
     lore_description: str = Field(default="", description="Описание отряда из лора")

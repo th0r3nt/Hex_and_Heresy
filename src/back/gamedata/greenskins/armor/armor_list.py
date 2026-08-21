@@ -1,0 +1,161 @@
+"""
+Реестр брони фракции зеленокожих.
+"""
+
+from typing import Any
+
+from src.back.l01_domain.army.constants import (
+    ArmorCategory,
+    EquipmentSlot,
+    EquipmentTag,
+)
+from src.back.l01_domain.army.models.card.equipment import EquipmentStats
+from src.back.gamedata.greenskins.common import GreenskinsArmorId
+
+_SLOT = EquipmentSlot.ARMOR
+
+ARMOR_LIST: dict[str, dict[str, Any]] = {
+    GreenskinsArmorId.BARE_TORSO_00.value: {
+        "id": GreenskinsArmorId.BARE_TORSO_00.value,
+        "name": "Голый торс",
+        "lore": "Для орка броня — это признак трусости. Ну или просто железа не хватило.",
+        "slot": _SLOT,
+        "category": ArmorCategory.UNARMORED,
+        "tier": 0,
+        "cost_gold": 0.0,
+        "cost_material": 0.0,
+        "stats": EquipmentStats(armor_bonus=0.0),
+    },
+    GreenskinsArmorId.DOG_SKIN_LOINCLOTH_00.value: {
+        "id": GreenskinsArmorId.DOG_SKIN_LOINCLOTH_00.value,
+        "name": "Набедренная повязка",
+        "lore": "Сшита из шкур диких собак. Хоть как-то спасает гоблинов от холода Долгой зимы.",
+        "slot": _SLOT,
+        "category": ArmorCategory.CLOTH,
+        "tier": 0,
+        "cost_gold": 0.0,
+        "cost_material": 0.5,
+        "stats": EquipmentStats(armor_bonus=0.5),
+    },
+    GreenskinsArmorId.BOILED_LEATHER_01.value: {
+        "id": GreenskinsArmorId.BOILED_LEATHER_01.value,
+        "name": "Вареная кожа",
+        "lore": "Жесткая, вонючая и бугристая кожа неизвестных тварей. Слегка гасит рубящие удары.",
+        "slot": _SLOT,
+        "category": ArmorCategory.LEATHER,
+        "tier": 1,
+        "cost_gold": 0.5,
+        "cost_material": 1.0,
+        "stats": EquipmentStats(armor_bonus=2.0),
+    },
+    GreenskinsArmorId.STRAW_SACKS_01.value: {
+        "id": GreenskinsArmorId.STRAW_SACKS_01.value,
+        "name": "Мешки с соломой",
+        "lore": "Гоблины надевают мешки из-под украденного имперского зерна прямо на голову. Иногда забывают прорезать дырки для глаз.",
+        "slot": _SLOT,
+        "category": ArmorCategory.PADDED,
+        "tier": 1,
+        "cost_gold": 0.0,
+        "cost_material": 1.0,
+        "stats": EquipmentStats(armor_bonus=1.5, initiative_modifier=-1),
+    },
+    GreenskinsArmorId.SCRAP_METAL_GUARDS_02.value: {
+        "id": GreenskinsArmorId.SCRAP_METAL_GUARDS_02.value,
+        "name": "Щитки из металлолома",
+        "lore": "Куски карет, ржавые ведра и оторванные дверцы, примотанные к телу веревками.",
+        "slot": _SLOT,
+        "category": ArmorCategory.BRIGANDINE,
+        "tier": 2,
+        "tags": {EquipmentTag.HEAVY},
+        "cost_gold": 1.0,
+        "cost_material": 4.0,
+        "stats": EquipmentStats(armor_bonus=4.0, speed_modifier=-0.05),
+    },
+    GreenskinsArmorId.CHAINED_MAIL_02.value: {
+        "id": GreenskinsArmorId.CHAINED_MAIL_02.value,
+        "name": "Связанные цепями кольчуги",
+        "lore": "Трофейные кольчуги, которые орки сшили вместе цепями, чтобы они налезли на их огромные плечи.",
+        "slot": _SLOT,
+        "category": ArmorCategory.MAIL,
+        "tier": 2,
+        "cost_gold": 2.0,
+        "cost_material": 3.0,
+        "stats": EquipmentStats(armor_bonus=5.0),
+    },
+    GreenskinsArmorId.SANDBAGS_WITH_NAILS_02.value: {
+        "id": GreenskinsArmorId.SANDBAGS_WITH_NAILS_02.value,
+        "name": "Мешки с песком и гвоздями",
+        "lore": "Тяжеленные мешки. Стрелы вязнут в песке, а в ближнем бою об гвозди можно порвать руки.",
+        "slot": _SLOT,
+        "category": ArmorCategory.PADDED,
+        "tier": 2,
+        "tags": {EquipmentTag.HEAVY},
+        "cost_gold": 1.0,
+        "cost_material": 3.0,
+        "stats": EquipmentStats(
+            armor_bonus=4.0,
+            speed_modifier=-0.2,  # Сильно режет скорость из-за веса песка
+            stamina_drain_per_turn=1.5,
+        ),
+        "special_rules": "Вязкая защита: снижает входящий урон от дальнобойных атак (стрелы, арбалетные болты).",
+    },
+    GreenskinsArmorId.STOLEN_KNIGHT_PLATE_03.value: {
+        "id": GreenskinsArmorId.STOLEN_KNIGHT_PLATE_03.value,
+        "name": "Трофейные рыцарские латы",
+        "lore": "Доспехи убитых имперцев. Орки не умеют их чинить, поэтому просто вбивают новые куски железа поверх старых пробоин.",
+        "slot": _SLOT,
+        "category": ArmorCategory.PLATE,
+        "tier": 3,
+        "tags": {EquipmentTag.HEAVY},
+        "cost_gold": 5.0,
+        "cost_material": 8.0,
+        "stats": EquipmentStats(
+            armor_bonus=8.0,
+            initiative_modifier=-3,
+            stamina_drain_per_turn=1.0,
+        ),
+    },
+    GreenskinsArmorId.RITUAL_TATTOOS_03.value: {
+        "id": GreenskinsArmorId.RITUAL_TATTOOS_03.value,
+        "name": "Ритуальные татуировки",
+        "lore": "Шаман втер им в кожу яд, пепел и мицелий. Орки верят, что это делает их невидимыми или железными. И иногда это почему-то работает.",
+        "slot": _SLOT,
+        "category": ArmorCategory.UNARMORED,
+        "tier": 3,
+        "cost_gold": 4.0,
+        "cost_material": 2.0,
+        "stats": EquipmentStats(armor_bonus=1.0),
+        "special_rules": "Влияние мицелия: дает 25% шанс уклониться от любой дистанционной атаки просто потому, что орк верит, что грибы помогает ему стать невидимым.",
+    },
+    GreenskinsArmorId.CAULDRON_ARMOR_04.value: {
+        "id": GreenskinsArmorId.CAULDRON_ARMOR_04.value,
+        "name": "Броня из котлов",
+        "lore": "Железные листы, котлы и решетки, вбитые прямо в плоть огра. Ему больно, но снять он это уже не может.",
+        "slot": _SLOT,
+        "category": ArmorCategory.PLATE,
+        "tier": 4,
+        "tags": {EquipmentTag.HEAVY},
+        "cost_gold": 8.0,
+        "cost_material": 15.0,
+        "stats": EquipmentStats(
+            armor_bonus=15.0,
+            speed_modifier=-0.1,
+        ),
+    },
+    GreenskinsArmorId.BLACK_IRON_ARMOR_05.value: {
+        "id": GreenskinsArmorId.BLACK_IRON_ARMOR_05.value,
+        "name": "Доспех из Черного железа",
+        "lore": "Выкован в жерлах спящих вулканов из метеоритного шлака. Тяжелейшая броня Железнокожих элит.",
+        "slot": _SLOT,
+        "category": ArmorCategory.PLATE,
+        "tier": 5,
+        "tags": {EquipmentTag.HEAVY, EquipmentTag.RESONITE_POWERED},
+        "cost_gold": 15.0,
+        "cost_material": 20.0,
+        "stats": EquipmentStats(
+            armor_bonus=20.0,
+            speed_modifier=-0.15,
+            stamina_drain_per_turn=2.0,
+        ),
+    },
+}
