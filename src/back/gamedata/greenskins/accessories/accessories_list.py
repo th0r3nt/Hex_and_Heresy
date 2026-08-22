@@ -66,7 +66,7 @@ ACCESSORIES_LIST: dict[str, dict[str, Any]] = {
     GreenskinsAccessoryId.OFFHAND_AXE_01.value: {
         "id": GreenskinsAccessoryId.OFFHAND_AXE_01.value,
         "name": "Дополнительный топор",
-        "lore": "Почему бы не взять по топору в каждую руку? Больше топоров — больше крови!",
+        "lore": "Почему бы не взять по топору в каждую руку? Больше топоров - больше крови!",
         "slot": _SLOT,
         "category": AccessoryCategory.MISC,
         "tier": 1,

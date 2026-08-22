@@ -57,7 +57,7 @@ class GameFlowFacade:
     def bind_world_state(self, world_state: WorldState) -> None:
         """
         Привязывает WorldState активной партии к фасаду. Вызывается composition
-        root'ом сразу после start_new_game()/load_game() — до этого момента
+        root'ом сразу после start_new_game()/load_game() - до этого момента
         WorldState ещё не существует, поэтому привязка не идёт через конструктор.
         """
         self._world_state = world_state
@@ -162,7 +162,7 @@ class GameFlowFacade:
         Завершает тактический бой, возвращает игру на глобальную карту
         и снимает лок с армий, задействованных в этом бою.
         """
-        
+
         if self._world_state is None:
             raise WorldStateNotBoundError("finish_tactical_combat")
 

@@ -175,7 +175,7 @@ class TestModalTransitionsFromDiplomacyAndGlobalEvents:
     @pytest.mark.asyncio
     async def test_settings_and_resume_from_diplomatic_session(self, fake_bus):
         """
-        Баг: (DIPLOMATIC_SESSION, OPEN_SETTINGS) отсутствовал в матрице —
+        Баг: (DIPLOMATIC_SESSION, OPEN_SETTINGS) отсутствовал в матрице -
         попытка открыть настройки во время аудиенции падала с
         InvalidStateTransitionError, хотя пауза из того же состояния работала.
         """

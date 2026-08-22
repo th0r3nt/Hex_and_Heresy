@@ -131,12 +131,12 @@ class StrategicArmy(BaseModel):
 
     def lock_in_tactical_battle(self) -> None:
         """
-        Помечает армию как связанную боем — вызывается при входе в тактический бой.
+        Помечает армию как связанную боем - вызывается при входе в тактический бой.
         """
         self.is_in_tactical_battle = True
 
     def release_from_tactical_battle(self) -> None:
         """
-        Снимает пометку боя — вызывается при завершении тактического боя.
+        Снимает пометку боя - вызывается при завершении тактического боя.
         """
         self.is_in_tactical_battle = False

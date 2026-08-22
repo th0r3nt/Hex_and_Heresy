@@ -2,6 +2,7 @@ custom.json
 
 .env
 assets/
+logs/
 __pycache__
 
 _docs

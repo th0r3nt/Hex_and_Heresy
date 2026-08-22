@@ -80,7 +80,7 @@ ACCESSORIES_LIST: dict[str, dict[str, Any]] = {
     ElfsAccessoryId.RESONATING_STONE_04.value: {
         "id": ElfsAccessoryId.RESONATING_STONE_04.value,
         "name": "Резонирующий камень",
-        "lore": "Синхронизирует души экипажа Ковчега. Для эльфов смерть — это лишь возврат в информационное поле.",
+        "lore": "Синхронизирует души экипажа Ковчега. Для эльфов смерть - это лишь возврат в информационное поле.",
         "slot": _SLOT,
         "category": AccessoryCategory.RELIC,
         "tier": 4,

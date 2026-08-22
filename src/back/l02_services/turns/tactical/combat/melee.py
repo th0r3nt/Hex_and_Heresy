@@ -12,7 +12,7 @@ from src.back.l01_domain.maps.models.tactical import CellCoordinates, cell_dista
 class TacticalMeleeService:
     """
     Разрешает рукопашный бой смежных отрядов, рассчитывает угол атаки
-    (лоб, фланг — срез 50% брони, тыл — срез 100% брони) и наносит урон.
+    (лоб, фланг - срез 50% брони, тыл - срез 100% брони) и наносит урон.
     """
 
     def resolve_melee_clashes(

@@ -1,6 +1,6 @@
 """
 Тесты сервиса учёта выслуги лет (второй, независимый от боевых убийств,
-триггер ветеранства — служба в армии полководца).
+триггер ветеранства - служба в армии полководца).
 """
 
 import pytest
@@ -34,7 +34,7 @@ class TestStrategicVeterancyService:
     ):
         """
         sample_army создаётся без полководца (StrategicArmy.commander по
-        умолчанию None) — гарнизон/безхозная армия по лору не считается
+        умолчанию None) - гарнизон/безхозная армия по лору не считается
         "службой в армии полководца".
         """
         world = WorldState()
@@ -126,5 +126,5 @@ class TestStrategicVeterancyService:
         report = await service.process_service_accumulation(world)
 
         assert report.veterancy_candidate_ids == []
-        # уже именной отряд пропущен — накопитель не тронут
+        # уже именной отряд пропущен - накопитель не тронут
         assert squad.veterancy.accumulated_service_days == 0.0

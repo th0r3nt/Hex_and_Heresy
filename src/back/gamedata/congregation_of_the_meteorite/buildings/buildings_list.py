@@ -95,7 +95,7 @@ BUILDINGS_LIST: dict[str, dict[str, Any]] = {
         "id": CotmBuildingId.BONE_PIT.value,
         "faction_id": _FACTION,
         "name": "Костяная яма",
-        "lore_description": "Огромный карьер, куда сбрасывают трупы. Здесь добывают кости и ржавчину — строительный материал Паствы.",
+        "lore_description": "Огромный карьер, куда сбрасывают трупы. Здесь добывают кости и ржавчину - строительный материал Паствы.",
         "category": BuildingCategory.ECONOMIC,
         "allowed_zone": TerritoryZoneType.ALLIED_LANDS,
         "cost_gold": 0.0,

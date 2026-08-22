@@ -60,7 +60,7 @@ class TestHexRingAndSpiralInvariants:
     def test_hex_ring_mathematical_properties(self):
         center = HexCoordinates.from_axial(0, 0)
 
-        # Радиус 0 — ровно 1 гекс (центр)
+        # Радиус 0 - ровно 1 гекс (центр)
         ring_0 = hex_ring(center, 0)
         assert ring_0 == [center]
 

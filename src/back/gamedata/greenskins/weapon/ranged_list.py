@@ -18,7 +18,7 @@ RANGED_WEAPONS: dict[str, dict[str, Any]] = {
     GreenskinsWeaponId.DART_BUNDLE_01.value: {
         "id": GreenskinsWeaponId.DART_BUNDLE_01.value,
         "name": "Связка дротиков",
-        "lore": "Дешево и сердито. Гоблины кидают их целыми охапками. Половина летит мимо, но если попадет — радости нет предела.",
+        "lore": "Дешево и сердито. Гоблины кидают их целыми охапками. Половина летит мимо, но если попадет - радости нет предела.",
         "slot": _SLOT,
         "category": WeaponCategory.THROWING,
         "tier": 1,

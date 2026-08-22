@@ -86,7 +86,7 @@ class TestTacticalOrchestratorFriendlyFireDeathAccounting:
         """
         Баг: при перехвате выстрела союзником убитые (rr.kills) начислялись
         и перехватчику (friendly_fire_squad_id), и изначальной цели
-        (target_squad_id) — хотя урон домен применял только к перехватчику.
+        (target_squad_id) - хотя урон домен применял только к перехватчику.
         """
         sq_archer = Squad.create_new(archetype=archetype_human_sword, weapon=weapon_bow)
         sq_archer.id = "archers"
@@ -104,7 +104,7 @@ class TestTacticalOrchestratorFriendlyFireDeathAccounting:
         place_squad_on_grid(empty_battle_state, "ally_shield", 2, 0)  # на линии огня
         place_squad_on_grid(empty_battle_state, "enemy_target", 4, 0)
 
-        # pace=0.0, чтобы фаза перемещения не двигала лучников —
+        # pace=0.0, чтобы фаза перемещения не двигала лучников -
         # проверяем именно учёт смертей от выстрела, а не геометрию марша
         empty_battle_state.queue_order(
             SquadOrder(squad_id="archers", target_cell=CellCoordinates(x=4, y=0), pace=0.0)
@@ -132,7 +132,7 @@ class TestTacticalOrchestratorCorpsePileAccumulatorReset:
         self, empty_battle_state, archetype_human_sword, fake_bus
     ):
         """
-        Баг: TacticalMoraleEnvironmentService._accumulated_corpse_weights —
+        Баг: TacticalMoraleEnvironmentService._accumulated_corpse_weights -
         состояние экземпляра, переживающее execute_turn(). Если один и тот
         же combat_service обслуживает несколько разных боёв подряд, остаток
         веса трупов из прошлого боя на той же координате утекал в новый.

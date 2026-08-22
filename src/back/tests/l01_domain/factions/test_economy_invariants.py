@@ -92,7 +92,7 @@ class TestBuildingLevelAndSlotsInvariants:
         assert hall.building_slots == 2
 
         hall.upgrade()
-        # Уровень 3: 3 слота — заявленный в building.md максимум теперь достижим
+        # Уровень 3: 3 слота - заявленный в building.md максимум теперь достижим
         assert hall.level == 3
         assert hall.building_slots == 3
         assert hall.building_slots == TOWNHALL_MAX_BUILDING_SLOTS

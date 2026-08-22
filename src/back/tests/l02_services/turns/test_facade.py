@@ -100,13 +100,15 @@ class TestTurnsFacadeTacticalIntegration:
         assert attacker_army.is_in_tactical_battle is True
         assert defender_army.is_in_tactical_battle is True
 
-        report = await facade.execute_tactical_turn(world_state=world, battle_state=battle_state)
+        report = await facade.execute_tactical_turn(
+            world_state=world, battle_state=battle_state
+        )
 
         assert report.battle_id == battle_state.id
         assert report.tick == 1
 
         # Урон, нанесённый через фасад, обязан отразиться на исходном объекте
-        # StrategicArmy.squads — фасад должен передавать оркестратору те же
+        # StrategicArmy.squads - фасад должен передавать оркестратору те же
         # самые ссылки на Squad, а не копии.
         defender_army.squads[0].state.unit_count = 42
         assert world.get_army("army_defender").squads[0].state.unit_count == 42
@@ -121,7 +123,9 @@ class TestTurnsFacadeTacticalIntegration:
         # Защитник уже уничтожен - раунд должен зафиксировать исход боя.
         defender_army.squads[0].state.unit_count = 0
 
-        report = await facade.execute_tactical_turn(world_state=world, battle_state=battle_state)
+        report = await facade.execute_tactical_turn(
+            world_state=world, battle_state=battle_state
+        )
 
         assert report.is_battle_finished is True
         assert report.victor_faction_id == "humans"

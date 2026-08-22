@@ -92,7 +92,7 @@ class TacticalChargeService:
             )
             distance_to_target = cell_distance_chebyshev(attacker_pos, order.target_cell)
 
-            # Нужно дойти вплотную (дистанция 1) — считаем путь без последнего шага на цель
+            # Нужно дойти вплотную (дистанция 1) - считаем путь без последнего шага на цель
             if distance_to_target - 1 > max_charge_steps:
                 continue
 
@@ -105,7 +105,7 @@ class TacticalChargeService:
 
             for step_cell in path[1 : max_charge_steps + 1]:
                 if step_cell == order.target_cell:
-                    break  # на занятую клетку цели встать нельзя — останавливаемся перед ней
+                    break  # на занятую клетку цели встать нельзя - останавливаемся перед ней
 
                 step_state = cell_map.get(step_cell.to_tuple())
                 if step_state is None or (
@@ -116,7 +116,7 @@ class TacticalChargeService:
 
                 landing_cell = step_cell
 
-            # Если натиск застрял по пути и не добежал вплотную — столкновения не будет
+            # Если натиск застрял по пути и не добежал вплотную - столкновения не будет
             if cell_distance_chebyshev(landing_cell, order.target_cell) > 1:
                 continue
 

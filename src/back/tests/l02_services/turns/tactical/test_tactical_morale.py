@@ -69,7 +69,7 @@ class TestTacticalVeterancyKillWeightAccumulation:
         squads = {"sq_mvp": sq1}
 
         service = TacticalMoraleEnvironmentService()
-        # 100 средних (MEDIUM) целей * вес 2.0 = 200.0 — ниже порога 500.0
+        # 100 средних (MEDIUM) целей * вес 2.0 = 200.0 - ниже порога 500.0
         report = service.process_morale_and_environment(
             empty_battle_state,
             squads,
@@ -103,7 +103,7 @@ class TestTacticalVeterancyKillWeightAccumulation:
         self, empty_battle_state, archetype_human_sword
     ):
         """
-        Ядро задачи: счётчик должен переживать несколько отдельных боёв —
+        Ядро задачи: счётчик должен переживать несколько отдельных боёв -
         симулируем это двумя независимыми вызовами на одном и том же
         объекте Squad с разными TacticalBattleState.
         """
@@ -113,7 +113,7 @@ class TestTacticalVeterancyKillWeightAccumulation:
 
         service = TacticalMoraleEnvironmentService()
 
-        # "Бой 1": набрано 300.0 — ниже порога
+        # "Бой 1": набрано 300.0 - ниже порога
         report_1 = service.process_morale_and_environment(
             empty_battle_state,
             squads,
@@ -123,7 +123,7 @@ class TestTacticalVeterancyKillWeightAccumulation:
         )
         assert "sq_mvp" not in report_1.veterancy_candidate_ids
 
-        # "Бой 2" — новое состояние боя, тот же Squad: добираем ещё 300.0,
+        # "Бой 2" - новое состояние боя, тот же Squad: добираем ещё 300.0,
         # суммарно 600.0, порог пройден именно на этом вызове
         battle_state_2 = TacticalBattleState()
         report_2 = service.process_morale_and_environment(

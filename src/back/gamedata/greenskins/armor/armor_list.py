@@ -18,7 +18,7 @@ ARMOR_LIST: dict[str, dict[str, Any]] = {
     GreenskinsArmorId.BARE_TORSO_00.value: {
         "id": GreenskinsArmorId.BARE_TORSO_00.value,
         "name": "Голый торс",
-        "lore": "Для орка броня — это признак трусости. Ну или просто железа не хватило.",
+        "lore": "Для орка броня - это признак трусости. Ну или просто железа не хватило.",
         "slot": _SLOT,
         "category": ArmorCategory.UNARMORED,
         "tier": 0,

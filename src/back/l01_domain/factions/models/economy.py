@@ -21,5 +21,5 @@ class FactionEconomyReport(BaseModel):
     completed_building_names: list[str] = Field(default_factory=list)
     unavailable_worker_squad_ids: list[str] = Field(
         default_factory=list,
-        description="Отряды тира 00, пропущенные из добычи — в бою или в Ничьей земле",
+        description="Отряды тира 00, пропущенные из добычи - в бою или в Ничьей земле",
     )

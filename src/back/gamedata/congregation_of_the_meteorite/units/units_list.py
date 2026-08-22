@@ -48,7 +48,7 @@ UNITS_LIST: dict[str, dict[str, Any]] = {
         ),
         "base_upkeep_food": 0.5,  # Мертвецы не едят, едят только маги
         "base_upkeep_gold": 1.0,
-        "lore_description": "Группа жрецов, окруженная поднятыми скелетами. Скелеты принимают урон, но если убить жрецов — кости рассыпаются.",
+        "lore_description": "Группа жрецов, окруженная поднятыми скелетами. Скелеты принимают урон, но если убить жрецов - кости рассыпаются.",
     },
     CotmUnitId.ZOMBIE_HORDE_01.value: {
         "id": CotmUnitId.ZOMBIE_HORDE_01.value,
@@ -160,7 +160,7 @@ UNITS_LIST: dict[str, dict[str, Any]] = {
         ),
         "base_upkeep_food": 4.0,  # Жрут очень много мяса
         "base_upkeep_gold": 1.0,
-        "lore_description": "На базе они — слабые люди. В Ничьей земле — гигантские волки с дикой скоростью и регенерацией.",
+        "lore_description": "На базе они - слабые люди. В Ничьей земле - гигантские волки с дикой скоростью и регенерацией.",
     },
     CotmUnitId.ELF_BLOODLETTERS_03.value: {
         "id": CotmUnitId.ELF_BLOODLETTERS_03.value,

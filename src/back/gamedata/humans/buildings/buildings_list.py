@@ -73,7 +73,7 @@ BUILDINGS_LIST: dict[str, dict[str, Any]] = {
         "id": HumanBuildingId.TRADING_GUILD.value,
         "faction_id": _FACTION,
         "name": "Торговая гильдия",
-        "lore_description": "Золото — это истинная кровь Империи.",
+        "lore_description": "Золото - это истинная кровь Империи.",
         "category": BuildingCategory.ECONOMIC,
         "allowed_zone": TerritoryZoneType.BASE,
         "cost_gold": 100.0,

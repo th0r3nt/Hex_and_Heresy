@@ -65,7 +65,7 @@ class WorldStateNotBoundError(GameFlowError):
         self.action_name = action_name
         super().__init__(
             f"Действие '{action_name}' требует активного WorldState, но он не привязан "
-            f"к GameFlowFacade — вызови bind_world_state() после старта или загрузки партии."
+            f"к GameFlowFacade - вызови bind_world_state() после старта или загрузки партии."
         )
 
 

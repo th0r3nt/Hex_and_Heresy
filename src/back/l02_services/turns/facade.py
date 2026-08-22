@@ -59,7 +59,7 @@ class TurnsFacade:
 
         Собирает отряды/полководцев/героев из армий, закреплённых за этим
         боем в world_state.active_battle_armies (см. WorldState.
-        lock_armies_for_battle) — те же самые объекты Squad/Commander/Hero,
+        lock_armies_for_battle) - те же самые объекты Squad/Commander/Hero,
         что лежат в StrategicArmy, а не их копии. Это критично для
         персистентности счётчика ветеранства (см.
         VeterancyStatus.accumulate_kills) - если бы сюда передавалась копия,

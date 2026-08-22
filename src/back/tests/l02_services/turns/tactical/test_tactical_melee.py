@@ -138,7 +138,7 @@ class TestTacticalMeleeWeaponRangeValidation:
         self, empty_battle_state, archetype_human_sword, weapon_bow
     ):
         """
-        Баг-следствие: лучник на дистанции 2 получал урон дважды — через
+        Баг-следствие: лучник на дистанции 2 получал урон дважды - через
         ranged.py и через melee.py (тот не смотрел на range_hexes вообще).
         """
         sq_atk = Squad.create_new(archetype=archetype_human_sword, weapon=weapon_bow)

@@ -19,7 +19,7 @@ MELEE_WEAPONS: dict[str, dict[str, Any]] = {
     GreenskinsWeaponId.SHARPENED_STICK_00.value: {
         "id": GreenskinsWeaponId.SHARPENED_STICK_00.value,
         "name": "Заостренные палки",
-        "lore": "Просто ветка. Если ткнуть ею в глаз рыцарю, ему будет неприятно. В остальных случаях — мусор.",
+        "lore": "Просто ветка. Если ткнуть ею в глаз рыцарю, ему будет неприятно. В остальных случаях - мусор.",
         "slot": _SLOT,
         "category": WeaponCategory.SPEAR,
         "tier": 0,
@@ -106,7 +106,7 @@ MELEE_WEAPONS: dict[str, dict[str, Any]] = {
     GreenskinsWeaponId.CANNONBALL_FLAIL_02.value: {
         "id": GreenskinsWeaponId.CANNONBALL_FLAIL_02.value,
         "name": "Цеп с ядром",
-        "lore": "Настоящее пушечное ядро, приваренное к цепи. Управлять им невозможно, главное — раскрутить и бросить в сторону врага.",
+        "lore": "Настоящее пушечное ядро, приваренное к цепи. Управлять им невозможно, главное - раскрутить и бросить в сторону врага.",
         "slot": _SLOT,
         "category": WeaponCategory.WHIP,
         "tier": 2,

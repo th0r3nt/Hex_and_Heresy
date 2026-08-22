@@ -77,7 +77,7 @@ class TestTacticalInitiativeService:
         sq2 = Squad.create_new(archetype=archetype_human_sword)
         sq2.id = "squad_b"  # Инициатива 10
 
-        # squad_b — защитник (приоритет при равной инициативе)
+        # squad_b - защитник (приоритет при равной инициативе)
         empty_battle_state.attacker_squad_ids = ["squad_a"]
         empty_battle_state.defender_squad_ids = ["squad_b"]
 

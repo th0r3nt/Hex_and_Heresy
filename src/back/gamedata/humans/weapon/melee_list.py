@@ -19,7 +19,7 @@ MELEE_WEAPONS: dict[str, dict[str, Any]] = {
     HumanWeaponId.BUILDER_HAMMER_00.value: {
         "id": HumanWeaponId.BUILDER_HAMMER_00.value,
         "name": "Строительные молоты",
-        "lore": "Рабочий инструмент гильдий. Бьет медленно, но если попадает — оставляет в доспехах серьезные вмятины.",
+        "lore": "Рабочий инструмент гильдий. Бьет медленно, но если попадает - оставляет в доспехах серьезные вмятины.",
         "slot": _SLOT,
         "category": WeaponCategory.AXE,  # Используем топоры/молоты как категорию дробящего одноручного
         "tier": 0,
