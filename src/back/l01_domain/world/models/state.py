@@ -6,6 +6,7 @@ from typing import Optional
 from uuid import uuid4
 from pydantic import BaseModel, Field
 
+from src.back.l01_domain.army.models.card.equipment import Equipment
 from src.back.l01_domain.army.models.strategic import StrategicArmy
 from src.back.l01_domain.factions.models.diplomacy.messengers import (
     Ambassador,
@@ -47,6 +48,12 @@ class WorldState(BaseModel):
     worker_assignments: dict[str, WorkerAssignment] = Field(
         default_factory=dict,
         description="Реестр активных назначений рабочих: assignment_id -> WorkerAssignment",
+    )
+
+    # Реестр уникальных предметов, созданных Оружейником в этой сессии
+    custom_equipment: dict[str, Equipment] = Field(
+        default_factory=dict,
+        description="Уникальные чертежи экипировки текущей партии (equipment_id -> Equipment)",
     )
 
     def get_faction(self, faction_id: str) -> Optional[Faction]:
@@ -173,3 +180,7 @@ class WorldState(BaseModel):
                 cleaned.append(a)
         self.worker_assignments = active
         return cleaned
+
+    # Метод для работы с кастомными предметами
+    def add_custom_equipment(self, equipment: Equipment) -> None:
+        self.custom_equipment[equipment.id] = equipment
