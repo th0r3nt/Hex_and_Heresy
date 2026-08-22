@@ -7,9 +7,9 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from src.back.l01_domain.exceptions import LLMKeyMissingError
+from src.back.l01_domain.llm.constants import ApiKeyStatus
 from src.back.l03_infrastructure.llm.keys.manager import (
     ApiKeyManager,
-    ApiKeyStatus,
     PrimaryFirstRotation,
     mask_key,
 )

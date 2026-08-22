@@ -11,8 +11,9 @@ from typing import Any, Optional
 
 from src.back.l01_domain.protocols.events import EventBusProtocol
 from src.back.l01_domain.protocols.saves import SaveGameRepositoryProtocol
+from src.back.l01_domain.world.models.saves import SaveMetadata
 from src.back.l01_domain.world.models.state import WorldState
-from src.back.l02_services.saves.dumper import SaveMetadata, WorldStateDumper
+from src.back.l02_services.saves.dumper import WorldStateDumper
 from src.back.l02_services.saves.loader import (
     GameDataRepositoryFactory,
     LoadedSession,

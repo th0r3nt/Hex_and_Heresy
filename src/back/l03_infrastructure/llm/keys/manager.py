@@ -7,24 +7,15 @@
 
 import os
 from datetime import datetime, timedelta, timezone
-from enum import Enum
 from typing import Callable, Iterable, Optional, Protocol, runtime_checkable
 
-from pydantic import BaseModel, ConfigDict, Field
-
 from src.back.l01_domain.exceptions import LLMKeyMissingError
+from src.back.l01_domain.llm.constants import ApiKeyStatus
+from src.back.l01_domain.llm.models.keys import ApiKeyView
 from src.back.utils.logger import main_logger
 
 # Сколько ключ отдыхает после отказа по квоте, прежде чем его снова попробуют
 DEFAULT_COOLDOWN_SECONDS = 300
-
-
-class ApiKeyStatus(str, Enum):
-    """Состояние ключа в пуле провайдера."""
-
-    ACTIVE = "active"  # Готов к работе
-    COOLING_DOWN = "cooling_down"  # Уперся в лимит частоты или квоты, ждет
-    REVOKED = "revoked"  # Провайдер отверг ключ: без вмешательства игрока бесполезен
 
 
 def mask_key(value: str) -> str:
@@ -35,20 +26,6 @@ def mask_key(value: str) -> str:
     if len(value) <= 8:
         return "*" * len(value)
     return f"{value[:4]}...{value[-4:]}"
-
-
-class ApiKeyView(BaseModel):
-    """
-    Безопасное представление ключа для экрана настроек.
-    """
-
-    model_config = ConfigDict(frozen=True)
-
-    provider_id: str
-    masked_value: str
-    label: Optional[str] = None
-    status: ApiKeyStatus
-    failures: int = Field(default=0, ge=0)
 
 
 class _ApiKeyRecord:

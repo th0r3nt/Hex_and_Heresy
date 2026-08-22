@@ -3,20 +3,13 @@
 """
 
 from typing import Optional
-from pydantic import BaseModel, Field
 
-from src.back.l01_domain.combat.models.reports import MovementStepReport
 from src.back.l01_domain.protocols.events import EventBusProtocol
+from src.back.l01_domain.world.models.reports import GlobalTurnReport
 from src.back.l01_domain.world.models.state import WorldState
-from src.back.l02_services.turns.strategic.economy import (
-    FactionEconomyReport,
-    StrategicEconomyService,
-)
+from src.back.l02_services.turns.strategic.economy import StrategicEconomyService
 from src.back.l02_services.turns.strategic.veterancy import StrategicVeterancyService
-from src.back.l02_services.turns.strategic.events import (
-    EventsStepReport,
-    StrategicEventsService,
-)
+from src.back.l02_services.turns.strategic.events import StrategicEventsService
 from src.back.l02_services.turns.strategic.movement import (
     StrategicMovementService,
 )
@@ -24,18 +17,6 @@ from src.back.l02_services.turns.strategic.workers.expedition import (
     ExpeditionWorkerService,
 )
 from src.back.utils.event.registry import GameEvents
-
-
-class GlobalTurnReport(BaseModel):
-    """
-    Итоговый структурированный отчет о расчете глобального хода.
-    """
-
-    events_report: EventsStepReport = Field(...)
-    economy_reports: dict[str, FactionEconomyReport] = Field(default_factory=dict)
-    movement_report: MovementStepReport = Field(...)
-    completed_expedition_ids: list[str] = Field(default_factory=list)
-    service_veterancy_candidate_ids: list[str] = Field(default_factory=list)
 
 
 class StrategicTurnOrchestrator:

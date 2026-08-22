@@ -5,12 +5,10 @@
 import pytest
 
 from src.back.l01_domain.exceptions import LLMRequestFailedError
-from src.back.l03_infrastructure.llm.client import (
-    ChatMessage,
-    ChatRole,
-    LLMProviderConfig,
-    OpenAISDKSessionFactory,
-)
+from src.back.l01_domain.llm.constants import ChatRole
+from src.back.l01_domain.llm.models.chat import ChatMessage
+from src.back.l01_domain.llm.models.provider import LLMProviderConfig
+from src.back.l03_infrastructure.llm.client import OpenAISDKSessionFactory
 
 
 @pytest.fixture

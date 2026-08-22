@@ -8,6 +8,13 @@ from src.back.l01_domain.combat.models.state import TacticalBattleState
 from src.back.l01_domain.maps.models.strategic import HexCoordinates
 from src.back.l01_domain.protocols.events import EventBusProtocol
 from src.back.l01_domain.world.models.events import GlobalEvent
+from src.back.l01_domain.world.models.gameflow import (
+    CombatResolutionPayload,
+    CombatTransitionPayload,
+    DiplomacyTransitionPayload,
+    GameOverPayload,
+    GlobalEventTransitionPayload,
+)
 from src.back.l01_domain.world.models.state import WorldState
 from src.back.l02_services.gameflow.fsm import GameFlowFSM
 from src.back.l02_services.gameflow.guards import (
@@ -18,15 +25,7 @@ from src.back.l02_services.gameflow.guards import (
     is_recruitment_action_allowed,
     is_saving_allowed,
 )
-from src.back.l02_services.gameflow.states import (
-    CombatResolutionPayload,
-    CombatTransitionPayload,
-    DiplomacyTransitionPayload,
-    GameFlowTrigger,
-    GameOverPayload,
-    GameState,
-    GlobalEventTransitionPayload,
-)
+from src.back.l02_services.gameflow.states import GameFlowTrigger, GameState
 
 
 class GameFlowFacade:

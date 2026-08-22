@@ -12,9 +12,9 @@ from src.back.l01_domain.combat.models.state import TacticalBattleState
 from src.back.l01_domain.exceptions import NoArmiesLockedForBattleError
 from src.back.l01_domain.maps.models.strategic import HexCoordinates
 from src.back.l01_domain.protocols.events import EventBusProtocol
+from src.back.l01_domain.world.models.reports import GlobalTurnReport
 from src.back.l01_domain.world.models.state import WorldState
 from src.back.l02_services.turns.strategic.orchestrator import (
-    GlobalTurnReport,
     StrategicTurnOrchestrator,
 )
 from src.back.l02_services.turns.tactical.orchestrator import TacticalTurnOrchestrator

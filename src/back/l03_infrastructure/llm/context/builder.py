@@ -11,28 +11,11 @@ markdown-блоков. Контекст описывает, ЧТО вокруг 
 
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, Field
-
 from src.back.l01_domain.army.models.strategic import StrategicArmy
 from src.back.l01_domain.combat.models.state import TacticalBattleState
 from src.back.l01_domain.factions.models.faction import Faction
+from src.back.l01_domain.llm.models.context import ContextBlock
 from src.back.l01_domain.world.models.state import WorldState
-
-
-class ContextBlock(BaseModel):
-    """
-    Именованный кусок контекста. Пустое тело означает, что блоку нечего сказать,
-    и он не попадет в промпт.
-    """
-
-    model_config = ConfigDict(frozen=True)
-
-    title: str = Field(..., min_length=1, description="Заголовок блока в промпте")
-    body: str = Field(default="", description="Содержимое блока")
-
-    @property
-    def is_empty(self) -> bool:
-        return not self.body.strip()
 
 
 class ContextBuilder:

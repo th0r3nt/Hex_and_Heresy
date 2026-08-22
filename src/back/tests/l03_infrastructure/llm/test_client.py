@@ -12,13 +12,11 @@ from src.back.l01_domain.exceptions import (
     LLMRateLimitError,
     LLMResponseFormatError,
 )
+from src.back.l01_domain.llm.constants import ApiKeyStatus, ChatRole
+from src.back.l01_domain.llm.models.provider import LLMProviderConfig
 from src.back.l01_domain.protocols.llm import LLMClientProtocol
-from src.back.l03_infrastructure.llm.client import (
-    ChatRole,
-    LLMProviderConfig,
-    OpenAICompatibleClient,
-)
-from src.back.l03_infrastructure.llm.keys.manager import ApiKeyManager, ApiKeyStatus
+from src.back.l03_infrastructure.llm.client import OpenAICompatibleClient
+from src.back.l03_infrastructure.llm.keys.manager import ApiKeyManager
 from src.back.tests.l03_infrastructure.llm.conftest import (
     FakeSessionFactory,
     WarCouncilDecision,

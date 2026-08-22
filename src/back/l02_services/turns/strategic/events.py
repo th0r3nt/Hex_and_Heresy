@@ -4,28 +4,11 @@
 """
 
 from typing import Optional
-from pydantic import BaseModel, Field
 
-from src.back.l01_domain.combat.constants import TimeOfDay
 from src.back.l01_domain.protocols.events import EventBusProtocol
+from src.back.l01_domain.world.models.reports import EventsStepReport
 from src.back.l01_domain.world.models.state import WorldState
 from src.back.utils.event.registry import GameEvents
-
-
-class EventsStepReport(BaseModel):
-    """
-    Отчет о результатах шага обновления времени и условий мира.
-    """
-
-    ticks_elapsed: int = Field(default=1)
-    current_timestamp: str = Field(...)
-    time_of_day: TimeOfDay = Field(...)
-    is_neon_hours: bool = Field(default=False)
-    phase_changed: bool = Field(default=False)
-
-    expired_event_ids: list[str] = Field(default_factory=list)
-    decayed_battlefield_ids: list[str] = Field(default_factory=list)
-    recovered_hero_ids: list[str] = Field(default_factory=list)
 
 
 class StrategicEventsService:

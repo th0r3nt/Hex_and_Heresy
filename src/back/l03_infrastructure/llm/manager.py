@@ -22,13 +22,14 @@ from src.back.l01_domain.exceptions import (
     LLMKeyMissingError,
     LLMProviderNotConfiguredError,
 )
+from src.back.l01_domain.llm.models.keys import ApiKeyView
+from src.back.l01_domain.llm.models.provider import LLMProviderConfig
 from src.back.l01_domain.protocols.llm import LLMClientProtocol
 from src.back.l03_infrastructure.llm.client import (
-    LLMProviderConfig,
     LLMSessionFactoryProtocol,
     OpenAICompatibleClient,
 )
-from src.back.l03_infrastructure.llm.keys.manager import ApiKeyManager, ApiKeyView
+from src.back.l03_infrastructure.llm.keys.manager import ApiKeyManager
 from src.back.utils.logger import main_logger
 
 T = TypeVar("T", bound=BaseModel)

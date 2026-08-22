@@ -12,8 +12,8 @@ from src.back.l01_domain.exceptions import (
     LLMRateLimitError,
     LLMRequestFailedError,
 )
+from src.back.l01_domain.llm.models.provider import LLMProviderConfig
 from src.back.l01_domain.protocols.llm import LLMClientProtocol
-from src.back.l03_infrastructure.llm.client import LLMProviderConfig
 from src.back.l03_infrastructure.llm.keys.manager import ApiKeyManager
 from src.back.l03_infrastructure.llm.manager import LLMManager
 from src.back.tests.l03_infrastructure.llm.conftest import WarCouncilDecision

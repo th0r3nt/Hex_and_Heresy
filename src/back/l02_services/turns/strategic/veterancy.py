@@ -4,19 +4,11 @@
 """
 
 from typing import Optional
-from pydantic import BaseModel, Field
 
 from src.back.l01_domain.protocols.events import EventBusProtocol
 from src.back.l01_domain.world.constants import HOURS_PER_DAY
+from src.back.l01_domain.world.models.reports import VeterancyServiceStepReport
 from src.back.l01_domain.world.models.state import WorldState
-
-
-class VeterancyServiceStepReport(BaseModel):
-    """
-    Отчёт о результатах шага учёта выслуги лет за один глобальный такт.
-    """
-
-    veterancy_candidate_ids: list[str] = Field(default_factory=list)
 
 
 class StrategicVeterancyService:

@@ -6,6 +6,7 @@ import pytest
 
 from src.back.l01_domain.combat.models.state import TacticalBattleState
 from src.back.l01_domain.maps.models.strategic import HexCoordinates
+from src.back.l01_domain.world.models.gameflow import CombatTransitionPayload
 from src.back.l01_domain.world.models.state import WorldState
 from src.back.l02_services.gameflow.facade import GameFlowFacade
 from src.back.l02_services.gameflow.fsm import GameFlowFSM
@@ -14,11 +15,7 @@ from src.back.l02_services.gameflow.guards import (
     GuardConditionFailedError,
     InvalidStateTransitionError,
 )
-from src.back.l02_services.gameflow.states import (
-    CombatTransitionPayload,
-    GameFlowTrigger,
-    GameState,
-)
+from src.back.l02_services.gameflow.states import GameFlowTrigger, GameState
 from src.back.utils.event.registry import GameEvents
 
 

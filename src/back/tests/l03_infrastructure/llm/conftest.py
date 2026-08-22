@@ -8,11 +8,9 @@ from typing import Any, AsyncIterator, Optional, Union
 import pytest
 from pydantic import BaseModel, Field
 
-from src.back.l03_infrastructure.llm.client import (
-    ChatMessage,
-    ChatSessionProtocol,
-    LLMProviderConfig,
-)
+from src.back.l01_domain.llm.models.chat import ChatMessage
+from src.back.l01_domain.llm.models.provider import LLMProviderConfig
+from src.back.l03_infrastructure.llm.client import ChatSessionProtocol
 
 
 class FakeSession(ChatSessionProtocol):

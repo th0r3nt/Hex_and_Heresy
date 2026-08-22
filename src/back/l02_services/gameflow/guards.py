@@ -5,13 +5,12 @@
 from typing import Any, Callable, Optional
 
 from src.back.l01_domain.exceptions import DomainError
-from src.back.l02_services.gameflow.states import (
+from src.back.l01_domain.world.models.gameflow import (
     CombatTransitionPayload,
     DiplomacyTransitionPayload,
-    GameFlowTrigger,
     GameOverPayload,
-    GameState,
 )
+from src.back.l02_services.gameflow.states import GameFlowTrigger, GameState
 
 
 class GameFlowError(DomainError):

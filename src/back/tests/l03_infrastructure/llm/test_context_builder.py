@@ -2,7 +2,8 @@
 Тесты сборщика изменчивого контекста. Сами блоки пока заглушки, проверяется сборка.
 """
 
-from src.back.l03_infrastructure.llm.context.builder import ContextBlock, ContextBuilder
+from src.back.l01_domain.llm.models.context import ContextBlock
+from src.back.l03_infrastructure.llm.context.builder import ContextBuilder
 from src.back.l01_domain.world.models.state import WorldState
 
 
