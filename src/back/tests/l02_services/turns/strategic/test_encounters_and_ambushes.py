@@ -1,6 +1,6 @@
 """
 Тесты сложных боевых столкновений нескольких армий на одном гексе,
-асимметрии засад при форсированном марше и перехвата дипломатических депеш.
+асимметрии засад при форсированном марше.
 """
 
 import pytest
@@ -9,13 +9,11 @@ from src.back.l01_domain.army.constants import StrategicMovementPace
 from src.back.l01_domain.army.models.strategic import StrategicArmy
 from src.back.l01_domain.common import FactionRace
 from src.back.l01_domain.factions.models.buildings import Headquarters
-from src.back.l01_domain.factions.models.diplomacy.messengers import Dispatch
 from src.back.l01_domain.factions.models.faction import Faction
 from src.back.l01_domain.factions.models.lord import Lord, LordArchetype, LordTrait
 from src.back.l01_domain.maps.models.strategic import HexCoordinates
 from src.back.l01_domain.world.models.state import WorldState
 from src.back.l02_services.turns.strategic.movement import StrategicMovementService
-from src.back.utils.event.registry import GameEvents
 
 
 @pytest.fixture
@@ -134,45 +132,3 @@ class TestStrategicEncountersAndAmbushes:
         encounter = report.encounters[0]
         assert encounter.is_ambush is True
         assert encounter.ambusher_army_id == army_orc.id
-
-
-class TestDispatchInterceptionLogic:
-    @pytest.mark.asyncio
-    async def test_dispatch_intercepted_by_hostile_army_in_neutral_zone(
-        self, human_faction, elf_faction, orc_faction, fake_bus
-    ):
-        neutral_hex = HexCoordinates.from_axial(2, 2)
-
-        # Депеша отправлена от Людей к Эльфам
-        dispatch = Dispatch(
-            sender_faction_id=human_faction.id,
-            recipient_faction_id=elf_faction.id,
-            message_text="Предлагаю пакт о ненападении.",
-            travel_ticks_remaining=2,
-        )
-
-        # Ордынская армия перекрывает нейтральный гекс маршрута
-        orc_patrol = StrategicArmy(
-            faction_id=orc_faction.id,
-            current_hex=neutral_hex,
-        )
-
-        world = WorldState()
-        world.neutral_hexes.append(neutral_hex)
-        world.add_army(orc_patrol)
-        world.dispatches.append(dispatch)
-
-        service = StrategicMovementService(event_bus=fake_bus)
-
-        # Такт 1: депеша проходит через нейтральный гекс с орками и перехватывается
-        report_1 = await service.process_movements_and_encounters(world)
-        assert dispatch.id in report_1.intercepted_dispatch_ids
-        assert dispatch.is_intercepted is True
-        assert dispatch.intercepted_by_faction_id == orc_faction.id
-
-        # Такт 2: депеша завершает время пути, но из-за перехвата не доставляется эльфам
-        report_2 = await service.process_movements_and_encounters(world)
-        assert dispatch.id not in report_2.delivered_dispatch_ids
-
-        event_names = [name for name, _ in fake_bus.events]
-        assert GameEvents.Strategic.DISPATCH_INTERCEPTED in event_names

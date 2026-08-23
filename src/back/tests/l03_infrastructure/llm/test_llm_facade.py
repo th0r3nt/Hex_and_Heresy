@@ -157,13 +157,6 @@ class TestRegistration:
 
         assert facade._rotators["cloud"].keys == ["key-one"]
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "Баг: set_api_keys с пустым списком для незарегистрированного провайдера "
-            "читает поле у класса LLMProviderConfig и падает с AttributeError"
-        ),
-    )
     def test_empty_keys_for_unknown_provider_do_not_crash(self, facade: LLMFacade):
         facade.set_api_keys("ghost", [])
 

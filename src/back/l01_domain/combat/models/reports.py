@@ -33,16 +33,14 @@ class EncounterEvent(BaseModel):
 
 class MovementStepReport(BaseModel):
     """
-    Отчет о результатах фазы стратегических перемещений, столкновений и дипломатической логистики.
+    Отчет о результатах фазы стратегических перемещений и столкновений.
+    Дипломатическая логистика (гонцы, послы) живет в DiplomacyTickReport.
     """
 
     model_config = ConfigDict(frozen=True)
 
     moved_army_ids: list[str] = Field(default_factory=list)
     encounters: list[EncounterEvent] = Field(default_factory=list)
-    delivered_dispatch_ids: list[str] = Field(default_factory=list)
-    intercepted_dispatch_ids: list[str] = Field(default_factory=list)
-    arrived_ambassador_ids: list[str] = Field(default_factory=list)
 
 
 # ==================================================================

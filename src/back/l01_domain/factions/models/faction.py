@@ -17,6 +17,7 @@ from src.back.l01_domain.factions.models.buildings import (
     Headquarters,
 )
 from src.back.l01_domain.factions.models.lord import Lord
+from src.back.l01_domain.maps.models.strategic import HexCoordinates
 
 
 class Faction(BaseModel):
@@ -41,6 +42,13 @@ class Faction(BaseModel):
 
     controlled_zone_ids: list[str] = Field(
         default_factory=list, description="ID гексов союзных земель под контролем"
+    )
+
+    capital_hex: Optional[HexCoordinates] = Field(
+        default=None,
+        description=(
+            "Гекс главного здания фракции."
+        ),
     )
 
     buildings: list[ConstructedBuilding] = Field(

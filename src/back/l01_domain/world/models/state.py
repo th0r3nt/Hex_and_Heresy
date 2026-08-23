@@ -36,6 +36,14 @@ class WorldState(BaseModel):
     dispatches: list[Dispatch] = Field(default_factory=list)
     ambassadors: list[Ambassador] = Field(default_factory=list)
 
+    intercepted_dispatches: dict[str, list[Dispatch]] = Field(
+        default_factory=dict,
+        description=(
+            "Чужие депеши, перехваченные фракцией: faction_id -> список писем. "
+            "Ложатся в контекст LLM перехватившего лорда"
+        ),
+    )
+
     active_events: list[GlobalEvent] = Field(default_factory=list)
     battlefield_sites: dict[str, BattlefieldLootSite] = Field(default_factory=dict)
     neutral_hexes: list[HexCoordinates] = Field(default_factory=list)
@@ -89,6 +97,26 @@ class WorldState(BaseModel):
             if is_direct or is_reverse:
                 return rel
         return None
+
+    def get_or_create_relation(
+        self, faction_a_id: str, faction_b_id: str
+    ) -> DiplomaticRelation:
+        """
+        Возвращает отношения пары фракций, создавая мирные при первом контакте.
+        """
+        relation = self.get_relation(faction_a_id, faction_b_id)
+        if relation is None:
+            relation = DiplomaticRelation(
+                faction_a_id=faction_a_id, faction_b_id=faction_b_id
+            )
+            self.diplomatic_relations.append(relation)
+        return relation
+
+    def add_intercepted_dispatch(self, faction_id: str, dispatch: Dispatch) -> None:
+        """
+        Кладет перехваченное письмо в разведывательные трофеи фракции.
+        """
+        self.intercepted_dispatches.setdefault(faction_id, []).append(dispatch)
 
     def add_event(self, event: GlobalEvent) -> None:
         self.active_events.append(event)

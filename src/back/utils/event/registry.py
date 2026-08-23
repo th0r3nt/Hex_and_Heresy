@@ -106,6 +106,8 @@ class DiplomacyEvents(str, Enum):
     TRIBUTE_DEMANDED = "diplomacy.tribute_demanded"
     TRIBUTE_PAID = "diplomacy.tribute_paid"
     AMBASSADOR_EXECUTED = "diplomacy.ambassador_executed"
+    DISPATCH_SENT = "diplomacy.dispatch_sent"
+    AMBASSADOR_SENT = "diplomacy.ambassador_sent"
 
 
 # ==================================================================

@@ -50,6 +50,7 @@ class DiplomaticRelation(BaseModel):
             None  # исполнение казни заложника - забота слушателя события в l02_services
         )
         self.war_alliance = None
+        self.tribute_demanded_gold = None
 
     # =====================================================================================
     # Методы, которые будут вызываться через JSON-схемы Function Calling
@@ -58,6 +59,22 @@ class DiplomaticRelation(BaseModel):
     # Мир
     def make_peace(self) -> None:
         self.stance = DiplomaticStance.PEACE
+
+    # Договор о ненападении (границы)
+    def establish_borders(self, pact: NonAggressionPact) -> None:
+        if self.stance == DiplomaticStance.WAR:
+            raise PactForbiddenDuringWarError(
+                "establish_borders", self.faction_a_id, self.faction_b_id
+            )
+        self.non_aggression_pact = pact
+
+    # Вымогательство дани
+    def demand_tribute(self, amount_gold: float) -> None:
+        self.tribute_demanded_gold = amount_gold
+
+    def settle_tribute(self) -> None:
+        """Снимает требование дани - выплачено оно или отвергнуто."""
+        self.tribute_demanded_gold = None
 
     # Торговля
     def propose_trade(self, agreement: TradeAgreement) -> None:

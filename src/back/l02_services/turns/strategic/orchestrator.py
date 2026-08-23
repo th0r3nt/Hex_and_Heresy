@@ -7,6 +7,7 @@ from typing import Optional
 from src.back.l01_domain.protocols.events import EventBusProtocol
 from src.back.l01_domain.world.models.reports import GlobalTurnReport
 from src.back.l01_domain.world.models.state import WorldState
+from src.back.l02_services.mechanics.diplomacy.facade import DiplomacyFacade
 from src.back.l02_services.turns.strategic.economy import StrategicEconomyService
 from src.back.l02_services.turns.strategic.veterancy import StrategicVeterancyService
 from src.back.l02_services.turns.strategic.events import StrategicEventsService
@@ -23,7 +24,7 @@ class StrategicTurnOrchestrator:
     """
     Главный оркестратор глобального хода.
     Строго последовательно выполняет конвейер:
-    [1. События и время] -> [2. Экспедиции] -> [3. Экономика и содержание] -> [4. Передвижения и логистика] -> [5. Итоговый отчет].
+    [1. События и время] -> [2. Экспедиции] -> [3. Экономика и содержание] -> [4. Передвижения] -> [4.5. Дипломатия] -> [5. Итоговый отчет].
     """
 
     def __init__(
@@ -33,6 +34,7 @@ class StrategicTurnOrchestrator:
         movement_service: Optional[StrategicMovementService] = None,
         expedition_service: Optional[ExpeditionWorkerService] = None,
         veterancy_service: Optional[StrategicVeterancyService] = None,
+        diplomacy_facade: Optional[DiplomacyFacade] = None,
         event_bus: Optional[EventBusProtocol] = None,
     ) -> None:
         self._event_bus = event_bus
@@ -47,6 +49,8 @@ class StrategicTurnOrchestrator:
         self._veterancy_service = veterancy_service or StrategicVeterancyService(
             event_bus=event_bus
         )
+        # Дипломатии на такте нужны только пакты и логистика, LLM здесь не участвует
+        self._diplomacy_facade = diplomacy_facade or DiplomacyFacade(event_bus=event_bus)
 
     async def execute_turn(
         self,
@@ -78,10 +82,13 @@ class StrategicTurnOrchestrator:
         # Шаг 3. Расчет экономики (стационарные здания, списание содержания)
         economy_reports = await self._economy_service.process_factions_economy(world_state)
 
-        # Шаг 4. Перемещение армий и караванов, обнаружение столкновений и логистика депеш/послов
+        # Шаг 4. Перемещение армий и караванов, обнаружение столкновений
         movement_report = await self._movement_service.process_movements_and_encounters(
             world_state
         )
+
+        # Шаг 4.5. Дипломатия: исполнение пактов, движение гонцов и послов
+        diplomacy_report = await self._diplomacy_facade.process_tick(world_state)
 
         # Очистка завершенных назначений
         world_state.cleanup_completed_assignments()
@@ -91,6 +98,7 @@ class StrategicTurnOrchestrator:
             events_report=events_report,
             economy_reports=economy_reports,
             movement_report=movement_report,
+            diplomacy_report=diplomacy_report,
             completed_expedition_ids=completed_expeditions,
             service_veterancy_candidate_ids=service_veterancy_report.veterancy_candidate_ids,
         )

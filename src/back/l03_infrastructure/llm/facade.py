@@ -65,7 +65,8 @@ class LLMFacade(LLMClientProtocol):
 
     def set_api_keys(self, provider_id: str, keys: List[str]) -> None:
         """Инициализирует или обновляет ротатор ключей для провайдера."""
-        if not keys and self._providers.get(provider_id, LLMProviderConfig).requires_api_key:
+        config = self._providers.get(provider_id)
+        if not keys and (config is None or config.requires_api_key):
             main_logger.warning(
                 f"[LLM] Попытка передать пустой список ключей для '{provider_id}'."
             )

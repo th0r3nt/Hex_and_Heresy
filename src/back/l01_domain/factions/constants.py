@@ -149,3 +149,18 @@ class NegotiationMode(str, Enum):
 
     MANUAL = "manual"
     AUTOMATIC = "automatic"
+
+
+# Гонец с депешей: скорость движения и риск перехвата (см. game_mechanics/diplomacy.md)
+DISPATCH_COURIER_SPEED_HEXES: Final[int] = 4
+DISPATCH_INTERCEPT_CHANCE: Final[float] = 0.20
+
+# Оплата труда гонца: фиксированная часть плюс надбавка за каждый гекс пути
+DISPATCH_BASE_COST_GOLD: Final[float] = 10.0
+DISPATCH_COST_GOLD_PER_HEX: Final[float] = 2.5
+
+# Скорость пешего посла без охраны (с охраной он идет со скоростью её армии)
+AMBASSADOR_SPEED_HEXES: Final[int] = 2
+
+# Предел реплик в автоматических переговорах двух LLM, чтобы диалог не зациклился
+MAX_AUTO_NEGOTIATION_ROUNDS: Final[int] = 6

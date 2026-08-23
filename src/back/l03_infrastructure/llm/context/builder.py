@@ -54,7 +54,9 @@ class ContextBuilder:
         """
         Дипломатия: отношения, пакты, войны, депеши и послы в пути.
         """
-        # TODO: заглушка
+        # TODO: заглушка. Короткую сводку отношений для переговоров сейчас
+        # собирает NegotiationService (l02_services/mechanics/diplomacy):
+        # при наполнении этого блока логику стоит забрать оттуда, а не дублировать.
         return ContextBlock(title="Дипломатическая обстановка")
 
     def build_battle_context(self, battle_state: TacticalBattleState) -> ContextBlock:

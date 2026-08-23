@@ -378,6 +378,28 @@ class AmbassadorUnavailableError(DiplomacyError):
         super().__init__(f"Посол '{ambassador_id}' недоступен: текущий статус '{status}'.")
 
 
+class SelfDiplomacyForbiddenError(DiplomacyError):
+    """
+    Попытка отправить депешу или посла самому себе.
+    """
+
+    def __init__(self, faction_id: str) -> None:
+        self.faction_id = faction_id
+        super().__init__(
+            f"Фракция '{faction_id}' не может вести дипломатию сама с собой."
+        )
+
+
+class FactionCapitalUnknownError(DiplomacyError):
+    """
+    У фракции не задан гекс цитадели, поэтому маршрут гонца или посла не построить.
+    """
+
+    def __init__(self, faction_id: str) -> None:
+        self.faction_id = faction_id
+        super().__init__(f"У фракции '{faction_id}' не задан гекс цитадели (capital_hex).")
+
+
 # ==================================================================
 # ГЕОМЕТРИЯ КАРТ
 # ==================================================================

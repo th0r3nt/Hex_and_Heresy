@@ -11,6 +11,7 @@ from uuid import uuid4
 from pydantic import BaseModel, Field
 
 from src.back.l01_domain.factions.constants import AmbassadorStatus, NegotiationMode
+from src.back.l01_domain.maps.models.strategic import HexCoordinates
 
 
 class Dispatch(BaseModel):
@@ -26,6 +27,12 @@ class Dispatch(BaseModel):
     message_text: str = Field(..., min_length=1)
 
     cost_gold: float = Field(default=0.0, ge=0)
+
+    route: list[HexCoordinates] = Field(
+        default_factory=list,
+        description="Непройденный остаток пути гонца; последний гекс - цитадель получателя",
+    )
+    total_travel_ticks: int = Field(default=1, ge=0, description="Длина пути в тактах при отправке")
     travel_ticks_remaining: int = Field(default=1, ge=0)
 
     is_intercepted: bool = Field(default=False)
@@ -49,8 +56,15 @@ class Ambassador(BaseModel):
     )
 
     status: AmbassadorStatus = Field(default=AmbassadorStatus.TRAVELING)
-    escort_squad_id: Optional[str] = Field(default=None)
+    escort_army_id: Optional[str] = Field(
+        default=None, description="Армия сопровождения на глобальной карте, если выделена"
+    )
     target_faction_id: Optional[str] = Field(default=None)
+
+    current_hex: Optional[HexCoordinates] = Field(default=None)
+    planned_path: list[HexCoordinates] = Field(
+        default_factory=list, description="Непройденный остаток пути до чужой цитадели"
+    )
 
     negotiation_mode: NegotiationMode = Field(default=NegotiationMode.AUTOMATIC)
     directive: Optional[str] = Field(
