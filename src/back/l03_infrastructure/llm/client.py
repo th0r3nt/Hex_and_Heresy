@@ -1,361 +1,90 @@
 """
-Клиент для запросов к LLM.
-Принимает готовый промпт+контекст и возвращает ответ от LLM.
+Асинхронный клиент-обертка для LLM.
 
-Общение идет по протоколу OpenAI Chat Completions - его понимают и облачные
-провайдеры (OpenAI, OpenRouter, DeepSeek, Groq), и локальные серверы
-(llama.cpp, LM Studio, Ollama, vLLM). Провайдер отличается только base_url,
-именем модели и наличием ключа, поэтому клиент один на всех.
+Инкапсулирует пулы HTTP-соединений и обеспечивает бесшовную интеграцию
+с любыми OpenAI-совместимыми провайдерами (OpenRouter, локальные сети и т.д.).
 """
 
-import json
-import re
-from contextlib import asynccontextmanager
-from typing import (
-    Any,
-    AsyncContextManager,
-    AsyncIterator,
-    Optional,
-    Protocol,
-    TypeVar,
-    runtime_checkable,
-)
+import httpx
+from openai import AsyncOpenAI
+from typing import Optional, Dict
 
-from pydantic import BaseModel, ValidationError
-
-from src.back.l01_domain.exceptions import (
-    LLMAuthorizationError,
-    LLMRateLimitError,
-    LLMRequestFailedError,
-    LLMResponseFormatError,
-)
-from src.back.l01_domain.llm.constants import ChatRole
-from src.back.l01_domain.llm.models.chat import ChatMessage
-from src.back.l01_domain.llm.models.provider import LLMProviderConfig
-from src.back.l01_domain.protocols.llm import LLMClientProtocol
-from src.back.l03_infrastructure.llm.keys.manager import ApiKeyManager
 from src.back.utils.logger import main_logger
-
-T = TypeVar("T", bound=BaseModel)
-
-# Модели любят оборачивать JSON в markdown-заборчик, даже когда их просят не делать этого
-_JSON_FENCE = re.compile(r"^\s*```(?:json)?\s*(.*?)\s*```\s*$", re.DOTALL)
+from src.back.l03_infrastructure.llm.keys.rotator import APIKeyRotator
 
 
-# ==================================================================
-# СЕССИЯ ЗАПРОСА
-# ==================================================================
-
-
-@runtime_checkable
-class ChatSessionProtocol(Protocol):
+class LLMClient:
     """
-    Контракт открытой сессии: умеет выполнить один запрос к модели.
-    """
-
-    async def complete(
-        self,
-        messages: list[ChatMessage],
-        temperature: float,
-        max_tokens: Optional[int] = None,
-        response_format: Optional[dict[str, Any]] = None,
-    ) -> str: ...
-
-
-@runtime_checkable
-class LLMSessionFactoryProtocol(Protocol):
-    """
-    Контракт фабрики сессий. Отделяет клиента от конкретного SDK: в тестах
-    сюда подставляется фейк, а завтра - другой транспорт.
-    """
-
-    def open_session(
-        self, config: LLMProviderConfig, api_key: Optional[str]
-    ) -> AsyncContextManager[ChatSessionProtocol]: ...
-
-
-class _OpenAISDKSession(ChatSessionProtocol):
-    """
-    Сессия поверх официального SDK. Переводит ошибки SDK в доменные исключения,
-    чтобы выше по стеку никто не знал про openai.
-    """
-
-    def __init__(self, sdk_client: Any, config: LLMProviderConfig, errors: Any) -> None:
-        self._client = sdk_client
-        self._config = config
-        self._errors = errors
-
-    async def complete(
-        self,
-        messages: list[ChatMessage],
-        temperature: float,
-        max_tokens: Optional[int] = None,
-        response_format: Optional[dict[str, Any]] = None,
-    ) -> str:
-        payload: dict[str, Any] = {
-            "model": self._config.model,
-            "messages": [message.to_payload() for message in messages],
-            "temperature": temperature,
-        }
-        if max_tokens is not None:
-            payload["max_tokens"] = max_tokens
-        if response_format is not None:
-            payload["response_format"] = response_format
-
-        try:
-            response = await self._client.chat.completions.create(**payload)
-        except self._errors.AuthenticationError as e:
-            raise LLMAuthorizationError(self._config.id, self._config.model, str(e)) from e
-        except self._errors.RateLimitError as e:
-            raise LLMRateLimitError(self._config.id, self._config.model, str(e)) from e
-        except self._errors.APIError as e:
-            raise LLMRequestFailedError(self._config.id, self._config.model, str(e)) from e
-        except Exception as e:  # transport-уровень: сеть, DNS, отвалившийся локальный сервер
-            raise LLMRequestFailedError(self._config.id, self._config.model, str(e)) from e
-
-        if not response.choices:
-            raise LLMRequestFailedError(
-                self._config.id, self._config.model, "провайдер вернул пустой список вариантов"
-            )
-
-        return response.choices[0].message.content or ""
-
-
-class OpenAISDKSessionFactory(LLMSessionFactoryProtocol):
-    """
-    Фабрика сессий поверх пакета `openai`.
-
-    SDK импортируется лениво: игра должна запускаться и без установленного
-    пакета, пока игрок не настроил ни одной модели.
-    """
-
-    @asynccontextmanager
-    async def open_session(
-        self, config: LLMProviderConfig, api_key: Optional[str]
-    ) -> AsyncIterator[ChatSessionProtocol]:
-        """
-        Открывает сессию на один запрос и гарантированно закрывает соединение.
-        """
-        try:
-            import openai
-            from openai import AsyncOpenAI
-        except ImportError as e:
-            raise LLMRequestFailedError(
-                config.id,
-                config.model,
-                "не установлен пакет 'openai' (pip install openai)",
-            ) from e
-
-        sdk_client = AsyncOpenAI(
-            # Совместимые локальные серверы ключ игнорируют, но SDK требует непустую строку
-            api_key=api_key or "no-key-required",
-            base_url=config.base_url,
-            timeout=config.timeout_seconds,
-            max_retries=config.max_retries,
-        )
-        try:
-            yield _OpenAISDKSession(sdk_client, config, errors=openai)
-        finally:
-            await sdk_client.close()
-
-
-# ==================================================================
-# КЛИЕНТ
-# ==================================================================
-
-
-class OpenAICompatibleClient(LLMClientProtocol):
-    """
-    Клиент одного провайдера: собирает сообщения, берет ключ, открывает сессию
-    на запрос и разбирает ответ.
-
-    Сессия живет ровно один вызов: ключ мог смениться ротацией или настройками
-    между двумя обращениями, а держать открытое соединение на всю партию незачем.
+    Управляет HTTP-сессиями для одного провайдера LLM.
+    Привязывает каждую сессию к конкретному ключу для оптимизации сетевых запросов.
     """
 
     def __init__(
         self,
-        config: LLMProviderConfig,
-        key_manager: Optional[ApiKeyManager] = None,
-        session_factory: Optional[LLMSessionFactoryProtocol] = None,
+        provider_id: str,
+        api_url: Optional[str],
+        rotator: APIKeyRotator,
+        proxy_url: Optional[str] = None,
     ) -> None:
-        self._config = config
-        self._keys = key_manager
-        self._sessions = session_factory or OpenAISDKSessionFactory()
+        self.provider_id = provider_id
+        self.api_url = api_url
+        self.rotator = rotator
+        self.proxy_url = proxy_url
 
-    @property
-    def config(self) -> LLMProviderConfig:
-        return self._config
+        self._sessions: Dict[str, AsyncOpenAI] = {}
+        self._default_session: Optional[AsyncOpenAI] = None
 
-    async def generate_text(
-        self,
-        system_prompt: str,
-        user_prompt: str,
-        temperature: float = 0.8,
-        max_tokens: Optional[int] = None,
-    ) -> str:
+        # Нормализация URL
+        if self.api_url and not self.api_url.startswith(("http://", "https://")):
+            if "localhost" in self.api_url or "127.0.0.1" in self.api_url:
+                self.api_url = f"http://{self.api_url}"
+            else:
+                self.api_url = f"https://{self.api_url}"
+
+        url_log = self.api_url if self.api_url else "официальный эндпоинт OpenAI"
+        main_logger.info(f"[LLM] Клиент '{self.provider_id}' инициализирован ({url_log}).")
+
+    def get_session(self) -> AsyncOpenAI:
         """
-        Генерация свободного художественного текста (письма, летописи, слухи).
+        Отдает закэшированную сессию OpenAI с активным "живым" ключом.
         """
-        messages = [
-            ChatMessage(role=ChatRole.SYSTEM, content=system_prompt),
-            ChatMessage(role=ChatRole.USER, content=user_prompt),
-        ]
-        return await self._complete(messages, temperature=temperature, max_tokens=max_tokens)
+        api_key = self.rotator.get_next_key()
 
-    async def generate_structured(
-        self,
-        system_prompt: str,
-        user_prompt: str,
-        response_model: type[T],
-        temperature: float = 0.6,
-    ) -> T:
-        """
-        Генерация строго валидированного JSON по Pydantic-модели.
-
-        Если ответ все равно не проходит валидацию, модель
-        переспрашивают с текстом ошибки - у локальных моделей это основной путь
-        к валидному ответу.
-        """
-
-        schema = _harden_schema(response_model.model_json_schema())
-        response_format = self._build_response_format(response_model.__name__, schema)
-
-        system_content = system_prompt
-        if not self._config.supports_json_schema:
-            system_content = (
-                f"{system_prompt}\n\n"
-                "Ответь строго одним JSON-объектом по схеме ниже, без пояснений и markdown.\n"
-                f"{json.dumps(schema, ensure_ascii=False)}"
-            )
-
-        messages = [
-            ChatMessage(role=ChatRole.SYSTEM, content=system_content),
-            ChatMessage(role=ChatRole.USER, content=user_prompt),
-        ]
-
-        last_error = ""
-        for attempt in range(self._config.structured_retries + 1):
-            raw = await self._complete(
-                messages, temperature=temperature, response_format=response_format
-            )
-            try:
-                return response_model.model_validate_json(_extract_json(raw))
-            except (ValidationError, ValueError) as e:
-                last_error = str(e)
-                main_logger.warning(
-                    f"[LLM] Модель '{self._config.model}' вернула невалидный JSON "
-                    f"(попытка {attempt + 1}): {last_error}"
+        # Если ключей нет, предполагаем, что это локальная модель
+        if not api_key:
+            if self._default_session is None:
+                http_client = (
+                    httpx.AsyncClient(proxy=self.proxy_url) if self.proxy_url else None
                 )
-                messages = [
-                    *messages,
-                    ChatMessage(role=ChatRole.ASSISTANT, content=raw),
-                    ChatMessage(
-                        role=ChatRole.USER,
-                        content=(
-                            "Твой ответ не прошел валидацию схемы. Ошибка:\n"
-                            f"{last_error}\n"
-                            "Верни исправленный JSON-объект и ничего кроме него."
-                        ),
-                    ),
-                ]
-
-        raise LLMResponseFormatError(self._config.model, last_error)
-
-    # ==================================================================
-    # СЛУЖЕБНОЕ
-    # ==================================================================
-
-    async def _complete(
-        self,
-        messages: list[ChatMessage],
-        temperature: float,
-        max_tokens: Optional[int] = None,
-        response_format: Optional[dict[str, Any]] = None,
-    ) -> str:
-        """
-        Выполняет один запрос и попутно ведет учет здоровья ключа.
-        """
-        api_key = self._acquire_key()
-
-        try:
-            async with self._sessions.open_session(self._config, api_key) as session:
-                answer = await session.complete(
-                    messages=messages,
-                    temperature=temperature,
-                    max_tokens=max_tokens,
-                    response_format=response_format,
+                self._default_session = AsyncOpenAI(
+                    api_key="no-key-required",
+                    base_url=self.api_url,
+                    http_client=http_client,
                 )
-        except LLMAuthorizationError:
-            self._report(lambda keys, key: keys.report_rejected(self._config.id, key), api_key)
-            raise
-        except LLMRateLimitError:
-            self._report(
-                lambda keys, key: keys.report_rate_limited(self._config.id, key), api_key
+            return self._default_session
+
+        # Кэшируем сессии по ключу, чтобы httpx переиспользовал keep-alive соединения
+        if api_key not in self._sessions:
+            http_client = httpx.AsyncClient(proxy=self.proxy_url) if self.proxy_url else None
+            self._sessions[api_key] = AsyncOpenAI(
+                api_key=api_key,
+                base_url=self.api_url,
+                http_client=http_client,
             )
-            raise
 
-        self._report(lambda keys, key: keys.report_success(self._config.id, key), api_key)
-        return answer
+        return self._sessions[api_key]
 
-    def _acquire_key(self) -> Optional[str]:
+    async def close(self) -> None:
         """
-        Берет ключ у менеджера. Провайдеру без ключа (локальная модель) ключ не нужен.
+        Корректно закрывает все активные пулы HTTP-соединений.
+        Вызывается при остановке сервера игры.
         """
-        if not self._config.requires_api_key or self._keys is None:
-            return None
-        return self._keys.get_key(self._config.id)
+        for session in self._sessions.values():
+            await session.close()
+        self._sessions.clear()
 
-    def _report(self, report: Any, api_key: Optional[str]) -> None:
-        if self._keys is not None and api_key is not None:
-            report(self._keys, api_key)
+        if self._default_session:
+            await self._default_session.close()
+            self._default_session = None
 
-    def _build_response_format(self, name: str, schema: dict[str, Any]) -> dict[str, Any]:
-        if not self._config.supports_json_schema:
-            # Минимальный общий знаменатель: просто попросить JSON
-            return {"type": "json_object"}
-
-        return {
-            "type": "json_schema",
-            "json_schema": {
-                "name": name,
-                "schema": schema,
-                "strict": self._config.strict_json_schema,
-            },
-        }
-
-
-def _harden_schema(schema: dict[str, Any]) -> dict[str, Any]:
-    """
-    Дополняет схему Pydantic запретом лишних полей.
-
-    Строгий режим провайдеров требует явного additionalProperties: false у
-    каждого объекта, а Pydantic его не проставляет.
-    """
-    if schema.get("type") == "object":
-        schema.setdefault("additionalProperties", False)
-
-    for key in ("properties", "$defs", "definitions"):
-        for value in schema.get(key, {}).values():
-            if isinstance(value, dict):
-                _harden_schema(value)
-
-    for key in ("items", "additionalItems"):
-        value = schema.get(key)
-        if isinstance(value, dict):
-            _harden_schema(value)
-
-    for key in ("anyOf", "oneOf", "allOf"):
-        for value in schema.get(key, []):
-            if isinstance(value, dict):
-                _harden_schema(value)
-
-    return schema
-
-
-def _extract_json(raw: str) -> str:
-    """
-    Выковыривает JSON из ответа модели, снимая markdown-обертку, если она есть.
-    """
-    fenced = _JSON_FENCE.match(raw)
-    return fenced.group(1) if fenced else raw.strip()
+        main_logger.info(f"[LLM] Все HTTP-сессии клиента '{self.provider_id}' закрыты.")

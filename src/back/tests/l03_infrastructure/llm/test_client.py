@@ -1,222 +1,131 @@
 """
-Тесты OpenAI-совместимого клиента: сессии, структурные ответы и здоровье ключей.
+Тесты клиента-обертки: нормализация адреса эндпоинта, кэш сессий по ключам
+и корректное закрытие пулов соединений.
 """
 
-import json
-
 import pytest
+from openai import AsyncOpenAI
 
-from src.back.l01_domain.exceptions import (
-    LLMAuthorizationError,
-    LLMKeyMissingError,
-    LLMRateLimitError,
-    LLMResponseFormatError,
-)
-from src.back.l01_domain.llm.constants import ApiKeyStatus, ChatRole
-from src.back.l01_domain.llm.models.provider import LLMProviderConfig
-from src.back.l01_domain.protocols.llm import LLMClientProtocol
-from src.back.l03_infrastructure.llm.client import OpenAICompatibleClient
-from src.back.l03_infrastructure.llm.keys.manager import ApiKeyManager
-from src.back.tests.l03_infrastructure.llm.conftest import (
-    FakeSessionFactory,
-    WarCouncilDecision,
+from src.back.l03_infrastructure.llm.client import LLMClient
+from src.back.l03_infrastructure.llm.keys.rotator import (
+    AllKeysExhaustedError,
+    APIKeyRotator,
 )
 
 
-def _keys(provider_id: str = "openrouter", *values: str) -> ApiKeyManager:
-    manager = ApiKeyManager()
-    manager.set_keys(provider_id, list(values) or ["sk-test"])
-    return manager
+def make_client(keys=None, api_url=None, proxy_url=None) -> LLMClient:
+    rotator = APIKeyRotator(provider_id="test_provider", keys=list(keys or []))
+    return LLMClient(
+        provider_id="test_provider",
+        api_url=api_url,
+        rotator=rotator,
+        proxy_url=proxy_url,
+    )
 
 
-class TestFreeTextGeneration:
-    async def test_prompts_become_system_and_user_messages(self, cloud_provider):
-        sessions = FakeSessionFactory(["Орки идут на юг."])
-        client = OpenAICompatibleClient(cloud_provider, _keys(), sessions)
+class TestUrlNormalization:
+    @pytest.mark.parametrize(
+        "raw, expected",
+        [
+            ("localhost:1234/v1", "http://localhost:1234/v1"),
+            ("127.0.0.1:8080/v1", "http://127.0.0.1:8080/v1"),
+            ("openrouter.ai/api/v1", "https://openrouter.ai/api/v1"),
+            ("https://openrouter.ai/api/v1", "https://openrouter.ai/api/v1"),
+            ("http://localhost:1234/v1", "http://localhost:1234/v1"),
+        ],
+    )
+    def test_scheme_is_added_by_host_kind(self, raw: str, expected: str):
+        client = make_client(api_url=raw)
 
-        answer = await client.generate_text(
-            system_prompt="Ты - летописец.", user_prompt="Опиши битву.", temperature=0.9
-        )
+        assert client.api_url == expected
 
-        assert answer == "Орки идут на юг."
-        messages = sessions.last_request["messages"]
-        assert [m.role for m in messages] == [ChatRole.SYSTEM, ChatRole.USER]
-        assert messages[0].content == "Ты - летописец."
-        assert sessions.last_request["temperature"] == 0.9
+    def test_none_url_means_official_openai_endpoint(self):
+        client = make_client(api_url=None)
 
-    async def test_session_is_closed_after_request(self, cloud_provider):
-        sessions = FakeSessionFactory(["ответ"])
-        client = OpenAICompatibleClient(cloud_provider, _keys(), sessions)
-
-        await client.generate_text("system", "user")
-
-        assert sessions.closed_sessions == 1
-
-    async def test_session_is_closed_even_when_provider_fails(self, cloud_provider):
-        sessions = FakeSessionFactory(
-            [LLMRateLimitError("openrouter", "test-cloud-model", "квота")]
-        )
-        client = OpenAICompatibleClient(cloud_provider, _keys(), sessions)
-
-        with pytest.raises(LLMRateLimitError):
-            await client.generate_text("system", "user")
-
-        assert sessions.closed_sessions == 1
+        assert client.api_url is None
+        assert str(client.get_session().base_url).startswith("https://api.openai.com")
 
 
-class TestStructuredGeneration:
-    async def test_valid_json_becomes_pydantic_model(self, cloud_provider):
-        payload = {"declare_war": True, "tribute_gold": 0, "reason": "Оскорбление посла"}
-        sessions = FakeSessionFactory([json.dumps(payload)])
-        client = OpenAICompatibleClient(cloud_provider, _keys(), sessions)
+class TestSessions:
+    def test_session_without_keys_is_shared_and_keyless(self):
+        client = make_client(keys=[], api_url="localhost:1234/v1")
 
-        decision = await client.generate_structured(
-            "Ты - лорд.", "Ответь на ультиматум.", WarCouncilDecision
-        )
+        first = client.get_session()
+        second = client.get_session()
 
-        assert isinstance(decision, WarCouncilDecision)
-        assert decision.declare_war is True
-        assert decision.reason == "Оскорбление посла"
+        assert isinstance(first, AsyncOpenAI)
+        assert first is second  # локальной модели хватает одной сессии
+        assert first.api_key == "no-key-required"
+        assert str(first.base_url).startswith("http://localhost:1234")
 
-    async def test_markdown_fence_is_stripped(self, cloud_provider):
-        """Модели упорно заворачивают JSON в ```json, даже когда их просят не делать этого."""
-        body = json.dumps({"declare_war": False, "tribute_gold": 50, "reason": "Мир выгоднее"})
-        sessions = FakeSessionFactory([f"```json\n{body}\n```"])
-        client = OpenAICompatibleClient(cloud_provider, _keys(), sessions)
+    def test_each_key_gets_its_own_cached_session(self):
+        client = make_client(keys=["alpha", "bravo"])
 
-        decision = await client.generate_structured("system", "user", WarCouncilDecision)
+        first = client.get_session()
+        second = client.get_session()
+        third = client.get_session()  # круг замкнулся, снова alpha
 
-        assert decision.tribute_gold == 50
+        assert first.api_key == "alpha"
+        assert second.api_key == "bravo"
+        assert third is first  # сессия переиспользуется ради keep-alive
+        assert len(client._sessions) == 2
 
-    async def test_invalid_json_triggers_corrective_retry(self, cloud_provider):
-        good = json.dumps({"declare_war": False, "tribute_gold": 0, "reason": "Передумал"})
-        sessions = FakeSessionFactory(["не JSON, а болтовня", good])
-        client = OpenAICompatibleClient(cloud_provider, _keys(), sessions)
+    def test_banned_key_is_not_reused(self):
+        client = make_client(keys=["alpha", "bravo"])
+        client.rotator.ban_key("alpha")
 
-        decision = await client.generate_structured("system", "user", WarCouncilDecision)
+        assert {client.get_session().api_key for _ in range(4)} == {"bravo"}
 
-        assert decision.reason == "Передумал"
-        assert len(sessions.requests) == 2
+    def test_exhausted_keys_propagate_to_caller(self):
+        client = make_client(keys=["alpha"])
+        client.rotator.cooldown_key("alpha", seconds=60)
 
-        # Во второй заход модель получает свой прошлый ответ и текст ошибки
-        retry_messages = sessions.requests[1]["messages"]
-        assert retry_messages[-2].role is ChatRole.ASSISTANT
-        assert retry_messages[-2].content == "не JSON, а болтовня"
-        assert "не прошел валидацию" in retry_messages[-1].content
+        with pytest.raises(AllKeysExhaustedError):
+            client.get_session()
 
-    async def test_hopeless_model_raises_format_error(self, cloud_provider):
-        sessions = FakeSessionFactory(["мусор", "снова мусор"])
-        client = OpenAICompatibleClient(cloud_provider, _keys(), sessions)
+    def test_proxy_url_does_not_break_session_creation(self):
+        client = make_client(keys=["alpha"], proxy_url="http://127.0.0.1:8888")
 
-        with pytest.raises(LLMResponseFormatError):
-            await client.generate_structured("system", "user", WarCouncilDecision)
+        session = client.get_session()
 
-        assert len(sessions.requests) == 2  # исходный запрос плюс один переспрос
-
-    async def test_retries_can_be_disabled(self, cloud_provider):
-        config = cloud_provider.model_copy(update={"structured_retries": 0})
-        sessions = FakeSessionFactory(["мусор"])
-        client = OpenAICompatibleClient(config, _keys(), sessions)
-
-        with pytest.raises(LLMResponseFormatError):
-            await client.generate_structured("system", "user", WarCouncilDecision)
-
-        assert len(sessions.requests) == 1
-
-    async def test_schema_is_sent_machine_readable_when_supported(self, cloud_provider):
-        payload = json.dumps({"declare_war": False, "tribute_gold": 0, "reason": "ok"})
-        sessions = FakeSessionFactory([payload])
-        client = OpenAICompatibleClient(cloud_provider, _keys(), sessions)
-
-        await client.generate_structured("Ты - лорд.", "user", WarCouncilDecision)
-
-        response_format = sessions.last_request["response_format"]
-        assert response_format["type"] == "json_schema"
-        assert response_format["json_schema"]["name"] == "WarCouncilDecision"
-        # Строгий режим провайдеров требует явного запрета лишних полей
-        assert response_format["json_schema"]["schema"]["additionalProperties"] is False
-        assert "schema" not in sessions.last_request["messages"][0].content
-
-    async def test_schema_falls_back_into_the_prompt_for_simple_servers(self, local_provider):
-        payload = json.dumps({"declare_war": False, "tribute_gold": 0, "reason": "ok"})
-        sessions = FakeSessionFactory([payload])
-        client = OpenAICompatibleClient(local_provider, key_manager=None, session_factory=sessions)
-
-        await client.generate_structured("Ты - лорд.", "user", WarCouncilDecision)
-
-        assert sessions.last_request["response_format"] == {"type": "json_object"}
-        system_content = sessions.last_request["messages"][0].content
-        assert "declare_war" in system_content
+        assert isinstance(session, AsyncOpenAI)
+        assert session.api_key == "alpha"
 
 
-class TestKeyLifecycle:
-    async def test_key_is_taken_from_the_pool(self, cloud_provider):
-        sessions = FakeSessionFactory(["ответ"])
-        client = OpenAICompatibleClient(cloud_provider, _keys("openrouter", "sk-alpha"), sessions)
+class TestClosing:
+    async def test_close_releases_all_sessions(self):
+        client = make_client(keys=["alpha", "bravo"])
+        first = client.get_session()
+        second = client.get_session()
 
-        await client.generate_text("system", "user")
+        await client.close()
 
-        assert sessions.opened_with_keys == ["sk-alpha"]
+        assert first.is_closed()
+        assert second.is_closed()
+        assert client._sessions == {}
 
-    async def test_local_provider_needs_no_key(self, local_provider):
-        sessions = FakeSessionFactory(["ответ"])
-        client = OpenAICompatibleClient(local_provider, key_manager=None, session_factory=sessions)
+    async def test_close_releases_default_session(self):
+        client = make_client(keys=[], api_url="localhost:1234/v1")
+        session = client.get_session()
 
-        await client.generate_text("system", "user")
+        await client.close()
 
-        assert sessions.opened_with_keys == [None]
+        assert session.is_closed()
+        assert client._default_session is None
 
-    async def test_request_without_keys_fails_fast(self, cloud_provider):
-        sessions = FakeSessionFactory(["ответ"])
-        client = OpenAICompatibleClient(cloud_provider, ApiKeyManager(), sessions)
+    async def test_close_is_safe_without_any_session(self):
+        client = make_client(keys=["alpha"])
 
-        with pytest.raises(LLMKeyMissingError):
-            await client.generate_text("system", "user")
+        await client.close()  # не должно падать
 
-        assert sessions.requests == []
+        assert client._sessions == {}
 
-    async def test_rejected_key_is_disabled(self, cloud_provider):
-        keys = _keys("openrouter", "sk-bad")
-        sessions = FakeSessionFactory(
-            [LLMAuthorizationError("openrouter", "test-cloud-model", "401")]
-        )
-        client = OpenAICompatibleClient(cloud_provider, keys, sessions)
+    async def test_client_is_usable_again_after_close(self):
+        client = make_client(keys=["alpha"])
+        first = client.get_session()
+        await client.close()
 
-        with pytest.raises(LLMAuthorizationError):
-            await client.generate_text("system", "user")
+        second = client.get_session()
 
-        assert keys.list_keys("openrouter")[0].status is ApiKeyStatus.REVOKED
-
-    async def test_rate_limited_key_goes_to_cooldown(self, cloud_provider):
-        keys = _keys("openrouter", "sk-tired")
-        sessions = FakeSessionFactory(
-            [LLMRateLimitError("openrouter", "test-cloud-model", "429")]
-        )
-        client = OpenAICompatibleClient(cloud_provider, keys, sessions)
-
-        with pytest.raises(LLMRateLimitError):
-            await client.generate_text("system", "user")
-
-        assert keys.list_keys("openrouter")[0].status is ApiKeyStatus.COOLING_DOWN
-
-    async def test_success_keeps_key_healthy(self, cloud_provider):
-        keys = _keys("openrouter", "sk-fine")
-        sessions = FakeSessionFactory(["ответ"])
-        client = OpenAICompatibleClient(cloud_provider, keys, sessions)
-
-        await client.generate_text("system", "user")
-
-        assert keys.list_keys("openrouter")[0].status is ApiKeyStatus.ACTIVE
-
-
-class TestProtocolCompliance:
-    def test_client_satisfies_domain_protocol(self, cloud_provider):
-        client = OpenAICompatibleClient(cloud_provider, ApiKeyManager(), FakeSessionFactory())
-
-        assert isinstance(client, LLMClientProtocol)
-
-    def test_provider_config_is_immutable(self):
-        config = LLMProviderConfig(id="p", title="P", model="m")
-
-        with pytest.raises(Exception):
-            config.model = "другая"  # type: ignore[misc]
+        assert second is not first
+        assert not second.is_closed()
