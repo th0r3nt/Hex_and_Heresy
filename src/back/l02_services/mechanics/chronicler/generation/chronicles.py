@@ -20,16 +20,16 @@ from src.back.l01_domain.world.models.chronicle import (
     LLMChronicleResponse,
     LLMEpitaphResponse,
 )
+from src.back.l03_infrastructure.llm.prompt.builder import PromptBuilder
+from src.back.l03_infrastructure.llm.prompt.catalog import (
+    PromptCatalog,
+    get_faction_prompt_path,
+)
 
-# Температура: летопись - художественный текст, эпитафия сдержаннее
 CHRONICLE_TEMPERATURE = 0.85
 EPITAPH_TEMPERATURE = 0.75
 
-
-# Культурная стилизация ответа под расу летописца.
-# TODO: перевести на prompt_builder и файлы l03_infrastructure/llm/prompt/
-# (roles/chronicler.md + factions/*.md), когда сборщик промптов будет готов.
-
+# Перенести в llm/prompts/
 RACE_STYLE_FRAGMENTS: dict[FactionRace, str] = {
     FactionRace.HUMANS: (
         "Ты пишешь в дорогой книге ровным фэнтезийным слогом. В тексте уместны "
@@ -91,8 +91,11 @@ class ChronicleGenerator:
     Сам ничего не сохраняет и не публикует: это делает фасад.
     """
 
-    def __init__(self, llm_client: LLMClientProtocol) -> None:
+    def __init__(
+        self, llm_client: LLMClientProtocol, prompt_builder: Optional[PromptBuilder] = None
+    ) -> None:
         self._llm = llm_client
+        self._prompt_builder = prompt_builder or PromptBuilder()
 
     async def generate_chronicle(
         self,
@@ -151,36 +154,48 @@ class ChronicleGenerator:
     def _build_chronicle_prompt(
         self, dossier: BattleDossier, faction: Optional[Faction]
     ) -> str:
-        lines = [BASE_CHRONICLER_PROMPT, "", race_style_fragment(faction)]
+        blocks = [
+            PromptCatalog.BASE.PERSONA,
+            PromptCatalog.ROLES.CHRONICLER,
+            PromptCatalog.BASE.MECHANICS.TACTICAL,
+        ]
+        if faction is not None:
+            blocks.append(get_faction_prompt_path(faction.race))
+
+        static_context = self._prompt_builder.build(blocks)
+
+        dynamic_lines = [
+            "Тебе приносят сухую сводку сражения: числа потерь, имена отрядов и переломные моменты.",
+            "Преврати эту математику в живой текст.",
+            "Не выдумывай события, которых нет в сводке.",
+        ]
 
         if faction is not None:
-            lines.append(
-                f"Ты служишь фракции '{faction.name}' и пишешь для ее правителя: "
-                "чужие потери можешь считать заслуженными."
+            dynamic_lines.append(
+                f"Ты служишь фракции '{faction.name}': чужие потери считай заслуженными."
             )
         if dossier.is_siege:
-            lines.append("Это был штурм цитадели - событие, которое запомнят надолго.")
+            dynamic_lines.append("Это был штурм цитадели - событие, которое запомнят надолго.")
         if dossier.is_massacre:
-            lines.append("Одну из сторон вырезали почти полностью: это была резня.")
+            dynamic_lines.append("Одну из сторон вырезали почти полностью: это была резня.")
 
-        lines.append(
-            "\nОтветь строго в поля: title (название сражения), quote (короткая "
-            "хлесткая фраза эпохи), body (сам рассказ на 2-5 абзацев)."
-        )
-        return "\n".join(lines)
+        dynamic_context = "\n".join(dynamic_lines)
+        return f"{static_context}\n\n{dynamic_context}"
 
-    def _build_epitaph_prompt(
-        self, subject: FallenSubject, faction: Optional[Faction]
-    ) -> str:
+    def _build_epitaph_prompt(self, subject: FallenSubject, faction: Optional[Faction]) -> str:
+        blocks = [PromptCatalog.BASE.PERSONA, PromptCatalog.ROLES.CHRONICLER]
+        if faction is not None:
+            blocks.append(get_faction_prompt_path(faction.race))
+
+        static_context = self._prompt_builder.build(blocks)
         who = "герое" if subject.kind == FallenKind.HERO else "именном отряде"
-        return (
-            f"{BASE_CHRONICLER_PROMPT}\n\n{race_style_fragment(faction)}\n"
-            f"Сейчас ты пишешь не летопись боя, а надгробную запись о {who} "
-            "в Зал павших - ее прочтут через сотню тактов, когда об этой войне "
-            "уже забудут.\n\n"
-            "Ответь строго в поля: title (заголовок надгробия) и epitaph "
-            "(некролог в несколько предложений: кем они были и как погибли)."
+
+        dynamic_context = (
+            f"Сейчас ты пишешь не летопись боя, а надгробную запись о {who} в Зал павших.\n"
+            "Напиши некролог в несколько предложений: кем они были и как погибли."
         )
+
+        return f"{static_context}\n\n{dynamic_context}"
 
     def _describe_subject(self, subject: FallenSubject) -> str:
         """

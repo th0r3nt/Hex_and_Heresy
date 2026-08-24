@@ -12,6 +12,8 @@
 
 from typing import Optional
 
+from src.back.utils.event.registry import GameEvents
+
 from src.back.l01_domain.factions.constants import (
     MAX_AUTO_NEGOTIATION_ROUNDS,
     DiplomaticActionType,
@@ -35,8 +37,9 @@ from src.back.l01_domain.factions.models.faction import Faction
 from src.back.l01_domain.protocols.events import EventBusProtocol
 from src.back.l01_domain.protocols.llm import LLMClientProtocol
 from src.back.l01_domain.world.models.state import WorldState
-from src.back.utils.event.registry import GameEvents
 
+from src.back.l03_infrastructure.llm.prompt.builder import PromptBuilder
+from src.back.l03_infrastructure.llm.prompt.catalog import PromptCatalog, get_faction_prompt_path
 
 # ==================================================================
 # СЕРВИС
@@ -52,9 +55,11 @@ class NegotiationService:
         self,
         llm_client: LLMClientProtocol,
         event_bus: Optional[EventBusProtocol] = None,
+        prompt_builder: Optional[PromptBuilder] = None,
     ) -> None:
         self._llm = llm_client
         self._event_bus = event_bus
+        self._prompt_builder = prompt_builder or PromptBuilder()
 
     async def answer_dispatch(
         self, world_state: WorldState, dispatch: Dispatch
@@ -273,35 +278,35 @@ class NegotiationService:
         counterpart_faction: Faction,
         ambassador: Optional[Ambassador] = None,
     ) -> str:
-        """
-        Системный промпт лорда, принимающего письмо или посла.
-        """
-        # TODO: Собирать из markdown-блоков (roles/lord.md, factions/*.md, lore/)
-        # через llm.prompt_builder, когда он появится. Пока каркас в коде.
+        # Собираем статический базис
+        static_context = self._prompt_builder.build([
+            PromptCatalog.BASE.PERSONA,
+            PromptCatalog.BASE.MECHANICS.STRATEGIC,
+            PromptCatalog.ROLES.LORD,
+            get_faction_prompt_path(lord_faction.race),
+            PromptCatalog.LORE.BASIC.MEDIUM
+        ])
+
         lord = lord_faction.lord
         guest = ""
         if ambassador is not None:
             traits = ", ".join(ambassador.traits) if ambassador.traits else "неизвестны"
             guest = (
                 f"\nПеред тобой посол {ambassador.name} (черты: {traits}). "
-                "Он стоит в твоем тронном зале, и его жизнь в твоей власти: "
-                "за дерзость ты вправе казнить его, но это означает войну, поэтому обдумывай свои решения."
+                "За дерзость ты вправе казнить его, но это означает войну, поэтому обдумывай решения."
             )
 
-        return (
-            f"Ты - {lord.display_name}, правитель фракции '{lord_faction.name}' "
-            f"(раса: {lord_faction.race.value}) в темном фэнтези мире Hex & Heresy.\n"
+        dynamic_context = (
+            f"Ты - {lord.display_name}, правитель фракции '{lord_faction.name}'.\n"
             f"Твой архетип: {lord.archetype.name}. {lord.archetype.description}\n"
             f"Твоя черта: {lord.trait.name}. {lord.trait.text_fragment}\n\n"
-            f"С тобой ведет переговоры фракция '{counterpart_faction.name}' "
-            f"(раса: {counterpart_faction.race.value}).{guest}\n\n"
+            f"С тобой ведет переговоры фракция '{counterpart_faction.name}'.{guest}\n\n"
             f"{self._render_relation_context(world_state, lord_faction, counterpart_faction)}\n\n"
-            "Правила ответа:\n"
-            "1. Не ломай четвертую стену, говори как правитель своей расы.\n"
-            "2. В reply_text пиши свою речь, в action - решение, только если ты его принял.\n"
-            "3. Решение принимай только тогда, когда условия тебя действительно устроили "
-            "или окончательно взбесили. Обычные разговоры оставляет action пустым."
+            "(Правила ответа:\n"
+            "В reply_text пиши свою речь, в action - решение, только если ты его принял.)"
         )
+
+        return f"{static_context}\n\n{dynamic_context}"
 
     def _build_envoy_prompt(
         self,
@@ -310,23 +315,25 @@ class NegotiationService:
         envoy_faction: Faction,
         host_faction: Faction,
     ) -> str:
-        """
-        Системный промпт посла, торгующегося по директиве игрока.
-        """
-        # TODO: Аналогично - переехать на roles/diplomat.md через prompt_builder.
+        static_context = self._prompt_builder.build([
+            PromptCatalog.BASE.PERSONA,
+            PromptCatalog.BASE.MECHANICS.STRATEGIC,
+            PromptCatalog.ROLES.DIPLOMAT,
+            get_faction_prompt_path(envoy_faction.race)
+        ])
+
         traits = ", ".join(ambassador.traits) if ambassador.traits else "обычные"
         directive = ambassador.directive or "Добиться мира на любых разумных условиях."
 
-        return (
-            f"Ты - {ambassador.name}, посол фракции '{envoy_faction.name}' "
-            f"(раса: {envoy_faction.race.value}). Твои черты: {traits}.\n"
-            f"Ты стоишь в цитадели фракции '{host_faction.name}' "
-            f"(раса: {host_faction.race.value}) перед ее правителем.\n\n"
+        dynamic_context = (
+            f"Ты - {ambassador.name}, посол фракции '{envoy_faction.name}'. Твои черты: {traits}.\n"
+            f"Ты стоишь в цитадели фракции '{host_faction.name}' перед ее правителем.\n\n"
             f"Директива твоего лорда: {directive}\n\n"
             f"{self._render_relation_context(world_state, envoy_faction, host_faction)}\n\n"
-            "Правила: говори репликами от первого лица, "
-            "держись рамок директивы и помни, что за дерзость тебя могут казнить."
+            "Говори репликами от первого лица и помни, что за дерзость тебя могут казнить."
         )
+
+        return f"{static_context}\n\n{dynamic_context}"
 
     def _render_relation_context(
         self, world_state: WorldState, faction: Faction, counterpart: Faction

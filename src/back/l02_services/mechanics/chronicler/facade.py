@@ -12,6 +12,8 @@
 
 from typing import Any, Optional
 
+from src.back.utils.logger import main_logger
+
 from src.back.l01_domain.army.models.card.squad import Squad
 from src.back.l01_domain.combat.models.reports import TacticalTurnReport
 from src.back.l01_domain.combat.models.state import TacticalBattleState
@@ -41,7 +43,8 @@ from src.back.l02_services.mechanics.chronicler.archives.history import Chronicl
 from src.back.l02_services.mechanics.chronicler.generation.battles import BattleLogCollector
 from src.back.l02_services.mechanics.chronicler.generation.chronicles import ChronicleGenerator
 from src.back.l02_services.mechanics.chronicler.generation.rumors import RumorGenerator
-from src.back.utils.logger import main_logger
+
+from src.back.l03_infrastructure.llm.prompt.builder import PromptBuilder
 
 
 class ChroniclerFacade:
@@ -54,14 +57,18 @@ class ChroniclerFacade:
         llm_client: Optional[LLMClientProtocol] = None,
         repository: Optional[ChroniclerRepositoryProtocol] = None,
         event_bus: Optional[EventBusProtocol] = None,
+        prompt_builder: Optional[PromptBuilder] = None,
     ) -> None:
         self._event_bus = event_bus
         self._collector = BattleLogCollector()
         self._archive = ChronicleArchive(repository=repository, event_bus=event_bus)
         self._hall = HallOfFallen(repository=repository, event_bus=event_bus)
 
-        self._chronicles = ChronicleGenerator(llm_client) if llm_client is not None else None
-        self._rumors = RumorGenerator(llm_client) if llm_client is not None else None
+        pb = prompt_builder or PromptBuilder()
+        self._chronicles = (
+            ChronicleGenerator(llm_client, pb) if llm_client is not None else None
+        )
+        self._rumors = RumorGenerator(llm_client, pb) if llm_client is not None else None
 
     # ==================================================================
     # ХОД БОЯ
@@ -168,7 +175,7 @@ class ChroniclerFacade:
         await self._archive.record_rumor(world_state, rumor)
 
         # сбрасываем таймер или откатываем его, чтобы слухи не генерировались каждый такт
-        world_state.ticks_since_last_battle = 0 
+        world_state.ticks_since_last_battle = 0
 
         return rumor
 

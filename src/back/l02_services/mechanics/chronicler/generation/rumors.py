@@ -15,8 +15,10 @@ from src.back.l01_domain.protocols.llm import LLMClientProtocol
 from src.back.l01_domain.world.constants import RUMOR_IDLE_TICKS_THRESHOLD
 from src.back.l01_domain.world.models.chronicle import RumorEntry
 from src.back.l01_domain.world.models.state import WorldState
-from src.back.l02_services.mechanics.chronicler.generation.chronicles import (
-    race_style_fragment,
+from src.back.l03_infrastructure.llm.prompt.builder import PromptBuilder
+from src.back.l03_infrastructure.llm.prompt.catalog import (
+    PromptCatalog,
+    get_faction_prompt_path,
 )
 from src.back.utils.logger import main_logger
 
@@ -38,7 +40,7 @@ BASE_RUMOR_PROMPT = (
     "3. Никаких обращений к игроку и никаких пояснений - только сам слух.\n"
     "Пример тона: «Торговцы говорят, что барон опять поднял налоги. "
     "В Черных топях неспокойно»."
-) 
+)
 # TODO: завязать слухи летописца на реальных событиях (напр. если барон отправит караван-экспедицию)
 
 
@@ -47,8 +49,11 @@ class RumorGenerator:
     Собирает обстановку на глобальной карте и просит модель выдать слух.
     """
 
-    def __init__(self, llm_client: LLMClientProtocol) -> None:
+    def __init__(
+        self, llm_client: LLMClientProtocol, prompt_builder: Optional[PromptBuilder] = None
+    ) -> None:
         self._llm = llm_client
+        self._prompt_builder = prompt_builder or PromptBuilder()
 
     def should_speak(
         self,
@@ -114,7 +119,9 @@ class RumorGenerator:
             lines.append(f"- Войны: {wars}.")
 
         if faction is not None:
-            lines.append(f"- Ты пишешь для фракции '{faction.name}' (раса: {faction.race.value}).")
+            lines.append(
+                f"- Ты пишешь для фракции '{faction.name}' (раса: {faction.race.value})."
+            )
             food = faction.resources.get(ResourceType.FOOD, 0.0)
             if food < RUMOR_HUNGER_THRESHOLD:
                 lines.append(f"- В закромах фракции осталось еды: {food:.0f}. Люди голодают.")
@@ -144,4 +151,19 @@ class RumorGenerator:
         return "; ".join(wars)
 
     def _build_prompt(self, faction: Optional[Faction]) -> str:
-        return f"{BASE_RUMOR_PROMPT}\n\n{race_style_fragment(faction)}"
+        blocks = [
+            PromptCatalog.BASE.PERSONA,
+            PromptCatalog.ROLES.CHRONICLER,
+            PromptCatalog.LORE.BASIC.LOW,
+        ]
+        if faction is not None:
+            blocks.append(get_faction_prompt_path(faction.race))
+
+        static_context = self._prompt_builder.build(blocks)
+
+        dynamic_context = (
+            "Боев нет, и ты собираешь то, о чем шепчутся на дорогах и в тавернах.\n"
+            "Напиши одну-две фразы. Никаких обращений к игроку — только сам слух."
+        )
+
+        return f"{static_context}\n\n{dynamic_context}"

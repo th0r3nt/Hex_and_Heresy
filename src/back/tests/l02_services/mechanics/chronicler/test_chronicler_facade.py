@@ -13,9 +13,12 @@ from src.back.utils.event.registry import GameEvents
 
 
 @pytest.fixture
-def facade(fake_llm, fake_repository, fake_bus) -> ChroniclerFacade:
+def facade(fake_llm, fake_repository, fake_bus, fake_prompt_builder) -> ChroniclerFacade:
     return ChroniclerFacade(
-        llm_client=fake_llm, repository=fake_repository, event_bus=fake_bus
+        llm_client=fake_llm, 
+        repository=fake_repository, 
+        event_bus=fake_bus,
+        prompt_builder=fake_prompt_builder
     )
 
 
@@ -133,7 +136,8 @@ class TestChronicleBattle:
 
         assert entry is not None
         assert entry.faction_id == "humans"
-        assert "инквизиции" in fake_llm.structured_calls[0]["system_prompt"]
+        # Проверяем, что в промпт ушел лорный файл людей, а не зеленокожих
+        assert "[factions/humans.md]" in fake_llm.structured_calls[0]["system_prompt"]
 
     @pytest.mark.asyncio
     async def test_skirmish_is_not_written(

@@ -15,6 +15,19 @@ from src.back.l01_domain.factions.models.lord import Lord, LordArchetype, LordTr
 from src.back.l01_domain.maps.models.strategic import HexCoordinates
 from src.back.l01_domain.world.models.state import WorldState
 
+from src.back.l03_infrastructure.llm.prompt.builder import PromptBuilder
+
+class FakePromptBuilder(PromptBuilder):
+    """Имитирует сборку, отдавая вместо текста сами ключи путей."""
+    def __init__(self):
+        super().__init__()
+
+    def build(self, keys: list[str]) -> str:
+        return "\n\n".join(f"[{key}]" for key in keys)
+
+@pytest.fixture
+def fake_prompt_builder() -> FakePromptBuilder:
+    return FakePromptBuilder()
 
 class FakeEventBus:
     """Фейковая шина событий для фиксации опубликованных сообщений."""

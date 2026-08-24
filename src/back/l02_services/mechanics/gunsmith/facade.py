@@ -14,6 +14,8 @@ from src.back.l02_services.mechanics.gunsmith.crafting import LLMGunsmithRespons
 from src.back.l02_services.mechanics.gunsmith.blueprints import BlueprintRegistry
 from src.back.l02_services.mechanics.gunsmith.validation.balance import EquipmentBalancer
 from src.back.l02_services.mechanics.gunsmith.validation.economy import EquipmentEconomist
+from src.back.l03_infrastructure.llm.prompt.builder import PromptBuilder
+from src.back.l03_infrastructure.llm.prompt.catalog import PromptCatalog, get_faction_prompt_path
 from src.back.utils.event.registry import GameEvents
 
 
@@ -22,20 +24,22 @@ class GunsmithFacade:
         self,
         llm_client: LLMClientProtocol,
         event_bus: Optional[EventBusProtocol] = None,
+        prompt_builder: Optional[PromptBuilder] = None,
     ) -> None:
         self._llm = llm_client
         self._event_bus = event_bus
+        self._prompt_builder = prompt_builder or PromptBuilder()
 
     async def draft_blueprint(
-        self, faction_id: str, user_request: str
+        self, world_state: WorldState, faction_id: str, user_request: str
     ) -> tuple[Optional[Equipment], str]:
-        """
-        Запрашивает у Мастера создание нового чертежа по текстовому описанию игрока.
-        Возвращает кортеж: (чертеж_если_одобрен, текстовый_ответ_мастера).
-        """
-        system_prompt = self._build_gunsmith_system_prompt(faction_id)
+        faction = world_state.get_faction(faction_id)
+        if not faction:
+            raise ValueError(f"Фракция {faction_id} не найдена")
 
-        # Вызываем LLM со строгой Pydantic-схемой
+        system_prompt = self._build_gunsmith_system_prompt(faction)
+
+        # Вызываем LLM
         response = await self._llm.generate_structured(
             system_prompt=system_prompt,
             user_prompt=f"Заказ от правителя:\n{user_request}",
@@ -53,13 +57,8 @@ class GunsmithFacade:
                 )
             return None, response.master_reply
 
-        # 1. Считаем баланс статов
         stats = EquipmentBalancer.normalize_stats(response.tier, response.priorities)
-
-        # 2. Считаем цену
         gold, material = EquipmentEconomist.calculate_cost(response.tier, response.tags)
-
-        # 3. Собираем чертеж
         draft = BlueprintRegistry.construct_draft(response, stats, gold, material)
 
         if self._event_bus:
@@ -102,20 +101,23 @@ class GunsmithFacade:
                 cost_material=draft.cost_material,
             )
 
-    def _build_gunsmith_system_prompt(self, faction_id: str) -> str:
-        """
-        Собирает промпт для LLM. На бою он будет брать markdown файлы из
-        инфраструктуры, но логика выглядит так:
-        """
-        # TODO: Интегрировать с llm.prompt_builder для склейки реальных файлов.
-        # Пока используем жесткий каркас для наглядности:
-        return (
-            "Ты — Оружейный мастер темного фэнтези мира Hex & Heresy.\n"
-            f"Твоя фракция: {faction_id}.\n"
-            "Твоя задача — оценивать заказы своего лорда на новое оружие, броню или аксессуары.\n\n"
-            "Правила:\n"
-            "1. Не нарушай лор. Отказывай в стиле своей расы.\n"
-            "2. Одобряй логичные заказы и распределяй приоритеты характеристик от 0 до 10.\n"
-            "3. Например, если оружие должно быть огромным и мощным, ставь высокий приоритет урону, но обязательно выкручивай штраф к весу.\n"
-            "4. Отвечай лорным комментарием в поле master_reply - ты общаешься с лордом лично."
+    def _build_gunsmith_system_prompt(self, faction) -> str:
+        # Собираем статический базис из файлов
+        static_context = self._prompt_builder.build([
+            PromptCatalog.BASE.PERSONA,
+            PromptCatalog.BASE.MECHANICS.ECONOMY,
+            PromptCatalog.ROLES.GUNSMITH,
+            get_faction_prompt_path(faction.race),
+            PromptCatalog.LORE.BASIC.MEDIUM
+        ])
+
+        # Добавляем динамическую обвязку
+        dynamic_context = (
+            f"Твоя фракция: {faction.name}.\n"
+            "Правила ответа:\n"
+            "1. Одобряй логичные заказы и распределяй приоритеты характеристик от 0 до 10.\n"
+            "2. Например, если оружие должно быть мощным, ставь высокий приоритет урону, но выкручивай штраф к весу.\n"
+            "3. Отвечай лорным комментарием в поле master_reply - ты общаешься со своим лордом."
         )
+
+        return f"{static_context}\n\n{dynamic_context}"

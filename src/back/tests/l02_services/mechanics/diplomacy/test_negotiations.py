@@ -66,9 +66,7 @@ class FakeLLMClient:
         return self.structured_replies.pop(0)
 
 
-def _reply(
-    text: str, action: Optional[DiplomaticAction] = None
-) -> LLMDiplomaticResponse:
+def _reply(text: str, action: Optional[DiplomaticAction] = None) -> LLMDiplomaticResponse:
     return LLMDiplomaticResponse(reply_text=text, action=action)
 
 
@@ -176,7 +174,9 @@ class TestApplyAction:
 
 class TestDispatchAnswer:
     @pytest.mark.asyncio
-    async def test_lord_answers_letter_and_declares_war(self, world, fake_bus):
+    async def test_lord_answers_letter_and_declares_war(
+        self, world, fake_bus, fake_prompt_builder
+    ):
         llm = FakeLLMClient(
             structured_replies=[
                 _reply(
@@ -185,7 +185,9 @@ class TestDispatchAnswer:
                 )
             ]
         )
-        service = NegotiationService(llm_client=llm, event_bus=fake_bus)
+        service = NegotiationService(
+            llm_client=llm, event_bus=fake_bus, prompt_builder=fake_prompt_builder
+        )
         dispatch = Dispatch(
             sender_faction_id="humans",
             recipient_faction_id="elfs",
@@ -196,9 +198,12 @@ class TestDispatchAnswer:
 
         assert "оскорбительны" in response.reply_text
         assert world.get_relation("humans", "elfs").stance == DiplomaticStance.WAR
-        # Промпт лорда собран от лица получателя письма
+
         system_prompt, user_prompt = llm.calls[0]
-        assert "Дом Серебряного Листа" in system_prompt
+        # Проверяем, что в системный промпт лорда ушли правильные блоки файлов:
+        assert "[base/persona.md]" in system_prompt
+        assert "[roles/lord.md]" in system_prompt
+        assert "[factions/elfs.md]" in system_prompt
         assert "Уберите своих сборщиков податей." in user_prompt
 
 

@@ -93,12 +93,6 @@ class TestRumorGeneration:
         assert rumor.faction_id == "humans"
 
     @pytest.mark.asyncio
-    async def test_race_style_reaches_the_prompt(self, generator, world, greenskins, fake_llm):
-        await generator.generate_rumor(world, greenskins)
-
-        assert "табличке кровью" in fake_llm.text_calls[0]["system_prompt"]
-
-    @pytest.mark.asyncio
     async def test_empty_answer_produces_nothing(self, world, humans, fake_llm):
         fake_llm.rumor = "   "
 
@@ -127,9 +121,7 @@ class TestRumorGeneration:
 
 class TestFacadeRumors:
     @pytest.mark.asyncio
-    async def test_facade_stays_quiet_until_the_threshold(
-        self, world, fake_llm, fake_bus
-    ):
+    async def test_facade_stays_quiet_until_the_threshold(self, world, fake_llm, fake_bus):
         facade = ChroniclerFacade(llm_client=fake_llm, event_bus=fake_bus)
         world.ticks_since_last_battle = RUMOR_IDLE_TICKS_THRESHOLD - 1
 
@@ -137,9 +129,7 @@ class TestFacadeRumors:
         assert fake_llm.text_calls == []
 
     @pytest.mark.asyncio
-    async def test_facade_records_rumor_and_publishes_event(
-        self, world, fake_llm, fake_bus
-    ):
+    async def test_facade_records_rumor_and_publishes_event(self, world, fake_llm, fake_bus):
         facade = ChroniclerFacade(llm_client=fake_llm, event_bus=fake_bus)
         world.ticks_since_last_battle = RUMOR_IDLE_TICKS_THRESHOLD
 
@@ -151,9 +141,7 @@ class TestFacadeRumors:
         assert GameEvents.Chronicler.RUMOR_GENERATED in fake_bus.names()
 
     @pytest.mark.asyncio
-    async def test_rumor_is_written_for_the_player_by_default(
-        self, world, fake_llm, fake_bus
-    ):
+    async def test_rumor_is_written_for_the_player_by_default(self, world, fake_llm, fake_bus):
         facade = ChroniclerFacade(llm_client=fake_llm, event_bus=fake_bus)
         world.ticks_since_last_battle = RUMOR_IDLE_TICKS_THRESHOLD
 
@@ -161,3 +149,14 @@ class TestFacadeRumors:
 
         assert rumor is not None
         assert rumor.faction_id == "humans"
+
+    async def test_race_style_reaches_the_prompt(
+        self, generator, world, greenskins, fake_llm, fake_prompt_builder
+    ):
+        # Подменяем билдер в генераторе слухов
+        generator._prompt_builder = fake_prompt_builder
+        await generator.generate_rumor(world, greenskins)
+
+        # Проверяем, что слух запросил лорный файл зеленокожих
+        assert "[factions/greenskins.md]" in fake_llm.text_calls[0]["system_prompt"]
+        assert "[roles/chronicler.md]" in fake_llm.text_calls[0]["system_prompt"]
