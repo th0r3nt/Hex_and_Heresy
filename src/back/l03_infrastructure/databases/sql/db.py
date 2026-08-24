@@ -30,3 +30,7 @@ class SQLDB:
         """Создает таблицы в базе данных, если они еще не существуют."""
         async with self._engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+
+    async def dispose(self) -> None:
+        """Корректно закрывает пул соединений движка SQLAlchemy."""
+        await self._engine.dispose()

@@ -15,6 +15,8 @@ from src.back.l01_domain.army.models.strategic import StrategicArmy
 from src.back.l01_domain.combat.models.state import TacticalBattleState
 from src.back.l01_domain.factions.models.faction import Faction
 from src.back.l01_domain.llm.models.context import ContextBlock
+from src.back.l01_domain.world.battle_summary import render_battle_summary
+from src.back.l01_domain.world.models.battle_log import BattleDossier
 from src.back.l01_domain.world.models.state import WorldState
 
 
@@ -61,11 +63,25 @@ class ContextBuilder:
 
     def build_battle_context(self, battle_state: TacticalBattleState) -> ContextBlock:
         """
-        Тактическая обстановка: фаза боя, расстановка, потери сторон.
-        Нужна летописцу для пересказа сражения и командирам - для реплик в бою.
+        Тактическая обстановка идущего боя: фаза, расстановка, кто где стоит.
+        Нужна командирам отрядов для реплик прямо посреди сражения.
         """
-        # TODO: заглушка
+        # TODO: заглушка. Пересказ уже законченного боя собирается не здесь,
+        # а в build_battle_summary_context.
         return ContextBlock(title="Обстановка боя")
+
+    def build_battle_summary_context(self, dossier: BattleDossier) -> ContextBlock:
+        """
+        Итоги законченного сражения: состав сторон, потери, переломные моменты.
+        Нужна летописцу для пересказа боя.
+
+        Сам текст собирает домен (world/battle_summary.py) - тот же, которым
+        пользуется механика летописца: две разные сводки об одном бое
+        неизбежно разошлись бы в числах.
+        """
+        return ContextBlock(
+            title="Итоги сражения", body=render_battle_summary(dossier)
+        )
 
     def render(self, blocks: list[ContextBlock]) -> str:
         """

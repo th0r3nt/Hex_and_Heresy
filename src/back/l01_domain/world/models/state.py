@@ -17,6 +17,11 @@ from src.back.l01_domain.factions.models.faction import Faction
 from src.back.l01_domain.factions.models.workers import WorkerAssignment
 from src.back.l01_domain.maps.models.strategic import HexCoordinates
 from src.back.l01_domain.world.models.battleground import BattlefieldLootSite
+from src.back.l01_domain.world.models.chronicle import (
+    ChronicleEntry,
+    FallenRecord,
+    RumorEntry,
+)
 from src.back.l01_domain.world.models.events import GlobalEvent
 from src.back.l01_domain.world.models.timekeeping import GameTime
 
@@ -62,6 +67,25 @@ class WorldState(BaseModel):
     custom_equipment: dict[str, Equipment] = Field(
         default_factory=dict,
         description="Уникальные чертежи экипировки текущей партии (equipment_id -> Equipment)",
+    )
+
+    # ==================================================================
+    # ЛЕТОПИСЬ ПАРТИИ
+    # ==================================================================
+
+    chronicle_entries: list[ChronicleEntry] = Field(
+        default_factory=list, description="Страницы летописи о сражениях этой партии"
+    )
+    fallen_records: list[FallenRecord] = Field(
+        default_factory=list, description="Надгробия Зала павших"
+    )
+    rumors: list[RumorEntry] = Field(
+        default_factory=list, description="Фоновые слухи для окна логов"
+    )
+    ticks_since_last_battle: int = Field(
+        default=0,
+        ge=0,
+        description="Сколько тактов не было ни одного боя: порог болтливости летописца",
     )
 
     def get_faction(self, faction_id: str) -> Optional[Faction]:
@@ -212,3 +236,33 @@ class WorldState(BaseModel):
     # Метод для работы с кастомными предметами
     def add_custom_equipment(self, equipment: Equipment) -> None:
         self.custom_equipment[equipment.id] = equipment
+
+    # ==================================================================
+    # МЕТОДЫ ЛЕТОПИСИ
+    # ==================================================================
+
+    def add_chronicle_entry(self, entry: ChronicleEntry) -> None:
+        """
+        Дописывает страницу летописи. Повторная запись о том же бое
+        игнорируется: перегенерация текста не должна плодить свитки.
+        """
+        if any(existing.battle_id == entry.battle_id for existing in self.chronicle_entries):
+            return
+        self.chronicle_entries.append(entry)
+
+    def add_fallen_record(self, record: FallenRecord) -> None:
+        """
+        Ставит надгробие в Зале павших. Один отряд хоронят единожды.
+        """
+        if any(existing.squad_id == record.squad_id for existing in self.fallen_records):
+            return
+        self.fallen_records.append(record)
+
+    def add_rumor(self, rumor: RumorEntry) -> None:
+        self.rumors.append(rumor)
+
+    def register_battle_happened(self) -> None:
+        """
+        Сбрасывает счетчик тишины: пока идут бои, летописцу не до слухов.
+        """
+        self.ticks_since_last_battle = 0

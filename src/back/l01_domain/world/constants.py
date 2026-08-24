@@ -55,3 +55,30 @@ class GlobalEventScope(str, Enum):
     GLOBAL = "global"  # действует на весь мир и все фракции
     FACTION = "faction"  # затрагивает конкретную фракцию
     ZONE = "zone"  # локализовано на конкретных гексах карты
+
+
+# ==================================================================
+# ЛЕТОПИСЕЦ И ЗАЛ ПАВШИХ (см. docs/game_mechanics/chronicler.md)
+# ==================================================================
+
+# Бой попадает в летопись, если с каждой стороны стояло не меньше стольких карточек.
+# Стычки меньшего масштаба уходят только в фоновые слухи
+CHRONICLE_MIN_SQUADS_PER_SIDE: Final[int] = 6
+
+# Доля погибших от исходной численности стороны, после которой бой считается резней
+CHRONICLE_MASSACRE_LOSS_RATIO: Final[float] = 0.6
+
+# Сколько отрядов должны запаниковать в одном раунде, чтобы это считалось цепной паникой
+CHRONICLE_CHAIN_PANIC_SQUADS: Final[int] = 2
+
+# Сколько тактов без единого боя терпит летописец, прежде чем начать разносить слухи
+RUMOR_IDLE_TICKS_THRESHOLD: Final[int] = 3
+
+# Размер страницы витрины летописи и Зала павших для интерфейса
+CHRONICLE_HISTORY_PAGE_SIZE: Final[int] = 50
+
+# Лимиты длины текстов от языковой модели: свиток должен помещаться в окно интерфейса
+CHRONICLE_TITLE_MAX_LENGTH: Final[int] = 120
+CHRONICLE_QUOTE_MAX_LENGTH: Final[int] = 400
+CHRONICLE_BODY_MAX_LENGTH: Final[int] = 4000
+RUMOR_TEXT_MAX_LENGTH: Final[int] = 300

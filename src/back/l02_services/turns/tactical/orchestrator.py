@@ -98,6 +98,17 @@ class TacticalTurnOrchestrator:
             self._combat_service.reset_battle_accumulators()
 
         if self._event_bus is not None:
+            if is_new_battle:
+                # Летописец снимает состав сторон до первого залпа: к концу боя
+                # выбитые отряды уже не найти ни в одной армии
+                await self._event_bus.publish(
+                    GameEvents.Tactical.BATTLE_STARTED,
+                    battle_id=battle_state.id,
+                    battle_state=battle_state,
+                    squads=squads,
+                    strategic_hex=strategic_hex,
+                )
+
             await self._event_bus.publish(
                 GameEvents.Tactical.TURN_STARTED,
                 battle_id=battle_state.id,
@@ -321,15 +332,7 @@ class TacticalTurnOrchestrator:
                 ticks_remaining=DEFAULT_BATTLEFIELD_DECAY_TICKS,
             )
 
-            if self._event_bus is not None:
-                await self._event_bus.publish(
-                    GameEvents.Tactical.BATTLE_COMPLETED,
-                    battle_id=battle_state.id,
-                    victor_faction_id=victor_faction_id,
-                    loot_site_id=loot_site.id,
-                )
-
-        return TacticalTurnReport(
+        report = TacticalTurnReport(
             battle_id=battle_state.id,
             tick=battle_state.current_tick,
             phase=battle_state.phase,
@@ -342,3 +345,24 @@ class TacticalTurnOrchestrator:
             victor_faction_id=victor_faction_id,
             loot_site=loot_site,
         )
+
+        # События раунда публикуются с готовым отчетом: подписчикам (летописец)
+        # нужны не идентификаторы, а сами числа боя
+        if self._event_bus is not None:
+            await self._event_bus.publish(
+                GameEvents.Tactical.TURN_COMPLETED,
+                battle_id=battle_state.id,
+                tick=report.tick,
+                report=report,
+            )
+
+            if is_finished:
+                await self._event_bus.publish(
+                    GameEvents.Tactical.BATTLE_COMPLETED,
+                    battle_id=battle_state.id,
+                    victor_faction_id=victor_faction_id,
+                    loot_site_id=loot_site.id if loot_site is not None else None,
+                    report=report,
+                )
+
+        return report

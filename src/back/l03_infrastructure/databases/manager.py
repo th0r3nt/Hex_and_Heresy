@@ -1,22 +1,26 @@
 """
 Фасад взаимодействия с базой данных.
-Адаптирует базу данных под доменный контракт SaveGameRepositoryProtocol.
+Адаптирует базу данных под доменные контракты SaveGameRepositoryProtocol
+и ChroniclerRepositoryProtocol.
 """
 
 from typing import Any, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from src.back.l01_domain.protocols.chronicler import ChroniclerRepositoryProtocol
 from src.back.l01_domain.protocols.saves import SaveGameRepositoryProtocol
 from src.back.l01_domain.world.models.state import WorldState
+from src.back.l03_infrastructure.databases.sql.management.chronicles import SQLChronicles
 from src.back.l03_infrastructure.databases.sql.management.saves import SQLSaves
 from src.back.utils.logger import main_logger
 
 
-class DatabaseManager(SaveGameRepositoryProtocol):
+class DatabaseManager(SaveGameRepositoryProtocol, ChroniclerRepositoryProtocol):
     """
     Фасад инфраструктуры баз данных.
-    Имплементирует SaveGameRepositoryProtocol, преобразуя Pydantic модели в строки JSON для базы.
+    Имплементирует SaveGameRepositoryProtocol, преобразуя Pydantic модели в строки JSON для базы,
+    и ChroniclerRepositoryProtocol - для летописи и Зала павших, которые переживают партию.
     """
 
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
@@ -82,3 +86,127 @@ class DatabaseManager(SaveGameRepositoryProtocol):
         except Exception as e:
             main_logger.error(f"Ошибка при удалении сохранения ID {save_id}: {e}")
             return False
+
+    # ==================================================================
+    # ЛЕТОПИСЬ И ЗАЛ ПАВШИХ
+    # ==================================================================
+
+    async def record_battle_history(
+        self,
+        battle_id: str,
+        title: str,
+        quote: str,
+        body: str,
+        tick: int,
+        location_name: str,
+    ) -> None:
+        """
+        Записывает страницу летописи о бое. Повторная запись об одном бое
+        игнорируется: летописец мог перегенерировать текст.
+        """
+        try:
+            async with self._session_factory() as session:
+                async with session.begin():
+                    existing = await SQLChronicles.get_battle_entry(session, battle_id)
+                    if existing is not None:
+                        main_logger.debug(
+                            f"Летопись боя '{battle_id}' уже записана, пропуск."
+                        )
+                        return
+
+                    await SQLChronicles.create_battle_entry(
+                        session,
+                        battle_id=battle_id,
+                        title=title,
+                        quote=quote,
+                        body=body,
+                        tick=tick,
+                        location_name=location_name,
+                    )
+            main_logger.info(f"Летопись боя '{battle_id}' записана: «{title}».")
+        except Exception as e:
+            main_logger.error(f"Ошибка при записи летописи боя '{battle_id}': {e}")
+            raise
+
+    async def record_fallen_squad(
+        self,
+        squad_name: str,
+        commander_name: str,
+        race_id: str,
+        biography: str,
+        death_tick: int,
+        killer_name: str,
+    ) -> None:
+        """
+        Ставит надгробие в Зале павших. Один и тот же отряд на одном такте
+        хоронят единожды.
+        """
+        try:
+            async with self._session_factory() as session:
+                async with session.begin():
+                    existing = await SQLChronicles.get_fallen_record(
+                        session, squad_name, death_tick
+                    )
+                    if existing is not None:
+                        main_logger.debug(
+                            f"Надгробие '{squad_name}' (такт {death_tick}) уже стоит, пропуск."
+                        )
+                        return
+
+                    await SQLChronicles.create_fallen_record(
+                        session,
+                        squad_name=squad_name,
+                        commander_name=commander_name,
+                        race_id=race_id,
+                        biography=biography,
+                        death_tick=death_tick,
+                        killer_name=killer_name,
+                    )
+            main_logger.info(f"В Зал павших записан отряд '{squad_name}'.")
+        except Exception as e:
+            main_logger.error(f"Ошибка при записи павшего отряда '{squad_name}': {e}")
+            raise
+
+    async def get_history_entries(self, limit: int = 50) -> list[dict[str, Any]]:
+        """Страницы летописи для вкладки книги."""
+        try:
+            async with self._session_factory() as session:
+                records = await SQLChronicles.list_battle_entries(session, limit=limit)
+                return [
+                    {
+                        "id": r.id,
+                        "battle_id": r.battle_id,
+                        "title": r.title,
+                        "quote": r.quote,
+                        "body": r.body,
+                        "tick": r.tick,
+                        "location_name": r.location_name,
+                        "created_at": r.created_at.isoformat(),
+                    }
+                    for r in records
+                ]
+        except Exception as e:
+            main_logger.error(f"Ошибка при чтении летописи: {e}")
+            return []
+
+    async def get_fallen_records(self, limit: int = 50) -> list[dict[str, Any]]:
+        """Надгробия для вкладки «Зал павших»."""
+        try:
+            async with self._session_factory() as session:
+                records = await SQLChronicles.list_fallen_records(session, limit=limit)
+                return [
+                    {
+                        "id": r.id,
+                        "squad_name": r.squad_name,
+                        "commander_name": r.commander_name,
+                        "race_id": r.race_id,
+                        "biography": r.biography,
+                        "death_tick": r.death_tick,
+                        "killer_name": r.killer_name,
+                        "created_at": r.created_at.isoformat(),
+                    }
+                    for r in records
+                ]
+        except Exception as e:
+            main_logger.error(f"Ошибка при чтении Зала павших: {e}")
+            return []

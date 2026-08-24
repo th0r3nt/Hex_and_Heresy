@@ -81,6 +81,7 @@ class TacticalEvents(str, Enum):
 
     BATTLE_STARTED = "tactical.battle_started"
     TURN_STARTED = "tactical.turn_started"
+    TURN_COMPLETED = "tactical.turn_completed"
     PHASE_ADVANCED = "tactical.phase_advanced"
     SQUAD_PANICKED = "tactical.squad_panicked"
     CHAIN_PANIC_TRIGGERED = "tactical.chain_panic_triggered"
