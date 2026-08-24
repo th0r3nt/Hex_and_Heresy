@@ -6,14 +6,16 @@
 """
 
 import importlib
-from typing import Optional
+from typing import Callable, Optional
 
+from src.back.gamedata.common import RACES
 from src.back.l01_domain.army.models.card.equipment import Equipment
 from src.back.l01_domain.army.models.card.unit import UnitArchetype
 from src.back.l01_domain.army.models.characters.commanders import (
     CommanderArchetype,
     CommanderTrait,
 )
+from src.back.l01_domain.common import FactionRace
 from src.back.l01_domain.factions.models.buildings import Building
 from src.back.l01_domain.protocols.gamedata import GameDataRepositoryProtocol
 from src.back.utils.logger import main_logger
@@ -125,29 +127,21 @@ def build_static_registry() -> StaticGameDataRegistry:
     и формирует итоговый статический реестр. Вызывается при запуске приложения.
     """
     registry = StaticGameDataRegistry()
-    factions = [  # TODO: типизировать
-        "humans",
-        "greenskins",
-        "elfs",
-        "baronial_troops",
-        "congregation_of_the_meteorite",
-        "mercenaries",
-    ]
 
-    for faction in factions:
-        _load_faction_module(registry, faction, "units.units_list", "UNITS_LIST", _loader_unit)
-        _load_faction_module(registry, faction, "armor.armor_list", "ARMOR_LIST", _loader_eq)
+    for race in RACES:
+        _load_faction_module(registry, race, "units.units_list", "UNITS_LIST", _loader_unit)
+        _load_faction_module(registry, race, "armor.armor_list", "ARMOR_LIST", _loader_eq)
         _load_faction_module(
-            registry, faction, "accessories.accessories_list", "ACCESSORIES_LIST", _loader_eq
+            registry, race, "accessories.accessories_list", "ACCESSORIES_LIST", _loader_eq
         )
         _load_faction_module(
-            registry, faction, "weapon.melee_list", "MELEE_WEAPONS", _loader_eq
+            registry, race, "weapon.melee_list", "MELEE_WEAPONS", _loader_eq
         )
         _load_faction_module(
-            registry, faction, "weapon.ranged_list", "RANGED_WEAPONS", _loader_eq
+            registry, race, "weapon.ranged_list", "RANGED_WEAPONS", _loader_eq
         )
         _load_faction_module(
-            registry, faction, "buildings.buildings_list", "BUILDINGS_LIST", _loader_bld
+            registry, race, "buildings.buildings_list", "BUILDINGS_LIST", _loader_bld
         )
 
     main_logger.info("Статическая геймдата успешно загружена и провалидирована.")
@@ -156,21 +150,22 @@ def build_static_registry() -> StaticGameDataRegistry:
 
 def _load_faction_module(
     registry: StaticGameDataRegistry,
-    faction: str,
+    race: FactionRace,
     module_suffix: str,
     dict_name: str,
-    loader_func,
+    loader_func: Callable[[StaticGameDataRegistry, FactionRace, dict], None],
 ) -> None:
     """
     Безопасно импортирует модуль геймдаты и передает его парсеру.
+    Имя пакета в каталоге gamedata совпадает со значением FactionRace.
     """
-    
-    module_path = f"src.back.gamedata.{faction}.{module_suffix}"
+
+    module_path = f"src.back.gamedata.{race.value}.{module_suffix}"
     try:
         mod = importlib.import_module(module_path)
         data_dict = getattr(mod, dict_name, {})
         for raw_data in data_dict.values():
-            loader_func(registry, faction, raw_data)
+            loader_func(registry, race, raw_data)
     except ModuleNotFoundError:
         # Для некоторых фракций модуль может отсутствовать (например, buildings у наемников)
         pass
@@ -179,13 +174,13 @@ def _load_faction_module(
         raise
 
 
-def _loader_unit(registry: StaticGameDataRegistry, faction: str, raw: dict) -> None:
+def _loader_unit(registry: StaticGameDataRegistry, race: FactionRace, raw: dict) -> None:
     registry._add_unit(UnitArchetype(**raw))
 
 
-def _loader_eq(registry: StaticGameDataRegistry, faction: str, raw: dict) -> None:
-    registry._add_equipment(Equipment(**raw), faction_id=faction)
+def _loader_eq(registry: StaticGameDataRegistry, race: FactionRace, raw: dict) -> None:
+    registry._add_equipment(Equipment(**raw), faction_id=race.value)
 
 
-def _loader_bld(registry: StaticGameDataRegistry, faction: str, raw: dict) -> None:
+def _loader_bld(registry: StaticGameDataRegistry, race: FactionRace, raw: dict) -> None:
     registry._add_building(Building(**raw))

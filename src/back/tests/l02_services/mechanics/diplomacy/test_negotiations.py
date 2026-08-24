@@ -10,18 +10,18 @@ from pydantic import BaseModel
 
 from src.back.l01_domain.exceptions import AmbassadorUnavailableError
 from src.back.l01_domain.factions.constants import (
+    DiplomaticActionType,
     DiplomaticStance,
     NegotiationMode,
     ResourceType,
 )
 from src.back.l01_domain.factions.models.diplomacy.messengers import Dispatch
-from src.back.l02_services.mechanics.diplomacy.facade import DiplomacyFacade
-from src.back.l02_services.mechanics.diplomacy.negotiations import (
+from src.back.l01_domain.factions.models.diplomacy.negotiations import (
     DiplomaticAction,
-    DiplomaticActionType,
     LLMDiplomaticResponse,
-    NegotiationService,
 )
+from src.back.l02_services.mechanics.diplomacy.facade import DiplomacyFacade
+from src.back.l02_services.mechanics.diplomacy.negotiations import NegotiationService
 from src.back.utils.event.registry import GameEvents
 
 

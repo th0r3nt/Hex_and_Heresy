@@ -72,7 +72,7 @@ class GunsmithFacade:
 
         return draft, response.master_reply
 
-    def approve_blueprint(
+    async def approve_blueprint(
         self, world_state: WorldState, faction_id: str, draft: Equipment
     ) -> None:
         """
@@ -92,7 +92,15 @@ class GunsmithFacade:
         # Добавляем в реестр кастомных предметов текущей партии
         world_state.add_custom_equipment(draft)
 
-        # TODO: Добавить публикацию GameEvents.Gunsmith.BLUEPRINT_APPROVED, если event_bus не None
+        if self._event_bus:
+            await self._event_bus.publish(
+                GameEvents.Gunsmith.BLUEPRINT_APPROVED,
+                faction_id=faction_id,
+                equipment_id=draft.id,
+                equipment_name=draft.name,
+                cost_gold=draft.cost_gold,
+                cost_material=draft.cost_material,
+            )
 
     def _build_gunsmith_system_prompt(self, faction_id: str) -> str:
         """

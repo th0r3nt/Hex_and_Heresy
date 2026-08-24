@@ -151,6 +151,19 @@ class NegotiationMode(str, Enum):
     AUTOMATIC = "automatic"
 
 
+class DiplomaticActionType(str, Enum):
+    """Функции, которые лорд может вызвать по итогам переговоров."""
+
+    NONE = "none"  # Лорд ограничился словами
+    DECLARE_WAR = "declare_war"
+    MAKE_PEACE = "make_peace"
+    PROPOSE_TRADE = "propose_trade"
+    ESTABLISH_BORDERS = "establish_borders"
+    ESTABLISH_RIGHT_OF_PASSAGE = "establish_right_of_passage"
+    DEMAND_TRIBUTE = "demand_tribute"
+    EXECUTE_AMBASSADOR = "execute_ambassador"
+
+
 # Гонец с депешей: скорость движения и риск перехвата (см. game_mechanics/diplomacy.md)
 DISPATCH_COURIER_SPEED_HEXES: Final[int] = 4
 DISPATCH_INTERCEPT_CHANCE: Final[float] = 0.20

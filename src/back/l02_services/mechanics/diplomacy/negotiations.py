@@ -5,20 +5,26 @@
 художественный текст плюс необязательное дипломатическое действие. Действие -
 это и есть Function Calling из diplomacy.md: сервис переносит его на методы
 агрегата DiplomaticRelation, который стоит на страже доменных правил.
+
+Сами схемы ответа живут в домене
+(l01_domain.factions.models.diplomacy.negotiations).
 """
 
-from enum import Enum
 from typing import Optional
-
-from pydantic import BaseModel, Field
 
 from src.back.l01_domain.factions.constants import (
     MAX_AUTO_NEGOTIATION_ROUNDS,
-    ResourceType,
+    DiplomaticActionType,
 )
 from src.back.l01_domain.factions.models.diplomacy.messengers import (
     Ambassador,
     Dispatch,
+)
+from src.back.l01_domain.factions.models.diplomacy.negotiations import (
+    DiplomaticAction,
+    LLMDiplomaticResponse,
+    NegotiationLine,
+    NegotiationTranscript,
 )
 from src.back.l01_domain.factions.models.diplomacy.pacts import (
     NonAggressionPact,
@@ -30,76 +36,6 @@ from src.back.l01_domain.protocols.events import EventBusProtocol
 from src.back.l01_domain.protocols.llm import LLMClientProtocol
 from src.back.l01_domain.world.models.state import WorldState
 from src.back.utils.event.registry import GameEvents
-
-
-# ==================================================================
-# СХЕМЫ ОТВЕТА LLM
-# TODO: в l1_domain/
-# ==================================================================
-
-
-class DiplomaticActionType(str, Enum):
-    """Функции, которые лорд может вызвать по итогам переговоров."""
-
-    NONE = "none"  # Лорд ограничился словами
-    DECLARE_WAR = "declare_war"
-    MAKE_PEACE = "make_peace"
-    PROPOSE_TRADE = "propose_trade"
-    ESTABLISH_BORDERS = "establish_borders"
-    ESTABLISH_RIGHT_OF_PASSAGE = "establish_right_of_passage"
-    DEMAND_TRIBUTE = "demand_tribute"
-    EXECUTE_AMBASSADOR = "execute_ambassador"
-
-
-class DiplomaticAction(BaseModel):
-    """
-    Решение лорда и его параметры. Схема намеренно плоская: строгий JSON-режим
-    провайдеров плохо переваривает union-ы, а лишние поля просто игнорируются.
-    """
-
-    kind: DiplomaticActionType = Field(default=DiplomaticActionType.NONE)
-
-    give_resource: Optional[ResourceType] = Field(
-        default=None, description="Что отдает инициатор переговоров (propose_trade)"
-    )
-    give_amount: float = Field(default=0.0, ge=0)
-    get_resource: Optional[ResourceType] = Field(
-        default=None, description="Что инициатор получает взамен (propose_trade)"
-    )
-    get_amount: float = Field(default=0.0, ge=0)
-
-    gold_amount: float = Field(
-        default=0.0,
-        ge=0,
-        description="Размер дани или пошлины за проход, если решение о золоте",
-    )
-    duration_turns: int = Field(default=5, ge=1, description="Срок действия договора в тактах")
-    allowed_hex_ids: list[str] = Field(
-        default_factory=list, description="Гексы для договора о границах или права прохода"
-    )
-
-
-class LLMDiplomaticResponse(BaseModel):
-    """Ожидаемый JSON-ответ лорда на письмо или реплику посла."""
-
-    reply_text: str = Field(..., description="Что лорд говорит вслух")
-    action: Optional[DiplomaticAction] = Field(
-        default=None, description="Дипломатическое решение, если лорд его принял"
-    )
-
-
-class NegotiationLine(BaseModel):
-    """Одна реплика в стенограмме переговоров."""
-
-    speaker: str = Field(..., description="'ambassador' или 'lord'")
-    text: str = Field(...)
-
-
-class NegotiationTranscript(BaseModel):
-    """Итог автоматических переговоров двух нейросетей."""
-
-    lines: list[NegotiationLine] = Field(default_factory=list)
-    final_response: Optional[LLMDiplomaticResponse] = Field(default=None)
 
 
 # ==================================================================
@@ -448,11 +384,4 @@ class NegotiationService:
         return faction
 
 
-__all__ = [
-    "DiplomaticAction",
-    "DiplomaticActionType",
-    "LLMDiplomaticResponse",
-    "NegotiationLine",
-    "NegotiationService",
-    "NegotiationTranscript",
-]
+__all__ = ["NegotiationService"]

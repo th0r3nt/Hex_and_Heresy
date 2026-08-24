@@ -10,6 +10,7 @@ from typing import Optional
 from src.back.l01_domain.exceptions import AmbassadorUnavailableError
 from src.back.l01_domain.factions.constants import (
     AmbassadorStatus,
+    DiplomaticActionType,
     NegotiationMode,
     ResourceType,
 )
@@ -17,18 +18,17 @@ from src.back.l01_domain.factions.models.diplomacy.messengers import (
     Ambassador,
     Dispatch,
 )
+from src.back.l01_domain.factions.models.diplomacy.negotiations import (
+    LLMDiplomaticResponse,
+    NegotiationTranscript,
+)
 from src.back.l01_domain.protocols.events import EventBusProtocol
 from src.back.l01_domain.protocols.llm import LLMClientProtocol
 from src.back.l01_domain.world.models.reports import DiplomacyTickReport
 from src.back.l01_domain.world.models.state import WorldState
 from src.back.l02_services.mechanics.diplomacy.ambassador import AmbassadorService
 from src.back.l02_services.mechanics.diplomacy.messenger import DispatchService
-from src.back.l02_services.mechanics.diplomacy.negotiations import (
-    DiplomaticActionType,
-    LLMDiplomaticResponse,
-    NegotiationService,
-    NegotiationTranscript,
-)
+from src.back.l02_services.mechanics.diplomacy.negotiations import NegotiationService
 from src.back.l02_services.mechanics.diplomacy.pacts import PactUpkeepService
 from src.back.utils.event.registry import GameEvents
 
