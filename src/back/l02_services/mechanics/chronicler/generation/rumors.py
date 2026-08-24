@@ -18,6 +18,7 @@ from src.back.l01_domain.world.models.state import WorldState
 from src.back.l03_infrastructure.llm.prompt.builder import PromptBuilder
 from src.back.l03_infrastructure.llm.prompt.catalog import (
     PromptCatalog,
+    get_chronicler_writing_path,
     get_faction_prompt_path,
 )
 from src.back.utils.logger import main_logger
@@ -31,16 +32,6 @@ RUMOR_MAX_TOKENS = 200
 # Ниже этого запаса еды фракция считается голодающей: слухи о пустых амбарах
 RUMOR_HUNGER_THRESHOLD = 50.0
 
-BASE_RUMOR_PROMPT = (
-    "Ты - летописец темного постапокалиптического фэнтези мира Hex & Heresy. "
-    "Боев нет, и ты собираешь то, о чем шепчутся на дорогах и в тавернах.\n\n"
-    "Правила:\n"
-    "1. Одна-две фразы, не больше. Это строка в окне слухов, а не рассказ.\n"
-    "2. Опирайся только на то, что сказано в сводке мира.\n"
-    "3. Никаких обращений к игроку и никаких пояснений - только сам слух.\n"
-    "Пример тона: «Торговцы говорят, что барон опять поднял налоги. "
-    "В Черных топях неспокойно»."
-)
 # TODO: завязать слухи летописца на реальных событиях (напр. если барон отправит караван-экспедицию)
 
 
@@ -153,17 +144,12 @@ class RumorGenerator:
     def _build_prompt(self, faction: Optional[Faction]) -> str:
         blocks = [
             PromptCatalog.BASE.PERSONA,
-            PromptCatalog.ROLES.CHRONICLER,
+            PromptCatalog.ROLES.CHRONICLER.PROMPT,
+            get_chronicler_writing_path(faction.race if faction is not None else None),
+            PromptCatalog.ROLES.CHRONICLER.RUMORS,
             PromptCatalog.LORE.BASIC.LOW,
         ]
         if faction is not None:
             blocks.append(get_faction_prompt_path(faction.race))
 
-        static_context = self._prompt_builder.build(blocks)
-
-        dynamic_context = (
-            "Боев нет, и ты собираешь то, о чем шепчутся на дорогах и в тавернах.\n"
-            "Напиши одну-две фразы. Никаких обращений к игроку — только сам слух."
-        )
-
-        return f"{static_context}\n\n{dynamic_context}"
+        return self._prompt_builder.build(blocks)

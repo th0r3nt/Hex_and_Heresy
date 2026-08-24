@@ -159,4 +159,4 @@ class TestFacadeRumors:
 
         # Проверяем, что слух запросил лорный файл зеленокожих
         assert "[factions/greenskins.md]" in fake_llm.text_calls[0]["system_prompt"]
-        assert "[roles/chronicler.md]" in fake_llm.text_calls[0]["system_prompt"]
+        assert "[roles/chronicler/prompt.md]" in fake_llm.text_calls[0]["system_prompt"]

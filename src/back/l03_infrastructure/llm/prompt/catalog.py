@@ -3,6 +3,8 @@
 Обеспечивает строгую типизацию и защиту от опечаток при сборке контекста для LLM.
 """
 
+from typing import Optional
+
 from src.back.l01_domain.common import FactionRace
 
 
@@ -77,15 +79,31 @@ class PromptCatalog:
                 MAX = "lore/factions/mercenaries/max.md"
 
     class ROLES:
-        ADVISOR = "roles/advisor.md"
-        CHRONICLER = "roles/chronicler.md"
-        COMMANDER = "roles/commander.md"
-        DIPLOMAT = "roles/diplomat.md"
-        GAME_MASTER = "roles/game_master.md"
-        GUNSMITH = "roles/gunsmith.md"
-        HERO = "roles/hero.md"
-        LORD = "roles/lord.md"
-        VETERAN = "roles/veteran.md"
+        ADVISOR = "roles/advisor/prompt.md"
+        COMMANDER = "roles/commander/prompt.md"
+        DIPLOMAT = "roles/diplomat/prompt.md"
+        GAME_MASTER = "roles/game_master/prompt.md"
+        GUNSMITH = "roles/gunsmith/prompt.md"
+        HERO = "roles/hero/prompt.md"
+        LORD = "roles/lord/prompt.md"
+        VETERAN = "roles/veteran/prompt.md"
+
+        class CHRONICLER:
+            PROMPT = "roles/chronicler/prompt.md"
+            RUMORS = "roles/chronicler/rumors.md"
+
+            class WRITING:
+                """Стиль записи летописца: у каждой расы свой носитель, почерк и тон."""
+
+                NEUTRAL = "roles/chronicler/neutral/writing.md"
+                BARONIAL_TROOPS = "roles/chronicler/baronial_troops/writing.md"
+                CONGREGATION_OF_THE_METEORITE = (
+                    "roles/chronicler/congregation_of_the_meteorite/writing.md"
+                )
+                ELFS = "roles/chronicler/elfs/writing.md"
+                GREENSKINS = "roles/chronicler/greenskins/writing.md"
+                HUMANS = "roles/chronicler/humans/writing.md"
+                MERCENARIES = "roles/chronicler/mercenaries/writing.md"
 
     class TRAITS:
         class PSYCHOLOGICAL:
@@ -171,3 +189,25 @@ def get_faction_prompt_path(race: FactionRace) -> str:
         FactionRace.MERCENARIES: PromptCatalog.FACTIONS.MERCENARIES,
     }
     return mapping[race]
+
+
+def get_chronicler_writing_path(race: Optional[FactionRace]) -> str:
+    """
+    Стилистический файл летописца для расы фракции.
+    Без фракции летопись пишется нейтрально: так бывает для боев наемников
+    и стычек на ничьей земле, где нет своего писаря.
+    """
+    if race is None:
+        return PromptCatalog.ROLES.CHRONICLER.WRITING.NEUTRAL
+
+    mapping = {
+        FactionRace.HUMANS: PromptCatalog.ROLES.CHRONICLER.WRITING.HUMANS,
+        FactionRace.GREENSKINS: PromptCatalog.ROLES.CHRONICLER.WRITING.GREENSKINS,
+        FactionRace.ELFS: PromptCatalog.ROLES.CHRONICLER.WRITING.ELFS,
+        FactionRace.BARONIAL_TROOPS: PromptCatalog.ROLES.CHRONICLER.WRITING.BARONIAL_TROOPS,
+        FactionRace.CONGREGATION_OF_THE_METEORITE: (
+            PromptCatalog.ROLES.CHRONICLER.WRITING.CONGREGATION_OF_THE_METEORITE
+        ),
+        FactionRace.MERCENARIES: PromptCatalog.ROLES.CHRONICLER.WRITING.MERCENARIES,
+    }
+    return mapping.get(race, PromptCatalog.ROLES.CHRONICLER.WRITING.NEUTRAL)

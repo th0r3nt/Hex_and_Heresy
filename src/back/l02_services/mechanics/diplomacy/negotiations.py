@@ -93,7 +93,7 @@ class NegotiationService:
             world_state, ambassador.target_faction_id or ""
         )
 
-        sys_prompt = self._build_lord_prompt(world_state, host_faction, envoy_faction, ambassador),
+        sys_prompt = self._build_lord_prompt(world_state, host_faction, envoy_faction, ambassador)
         
         response = await self._llm.generate_structured(
             system_prompt=sys_prompt,
@@ -291,19 +291,14 @@ class NegotiationService:
         guest = ""
         if ambassador is not None:
             traits = ", ".join(ambassador.traits) if ambassador.traits else "неизвестны"
-            guest = (
-                f"\nПеред тобой посол {ambassador.name} (черты: {traits}). "
-                "За дерзость ты вправе казнить его, но это означает войну, поэтому обдумывай решения."
-            )
+            guest = f" Перед тобой посол {ambassador.name} (черты: {traits})."
 
         dynamic_context = (
             f"Ты - {lord.display_name}, правитель фракции '{lord_faction.name}'.\n"
             f"Твой архетип: {lord.archetype.name}. {lord.archetype.description}\n"
             f"Твоя черта: {lord.trait.name}. {lord.trait.text_fragment}\n\n"
             f"С тобой ведет переговоры фракция '{counterpart_faction.name}'.{guest}\n\n"
-            f"{self._render_relation_context(world_state, lord_faction, counterpart_faction)}\n\n"
-            "(Правила ответа:\n"
-            "В reply_text пиши свою речь, в action - решение, только если ты его принял.)"
+            f"{self._render_relation_context(world_state, lord_faction, counterpart_faction)}"
         )
 
         return f"{static_context}\n\n{dynamic_context}"
@@ -329,8 +324,7 @@ class NegotiationService:
             f"Ты - {ambassador.name}, посол фракции '{envoy_faction.name}'. Твои черты: {traits}.\n"
             f"Ты стоишь в цитадели фракции '{host_faction.name}' перед ее правителем.\n\n"
             f"Директива твоего лорда: {directive}\n\n"
-            f"{self._render_relation_context(world_state, envoy_faction, host_faction)}\n\n"
-            "Говори репликами от первого лица и помни, что за дерзость тебя могут казнить."
+            f"{self._render_relation_context(world_state, envoy_faction, host_faction)}"
         )
 
         return f"{static_context}\n\n{dynamic_context}"

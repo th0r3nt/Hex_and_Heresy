@@ -202,7 +202,7 @@ class TestDispatchAnswer:
         system_prompt, user_prompt = llm.calls[0]
         # Проверяем, что в системный промпт лорда ушли правильные блоки файлов:
         assert "[base/persona.md]" in system_prompt
-        assert "[roles/lord.md]" in system_prompt
+        assert "[roles/lord/prompt.md]" in system_prompt
         assert "[factions/elfs.md]" in system_prompt
         assert "Уберите своих сборщиков податей." in user_prompt
 

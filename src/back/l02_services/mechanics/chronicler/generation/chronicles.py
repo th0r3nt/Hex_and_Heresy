@@ -9,7 +9,6 @@
 
 from typing import Optional
 
-from src.back.l01_domain.common import FactionRace
 from src.back.l01_domain.exceptions import ChronicleGenerationFailedError, LLMError
 from src.back.l01_domain.factions.models.faction import Faction
 from src.back.l01_domain.protocols.llm import LLMClientProtocol
@@ -23,65 +22,12 @@ from src.back.l01_domain.world.models.chronicle import (
 from src.back.l03_infrastructure.llm.prompt.builder import PromptBuilder
 from src.back.l03_infrastructure.llm.prompt.catalog import (
     PromptCatalog,
+    get_chronicler_writing_path,
     get_faction_prompt_path,
 )
 
 CHRONICLE_TEMPERATURE = 0.85
 EPITAPH_TEMPERATURE = 0.75
-
-# Перенести в llm/prompts/
-RACE_STYLE_FRAGMENTS: dict[FactionRace, str] = {
-    FactionRace.HUMANS: (
-        "Ты пишешь в дорогой книге ровным фэнтезийным слогом. В тексте уместны "
-        "упоминания инквизиции, костров и веры в то, что павшие исполнили долг."
-    ),
-    FactionRace.GREENSKINS: (
-        "Ты царапаешь запись на деревянной табличке кровью. Пиши коротко, грубо и "
-        "радостно: хорошая драка важнее потерь, а слабых не жалеют."
-    ),
-    FactionRace.ELFS: (
-        "Ты выводишь тонкие светящиеся строки в изящной книге. Пиши отстраненно и "
-        "печально, как существо, пережившее сотни таких битв."
-    ),
-    FactionRace.BARONIAL_TROOPS: (
-        "Ты ведешь бухгалтерский учет войны. Пиши сухо и предельно ровно, считай "
-        "убытки и амортизацию снаряжения, эмоции держи при себе."
-    ),
-    FactionRace.CONGREGATION_OF_THE_METEORITE: (
-        "Ты высекаешь текст на табличке из магического обсидиана. Пиши как "
-        "проповедь: смерть - это подношение, а метеорит все видит."
-    ),
-    FactionRace.MERCENARIES: (
-        "Ты заполняешь отчет для нанимателя. Пиши деловито: кто заплатил, что "
-        "стоило крови и во сколько обошелся контракт."
-    ),
-}
-
-BASE_CHRONICLER_PROMPT = (
-    "Ты - летописец темного постапокалиптического фэнтези мира Hex & Heresy. "
-    "Тебе приносят сухую сводку сражения: числа потерь, имена отрядов и "
-    "переломные моменты.\n"
-    "Твоя работа - превратить эту математику в живой текст.\n\n"
-    "Правила:\n"
-    "1. Не ломай четвертую стену: ты житель этого мира, а не рассказчик игры.\n"
-    "2. Не выдумывай события, которых нет в сводке. Имена, числа и исход - "
-    "только оттуда.\n"
-    "3. Опирайся на переломные моменты: паника, удар во фланг, осечка, гора трупов.\n"
-    "4. Безымянное ополчение хорони общими словами, именные отряды называй поименно."
-)
-
-
-def race_style_fragment(faction: Optional[Faction]) -> str:
-    """
-    Стилистический фрагмент промпта для расы фракции.
-    Без фракции летописец пишет нейтрально: так бывает для боев наемников
-    и стычек на ничьей земле, где нет своего писаря.
-    """
-    if faction is None:
-        return "Ты пишешь нейтральной хроникой стороннего наблюдателя."
-    return RACE_STYLE_FRAGMENTS.get(
-        faction.race, "Ты пишешь нейтральной хроникой стороннего наблюдателя."
-    )
 
 
 class ChronicleGenerator:
@@ -154,21 +100,14 @@ class ChronicleGenerator:
     def _build_chronicle_prompt(
         self, dossier: BattleDossier, faction: Optional[Faction]
     ) -> str:
-        blocks = [
-            PromptCatalog.BASE.PERSONA,
-            PromptCatalog.ROLES.CHRONICLER,
-            PromptCatalog.BASE.MECHANICS.TACTICAL,
-        ]
+        blocks = self._role_blocks(faction)
+        blocks.append(PromptCatalog.BASE.MECHANICS.TACTICAL)
         if faction is not None:
             blocks.append(get_faction_prompt_path(faction.race))
 
         static_context = self._prompt_builder.build(blocks)
 
-        dynamic_lines = [
-            "Тебе приносят сухую сводку сражения: числа потерь, имена отрядов и переломные моменты.",
-            "Преврати эту математику в живой текст.",
-            "Не выдумывай события, которых нет в сводке.",
-        ]
+        dynamic_lines: list[str] = []
 
         if faction is not None:
             dynamic_lines.append(
@@ -179,11 +118,14 @@ class ChronicleGenerator:
         if dossier.is_massacre:
             dynamic_lines.append("Одну из сторон вырезали почти полностью: это была резня.")
 
+        if not dynamic_lines:
+            return static_context
+
         dynamic_context = "\n".join(dynamic_lines)
         return f"{static_context}\n\n{dynamic_context}"
 
     def _build_epitaph_prompt(self, subject: FallenSubject, faction: Optional[Faction]) -> str:
-        blocks = [PromptCatalog.BASE.PERSONA, PromptCatalog.ROLES.CHRONICLER]
+        blocks = self._role_blocks(faction)
         if faction is not None:
             blocks.append(get_faction_prompt_path(faction.race))
 
@@ -196,6 +138,17 @@ class ChronicleGenerator:
         )
 
         return f"{static_context}\n\n{dynamic_context}"
+
+    def _role_blocks(self, faction: Optional[Faction]) -> list[str]:
+        """
+        Файлы, с которых начинается любой промпт летописца: персона, сама роль
+        и стиль записи. Без фракции стиль нейтральный - у боя не было писаря.
+        """
+        return [
+            PromptCatalog.BASE.PERSONA,
+            PromptCatalog.ROLES.CHRONICLER.PROMPT,
+            get_chronicler_writing_path(faction.race if faction is not None else None),
+        ]
 
     def _describe_subject(self, subject: FallenSubject) -> str:
         """
