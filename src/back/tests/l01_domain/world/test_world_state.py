@@ -2,6 +2,13 @@
 Тесты для src/back/l01_domain/world/models/state.py
 """
 
+from src.back.l01_domain.army.models.characters.commanders import (
+    Commander,
+    CommanderArchetype,
+    CommanderTrait,
+)
+from src.back.l01_domain.army.models.characters.heroes import Hero, HeroArchetype
+from src.back.l01_domain.common import CharacterGenerationType, FactionRace
 from src.back.l01_domain.factions.models.buildings import Headquarters
 from src.back.l01_domain.factions.models.diplomacy.relation import DiplomaticRelation
 from src.back.l01_domain.factions.models.faction import Faction
@@ -11,7 +18,7 @@ from src.back.l01_domain.world.constants import GlobalEventCategory
 from src.back.l01_domain.world.models.battleground import BattlefieldLootSite
 from src.back.l01_domain.world.models.events import GlobalEvent
 from src.back.l01_domain.world.models.state import WorldState
-from src.back.l01_domain.common import FactionRace
+
 
 def _make_dummy_faction(faction_id: str, name: str, is_player: bool = False) -> Faction:
     lord = Lord(
@@ -44,6 +51,49 @@ class TestWorldState:
         assert world.get_faction("f_human") == f_player
         assert world.get_player_faction() == f_player
         assert len(world.factions) == 2
+
+    def test_available_commanders_and_heroes_pools(self):
+        world = WorldState()
+
+        commander = Commander(
+            id="cmd_custom_hans",
+            name="Сержант Ганс",
+            faction_id="humans",
+            generation_type=CharacterGenerationType.CUSTOM,
+            archetype=CommanderArchetype(id="arch_vet", name="Ветеран", description="..."),
+            trait=CommanderTrait(id="trait_cynic", name="Циник", text_fragment="..."),
+            custom_biography="Потерял глаз в резне с гоблинами.",
+            personality_prompt_override="Грубый и подозрительный ветеран.",
+        )
+
+        hero = Hero.create_new(
+            name="Илай",
+            faction_id="congregation_of_the_meteorite",
+            archetype=HeroArchetype(
+                id="arch_seer", name="Видящий", description="...", special_rule="..."
+            ),
+            max_hp=80.0,
+            generation_type=CharacterGenerationType.CUSTOM,
+            custom_biography="Бывший хирург Империи.",
+        )
+
+        # Добавление в пул доступных
+        world.add_available_commander(commander)
+        world.add_available_hero(hero)
+
+        assert len(world.available_commanders) == 1
+        assert world.available_commanders["cmd_custom_hans"].name == "Сержант Ганс"
+        assert len(world.available_heroes) == 1
+        assert world.available_heroes[hero.id].name == "Илай"
+
+        # Извлечение из пула (например, при найме)
+        removed_cmd = world.remove_available_commander("cmd_custom_hans")
+        assert removed_cmd is commander
+        assert len(world.available_commanders) == 0
+
+        removed_hero = world.remove_available_hero(hero.id)
+        assert removed_hero is hero
+        assert len(world.available_heroes) == 0
 
     def test_diplomatic_relation_bidirectional_lookup(self):
         world = WorldState()

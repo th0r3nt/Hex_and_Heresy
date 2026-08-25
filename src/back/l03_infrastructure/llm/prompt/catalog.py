@@ -26,6 +26,7 @@ class PromptCatalog:
         GREENSKINS = "factions/greenskins.md"
         HUMANS = "factions/humans.md"
         MERCENARIES = "factions/mercenaries.md"
+        NEUTRALS = "factions/neutrals.md"
 
     class LORE:
         class BASIC:
@@ -175,16 +176,14 @@ def get_faction_prompt_path(race: FactionRace) -> str:
             PromptCatalog.FACTIONS.CONGREGATION_OF_THE_METEORITE
         ),
         FactionRace.MERCENARIES: PromptCatalog.FACTIONS.MERCENARIES,
+        FactionRace.NEUTRALS: PromptCatalog.FACTIONS.NEUTRALS,
     }
     return mapping[race]
 
 
 def get_chronicler_writing_path(race: Optional[FactionRace]) -> str:
-    """
-    Возвращает путь к файлу стиля записи летописца для конкретной расы.
-    """
-    
-    if race is None:
+    """Возвращает путь к файлу стиля записи летописца для конкретной расы."""
+    if race is None or race == FactionRace.NEUTRALS:
         return PromptCatalog.ROLES.CHRONICLER.WRITING.NEUTRAL
 
     mapping = {
@@ -196,5 +195,6 @@ def get_chronicler_writing_path(race: Optional[FactionRace]) -> str:
             PromptCatalog.ROLES.CHRONICLER.WRITING.CONGREGATION_OF_THE_METEORITE
         ),
         FactionRace.MERCENARIES: PromptCatalog.ROLES.CHRONICLER.WRITING.MERCENARIES,
+        FactionRace.NEUTRALS: PromptCatalog.ROLES.CHRONICLER.WRITING.NEUTRAL,
     }
     return mapping.get(race, PromptCatalog.ROLES.CHRONICLER.WRITING.NEUTRAL)

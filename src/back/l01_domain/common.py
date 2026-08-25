@@ -16,6 +16,7 @@ class FactionRace(str, Enum):
     BARONIAL_TROOPS = "baronial_troops"
     CONGREGATION_OF_THE_METEORITE = "congregation_of_the_meteorite"
     MERCENARIES = "mercenaries"
+    NEUTRALS = "neutrals"
 
 
 class CharacterGenerationType(str, Enum):

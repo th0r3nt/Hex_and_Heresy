@@ -16,7 +16,7 @@ from src.back.l01_domain.army.models.characters.commanders import (
 from src.back.l01_domain.army.models.characters.heroes import Hero, HeroArchetype, HeroState
 from src.back.l01_domain.army.models.strategic import StrategicArmy
 from src.back.l01_domain.combat.models.state import TacticalBattleState
-from src.back.l01_domain.common import FactionRace
+from src.back.l01_domain.common import CharacterGenerationType, FactionRace
 from src.back.l01_domain.factions.constants import DiplomaticStance
 from src.back.l01_domain.factions.models.buildings import Headquarters
 from src.back.l01_domain.factions.models.diplomacy.messengers import Ambassador
@@ -388,3 +388,55 @@ class TestRender:
 
         assert rendered.startswith("## Твой личный статус\n")
         assert "\n\n## Экономика фракции\n" in rendered
+
+    def test_custom_commander_biography_and_override_in_context(
+        self, builder: ContextBuilder, world_state: WorldState, army: StrategicArmy
+    ):
+        commander = Commander(
+            name="Ганс",
+            faction_id="humans",
+            generation_type=CharacterGenerationType.CUSTOM,
+            archetype=CommanderArchetype(id="arch", name="Осторожный", description="..."),
+            trait=CommanderTrait(id="trait", name="Педант", text_fragment="..."),
+            custom_biography="Выжил в резне с гоблинами.",
+            personality_prompt_override="Ненавидит зеленокожих и пьет дешевый ром.",
+        )
+
+        blocks = builder.build_commander_context(world_state, commander, army)
+        rendered = builder.render(blocks)
+
+        assert "Выжил в резне с гоблинами." in rendered
+        assert "Ненавидит зеленокожих и пьет дешевый ром." in rendered
+
+    def test_custom_hero_biography_and_override_in_context(
+        self, builder: ContextBuilder, world_state: WorldState
+    ):
+        hero = Hero(
+            name="Варг",
+            faction_id="greenskins",
+            archetype=HeroArchetype(
+                id="arch_warrior", name="Воин", description="...", special_rule="..."
+            ),
+            max_hp=100.0,
+            state=HeroState(current_hp=100.0),
+            custom_biography="Бывший гладиатор арены.",
+            personality_prompt_override="Всегда ищет драки один на один.",
+        )
+
+        blocks = builder.build_hero_context(world_state, hero)
+        rendered = builder.render(blocks)
+
+        assert "Бывший гладиатор арены." in rendered
+        assert "Всегда ищет драки один на один." in rendered
+
+    def test_custom_lord_biography_and_override_in_context(
+        self, builder: ContextBuilder, world_state: WorldState, faction: Faction
+    ):
+        faction.lord.custom_biography = "Захватил трон в результате переворота."
+        faction.lord.personality_prompt_override = "Крайне подозрителен ко всем послам."
+
+        blocks = builder.build_lord_context(world_state, faction)
+        rendered = builder.render(blocks)
+
+        assert "Захватил трон в результате переворота." in rendered
+        assert "Крайне подозрителен ко всем послам." in rendered

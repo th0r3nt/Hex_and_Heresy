@@ -18,4 +18,5 @@ RACES: Final[list[FactionRace]] = [
     FactionRace.BARONIAL_TROOPS,
     FactionRace.CONGREGATION_OF_THE_METEORITE,
     FactionRace.MERCENARIES,
+    FactionRace.NEUTRALS,
 ]

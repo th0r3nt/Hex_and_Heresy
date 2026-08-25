@@ -1,5 +1,5 @@
 """
-Тесты инвариантов полководцев, героев, перков, шрамов и артефактов.
+Тесты инвариантов полководцев, героев, лордов, перков, шрамов и артефактов.
 """
 
 import pytest
@@ -16,7 +16,6 @@ from src.back.l01_domain.army.models.characters.commanders import (
     CommanderArchetype,
     CommanderArchetypeStats,
     CommanderCharacteristics,
-    CommanderGenerationType,
     CommanderTrait,
 )
 from src.back.l01_domain.army.models.characters.heroes import (
@@ -25,8 +24,18 @@ from src.back.l01_domain.army.models.characters.heroes import (
     Perk,
     Scar,
 )
-from src.back.l01_domain.common import MechanicalModifier, StatName
+from src.back.l01_domain.common import (
+    CharacterGenerationType,
+    MechanicalModifier,
+    StatName,
+)
 from src.back.l01_domain.exceptions.army import HeroLevelTooLowError, NegativeExperienceError
+from src.back.l01_domain.factions.models.lord import (
+    Lord,
+    LordArchetype,
+    LordArchetypeStats,
+    LordTrait,
+)
 
 
 @pytest.fixture
@@ -39,12 +48,24 @@ def sample_hero() -> Hero:
         trigger_modifier=MechanicalModifier(stat_name=StatName.DAMAGE, value=5.0),
     )
     return Hero.create_new(
-        name="Варг", faction_id="greenskins", archetype=archetype, max_hp=150.0
+        name="Варг",
+        faction_id="greenskins",
+        archetype=archetype,
+        max_hp=150.0,
+        generation_type=CharacterGenerationType.CUSTOM,
+        custom_biography="Бывший раб гладиаторских ям.",
+        personality_prompt_override="Крайне агрессивен в рукопашной.",
     )
 
 
-class TestHeroDamageAndScarsInvariants:
-    def test_hero_armor_can_fully_absorb_damage(self, sample_hero):
+class TestHeroCustomizationAndInvariants:
+    def test_custom_hero_fields(self, sample_hero: Hero):
+        assert sample_hero.generation_type == CharacterGenerationType.CUSTOM
+        assert sample_hero.custom_biography == "Бывший раб гладиаторских ям."
+        assert sample_hero.personality_prompt_override == "Крайне агрессивен в рукопашной."
+        assert sample_hero.is_legendary is False
+
+    def test_hero_armor_can_fully_absorb_damage(self, sample_hero: Hero):
         artifact_armor = HeroArtifact(
             id="art_armor_01",
             name="Драконий панцирь",
@@ -56,13 +77,12 @@ class TestHeroDamageAndScarsInvariants:
         )
         sample_hero.armor = artifact_armor
 
-        # Урон меньше брони полностью поглощается героем (в отличие от Squad, нет мин. урона 1)
         is_lethal = sample_hero.take_damage(raw_damage=25.0)
 
         assert is_lethal is False
         assert sample_hero.state.current_hp == 150.0
 
-    def test_hero_lethal_damage_and_scar_recovery(self, sample_hero):
+    def test_hero_lethal_damage_and_scar_recovery(self, sample_hero: Hero):
         is_lethal = sample_hero.take_damage(raw_damage=500.0)
 
         assert is_lethal is True
@@ -81,7 +101,6 @@ class TestHeroDamageAndScarsInvariants:
         assert sample_hero.state.current_hp == 1.0
         assert len(sample_hero.state.scars) == 1
 
-        # Повторное ранение и наложение второго шрама
         scar2 = Scar(
             name="Выбитый глаз",
             description="...",
@@ -92,7 +111,7 @@ class TestHeroDamageAndScarsInvariants:
         assert sample_hero.state.wounded_ticks_remaining == 4
         assert len(sample_hero.state.scars) == 2
 
-    def test_hero_modifiers_aggregation(self, sample_hero):
+    def test_hero_modifiers_aggregation(self, sample_hero: Hero):
         perk = Perk(
             id="perk_berserk",
             name="Берсерк",
@@ -109,7 +128,6 @@ class TestHeroDamageAndScarsInvariants:
         sample_hero.learn_perk(perk)
         sample_hero.apply_scar(scar, recovery_ticks=1)
 
-        # Модификаторы: перк (10) + шрам (-0.5) + архетип триггер (5.0)
         modifiers = sample_hero.get_active_modifiers()
         stat_values = {m.stat_name: m.value for m in modifiers}
 
@@ -117,7 +135,7 @@ class TestHeroDamageAndScarsInvariants:
         assert stat_values["speed"] == -0.5
         assert stat_values["damage"] in (10.0, 5.0)
 
-    def test_learn_perk_level_invariants(self, sample_hero):
+    def test_learn_perk_level_invariants(self, sample_hero: Hero):
         perk_high_level = Perk(
             id="perk_warlord",
             name="Полководец",
@@ -135,12 +153,34 @@ class TestHeroDamageAndScarsInvariants:
         assert exc_info.value.perk_id == "perk_warlord"
 
 
-class TestCommanderInvariants:
+class TestLordAndCommanderCustomizationInvariants:
+    def test_custom_lord_fields(self):
+        lord = Lord(
+            faction_id="humans",
+            name="Бенедикт",
+            title="Канцлер",
+            generation_type=CharacterGenerationType.CUSTOM,
+            archetype=LordArchetype(
+                id="arch_bureaucrat",
+                name="Бюрократ",
+                description="...",
+                stats=LordArchetypeStats(tax_rate_bias=0.2),
+            ),
+            trait=LordTrait(id="trait_greedy", name="Скупой", text_fragment="..."),
+            custom_biography="Поднялся из счетоводов гильдии.",
+            personality_prompt_override="Помешан на проверке налоговых деклараций.",
+        )
+
+        assert lord.generation_type == CharacterGenerationType.CUSTOM
+        assert lord.custom_biography == "Поднялся из счетоводов гильдии."
+        assert lord.personality_prompt_override == "Помешан на проверке налоговых деклараций."
+        assert lord.display_name == "Канцлер Бенедикт"
+
     def test_commander_experience_and_bounds(self):
         commander = Commander(
             name="Ольгерд",
             faction_id="baronial_troops",
-            generation_type=CommanderGenerationType.PROCEDURAL,
+            generation_type=CharacterGenerationType.PROCEDURAL,
             archetype=CommanderArchetype(
                 id="arch_defender",
                 name="Защитник",

@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 from src.back.l01_domain.combat.constants import TimeOfDay
 from src.back.l01_domain.combat.models.reports import MovementStepReport
 from src.back.l01_domain.factions.models.economy import FactionEconomyReport
+from src.back.l01_domain.world.models.events import GlobalEvent
 
 
 class EventsStepReport(BaseModel):
@@ -20,6 +21,13 @@ class EventsStepReport(BaseModel):
     is_neon_hours: bool = Field(default=False)
     phase_changed: bool = Field(default=False)
 
+    new_events: list[GlobalEvent] = Field(
+        default_factory=list, description="Новые события, запущенные на этом такте"
+    )
+    spawned_army_ids: list[str] = Field(
+        default_factory=list, description="ID армий, появившихся на карте в результате событий"
+    )
+
     expired_event_ids: list[str] = Field(default_factory=list)
     decayed_battlefield_ids: list[str] = Field(default_factory=list)
     recovered_hero_ids: list[str] = Field(default_factory=list)
@@ -27,7 +35,7 @@ class EventsStepReport(BaseModel):
 
 class VeterancyServiceStepReport(BaseModel):
     """
-    Отчёт о результатах шага учёта выслуги лет за один глобальный такт.
+    Отчет о результатах шага учета выслуги лет за один глобальный такт.
     """
 
     veterancy_candidate_ids: list[str] = Field(default_factory=list)

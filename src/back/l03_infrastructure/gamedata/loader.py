@@ -134,9 +134,7 @@ def build_static_registry() -> StaticGameDataRegistry:
         _load_faction_module(
             registry, race, "accessories.accessories_list", "ACCESSORIES_LIST", _loader_eq
         )
-        _load_faction_module(
-            registry, race, "weapon.melee_list", "MELEE_WEAPONS", _loader_eq
-        )
+        _load_faction_module(registry, race, "weapon.melee_list", "MELEE_WEAPONS", _loader_eq)
         _load_faction_module(
             registry, race, "weapon.ranged_list", "RANGED_WEAPONS", _loader_eq
         )
@@ -166,9 +164,13 @@ def _load_faction_module(
         data_dict = getattr(mod, dict_name, {})
         for raw_data in data_dict.values():
             loader_func(registry, race, raw_data)
-    except ModuleNotFoundError:
-        # Для некоторых фракций модуль может отсутствовать (например, buildings у наемников)
-        pass
+    except ModuleNotFoundError as e:
+        # Если отсутствует сам файл или любая из его родительских папок
+        # (например, у наемников или нейтралов нет папки buildings), безопасно пропускаем
+        if e.name and module_path.startswith(e.name):
+            return
+        main_logger.error(f"Ошибка импорта зависимостей внутри {module_path}: {e}")
+        raise
     except Exception as e:
         main_logger.error(f"Ошибка при загрузке {module_path}: {e}")
         raise
