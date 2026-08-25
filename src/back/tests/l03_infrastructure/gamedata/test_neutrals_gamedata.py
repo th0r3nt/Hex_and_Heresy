@@ -9,7 +9,7 @@ from src.back.gamedata.neutrals.common import (
     NeutralsUnitId,
     NeutralsWeaponId,
 )
-from src.back.gamedata.neutrals.roster.roster import ROSTER_LIST
+from src.back.gamedata.neutrals.roster import ROSTER_LIST
 from src.back.l01_domain.army.constants import (
     ArmorCategory,
     EquipmentSlot,
