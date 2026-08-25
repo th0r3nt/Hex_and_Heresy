@@ -5,7 +5,7 @@
 
 import pytest
 
-from src.back.l01_domain.exceptions import LLMRequestFailedError
+from src.back.l01_domain.exceptions.llm import LLMRequestFailedError
 from src.back.l01_domain.factions.constants import ResourceType
 from src.back.l01_domain.world.constants import (
     RUMOR_IDLE_TICKS_THRESHOLD,

@@ -17,7 +17,7 @@ from src.back.utils.logger import main_logger
 from src.back.l01_domain.army.models.card.squad import Squad
 from src.back.l01_domain.combat.models.reports import TacticalTurnReport
 from src.back.l01_domain.combat.models.state import TacticalBattleState
-from src.back.l01_domain.exceptions import (
+from src.back.l01_domain.exceptions.chronicler import (
     BattleDossierNotFoundError,
     ChronicleGenerationFailedError,
 )

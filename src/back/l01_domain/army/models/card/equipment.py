@@ -13,7 +13,7 @@ from src.back.l01_domain.army.constants import (
     UnitSizeCategory,
     WeaponCategory,
 )
-from src.back.l01_domain.exceptions import InvalidEquipmentSlotError
+from src.back.l01_domain.exceptions.army import InvalidEquipmentSlotError
 
 EquipmentCategoryType = Union[WeaponCategory, ArmorCategory, AccessoryCategory]
 

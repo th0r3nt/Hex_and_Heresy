@@ -11,7 +11,7 @@ from src.back.l01_domain.army.models.strategic import StrategicArmy
 from src.back.l01_domain.combat.constants import BattleMapSize
 from src.back.l01_domain.combat.models.state import TacticalBattleState, TacticalCellState
 from src.back.l01_domain.common import FactionRace
-from src.back.l01_domain.exceptions import NoArmiesLockedForBattleError
+from src.back.l01_domain.exceptions.world import NoArmiesLockedForBattleError
 from src.back.l01_domain.maps.models.strategic import HexCoordinates
 from src.back.l01_domain.maps.models.tactical import CellCoordinates
 from src.back.l01_domain.world.models.state import WorldState

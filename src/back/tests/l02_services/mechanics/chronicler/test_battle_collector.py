@@ -14,7 +14,7 @@ from src.back.l01_domain.combat.models.reports import (
     MoraleAndEnvironmentReport,
     RangedCombatReport,
 )
-from src.back.l01_domain.exceptions import BattleDossierNotFoundError
+from src.back.l01_domain.exceptions.chronicler import BattleDossierNotFoundError
 from src.back.l01_domain.maps.models.strategic import HexCoordinates
 from src.back.l01_domain.maps.models.tactical import CellCoordinates
 from src.back.l01_domain.world.models.battle_log import BattleSide, TurningPointKind

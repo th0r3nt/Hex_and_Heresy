@@ -5,7 +5,7 @@
 
 import pytest
 
-from src.back.l01_domain.exceptions import InvalidRadiusError
+from src.back.l01_domain.exceptions.maps import InvalidRadiusError
 from src.back.l01_domain.maps.models.tactical import (
     CellCoordinates,
     cell_distance_chebyshev,

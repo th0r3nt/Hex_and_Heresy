@@ -9,10 +9,7 @@ from datetime import datetime, timezone
 from typing import Optional
 from uuid import uuid4
 
-from src.back.l01_domain.exceptions import (
-    EmptySaveNameError,
-    SaveDuringBattleForbiddenError,
-)
+from src.back.l01_domain.exceptions.saves import EmptySaveNameError, SaveDuringBattleForbiddenError
 from src.back.l01_domain.world.models.saves import SaveMetadata, SaveSnapshot
 from src.back.l01_domain.world.models.state import WorldState
 

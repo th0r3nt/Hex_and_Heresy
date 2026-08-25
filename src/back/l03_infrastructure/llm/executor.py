@@ -17,7 +17,7 @@ import openai
 from pydantic import BaseModel, ValidationError
 
 from src.back.utils.logger import main_logger
-from src.back.l01_domain.exceptions import (
+from src.back.l01_domain.exceptions.llm import (
     LLMAuthorizationError,
     LLMRequestFailedError,
     LLMResponseFormatError,

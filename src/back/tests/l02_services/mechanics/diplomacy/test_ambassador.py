@@ -7,7 +7,7 @@ import pytest
 
 from src.back.l01_domain.army.constants import StrategicMovementPace
 from src.back.l01_domain.army.models.strategic import StrategicArmy
-from src.back.l01_domain.exceptions import (
+from src.back.l01_domain.exceptions.diplomacy import (
     AmbassadorUnavailableError,
     FactionCapitalUnknownError,
     SelfDiplomacyForbiddenError,

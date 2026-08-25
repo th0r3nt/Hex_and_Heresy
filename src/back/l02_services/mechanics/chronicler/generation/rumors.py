@@ -8,7 +8,7 @@
 
 from typing import Optional
 
-from src.back.l01_domain.exceptions import LLMError
+from src.back.l01_domain.exceptions.llm import LLMError
 from src.back.l01_domain.factions.models.faction import Faction
 from src.back.l01_domain.protocols.llm import LLMClientProtocol
 from src.back.l01_domain.world.constants import RUMOR_IDLE_TICKS_THRESHOLD

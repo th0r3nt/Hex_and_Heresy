@@ -26,10 +26,7 @@ from src.back.l01_domain.army.models.characters.heroes import (
     Scar,
 )
 from src.back.l01_domain.common import MechanicalModifier, StatName
-from src.back.l01_domain.exceptions import (
-    HeroLevelTooLowError,
-    NegativeExperienceError,
-)
+from src.back.l01_domain.exceptions.army import HeroLevelTooLowError, NegativeExperienceError
 
 
 @pytest.fixture

@@ -6,7 +6,7 @@
 import pytest
 
 from src.back.l01_domain.common import FactionRace
-from src.back.l01_domain.exceptions import (
+from src.back.l01_domain.exceptions.factions import (
     BuildingMaxLevelReachedError,
     InsufficientResourcesError,
     NegativeResourceAmountError,

@@ -5,10 +5,7 @@
 
 import pytest
 
-from src.back.l01_domain.exceptions import (
-    InvalidCubeCoordinatesError,
-    InvalidRadiusError,
-)
+from src.back.l01_domain.exceptions.maps import InvalidCubeCoordinatesError, InvalidRadiusError
 from src.back.l01_domain.maps.constants import (
     DISTANCE_BETWEEN_CITADELS_HEXES,
     STRATEGIC_MAP_TOTAL_HEXES,

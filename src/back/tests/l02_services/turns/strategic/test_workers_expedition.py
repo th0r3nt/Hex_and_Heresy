@@ -8,7 +8,7 @@ from src.back.l01_domain.army.models.card.squad import Squad
 from src.back.l01_domain.army.models.card.unit import BaseUnitStats, UnitArchetype
 from src.back.l01_domain.army.models.strategic import StrategicArmy
 from src.back.l01_domain.common import FactionRace
-from src.back.l01_domain.exceptions import WorkerNotAvailableError
+from src.back.l01_domain.exceptions.workers import WorkerNotAvailableError
 from src.back.l01_domain.factions.constants import (
     ResourceType,
     WorkerAssignmentStatus,

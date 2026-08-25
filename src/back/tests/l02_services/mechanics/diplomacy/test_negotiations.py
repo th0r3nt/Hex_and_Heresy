@@ -8,7 +8,7 @@ from typing import Optional
 import pytest
 from pydantic import BaseModel
 
-from src.back.l01_domain.exceptions import AmbassadorUnavailableError
+from src.back.l01_domain.exceptions.diplomacy import AmbassadorUnavailableError
 from src.back.l01_domain.factions.constants import (
     DiplomaticActionType,
     DiplomaticStance,

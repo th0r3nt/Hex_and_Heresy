@@ -11,7 +11,7 @@ from typing import Callable, Optional
 from pydantic import ValidationError
 
 from src.back.l01_domain.army.models.card.equipment import Equipment
-from src.back.l01_domain.exceptions import SaveDataCorruptedError, SaveNotFoundError
+from src.back.l01_domain.exceptions.saves import SaveDataCorruptedError, SaveNotFoundError
 from src.back.l01_domain.protocols.gamedata import GameDataRepositoryProtocol
 from src.back.l01_domain.protocols.saves import SaveGameRepositoryProtocol
 from src.back.l01_domain.world.models.state import WorldState

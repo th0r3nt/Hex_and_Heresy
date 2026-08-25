@@ -55,7 +55,7 @@ src/back/
 │   ├── factions/        # Diplomacy, Lord, Faction aggregate
 │   ├── maps/            # GlobalMap, TacticalGrid, Hex logic
 │   ├── world/           # WorldState, Timekeeping, Resources
-│   ├── exceptions.py    # Domain Exceptions
+│   ├── exceptions/      # Domain Exceptions (base, army, combat, factions, llm, ...)
 │   └── state.py         # Protocols (Interfaces) for Infrastructure
 │
 ├── l02_services/        # APPLICATION: Use Cases, Orchestration, Event Handlers.

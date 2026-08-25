@@ -4,7 +4,7 @@
 
 from typing import Optional
 
-from src.back.l01_domain.exceptions import (
+from src.back.l01_domain.exceptions.workers import (
     InvalidAssignmentTargetError,
     WorkerNotAvailableError,
 )

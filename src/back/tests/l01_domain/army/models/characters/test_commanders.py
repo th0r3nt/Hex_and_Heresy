@@ -16,7 +16,7 @@ from src.back.l01_domain.army.models.characters.commanders import (
     CommanderTrait,
 )
 
-from src.back.l01_domain.exceptions import NegativeExperienceError
+from src.back.l01_domain.exceptions.army import NegativeExperienceError
 
 
 @pytest.fixture

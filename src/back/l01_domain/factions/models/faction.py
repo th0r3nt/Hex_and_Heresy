@@ -7,7 +7,7 @@ from uuid import uuid4
 from pydantic import BaseModel, Field
 
 from src.back.l01_domain.common import FactionRace
-from src.back.l01_domain.exceptions import (
+from src.back.l01_domain.exceptions.factions import (
     InsufficientResourcesError,
     NegativeResourceAmountError,
 )

@@ -12,7 +12,7 @@ from typing import Awaitable, Callable, Dict, List, Optional, TypeVar
 from pydantic import BaseModel
 
 from src.back.utils.logger import main_logger
-from src.back.l01_domain.exceptions import (
+from src.back.l01_domain.exceptions.llm import (
     LLMError,
     LLMKeyMissingError,
     LLMProviderNotConfiguredError,

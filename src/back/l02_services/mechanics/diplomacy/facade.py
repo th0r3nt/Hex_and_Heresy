@@ -7,7 +7,7 @@
 from random import Random
 from typing import Optional
 
-from src.back.l01_domain.exceptions import AmbassadorUnavailableError
+from src.back.l01_domain.exceptions.diplomacy import AmbassadorUnavailableError
 from src.back.l01_domain.factions.constants import (
     AmbassadorStatus,
     DiplomaticActionType,

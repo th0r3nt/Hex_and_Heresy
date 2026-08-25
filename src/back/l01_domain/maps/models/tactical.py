@@ -13,7 +13,7 @@ from src.back.l01_domain.maps.constants import (
     GridDirection,
 )
 
-from src.back.l01_domain.exceptions import InvalidRadiusError
+from src.back.l01_domain.exceptions.maps import InvalidRadiusError
 
 class CellCoordinates(BaseModel):
     """

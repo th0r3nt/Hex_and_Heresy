@@ -5,7 +5,7 @@
 
 import pytest
 
-from src.back.l01_domain.exceptions import (
+from src.back.l01_domain.exceptions.diplomacy import (
     PactForbiddenDuringWarError,
     WarAllianceWithEnemyForbiddenError,
 )

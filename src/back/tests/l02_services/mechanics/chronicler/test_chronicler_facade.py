@@ -6,7 +6,7 @@
 import pytest
 
 from src.back.l01_domain.combat.models.reports import MeleeCombatReport
-from src.back.l01_domain.exceptions import LLMRequestFailedError
+from src.back.l01_domain.exceptions.llm import LLMRequestFailedError
 from src.back.l01_domain.world.models.chronicle import LLMChronicleResponse
 from src.back.l02_services.mechanics.chronicler.facade import ChroniclerFacade
 from src.back.utils.event.registry import GameEvents

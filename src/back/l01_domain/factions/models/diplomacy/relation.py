@@ -17,7 +17,7 @@ from src.back.l01_domain.factions.models.diplomacy.pacts import (
     WarAlliancePact,
 )
 
-from src.back.l01_domain.exceptions import (
+from src.back.l01_domain.exceptions.diplomacy import (
     PactForbiddenDuringWarError,
     WarAllianceWithEnemyForbiddenError,
 )

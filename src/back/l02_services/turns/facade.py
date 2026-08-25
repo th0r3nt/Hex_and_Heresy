@@ -9,7 +9,7 @@ from src.back.l01_domain.army.models.characters.commanders import Commander
 from src.back.l01_domain.army.models.characters.heroes import Hero
 from src.back.l01_domain.combat.models.reports import TacticalTurnReport
 from src.back.l01_domain.combat.models.state import TacticalBattleState
-from src.back.l01_domain.exceptions import NoArmiesLockedForBattleError
+from src.back.l01_domain.exceptions.world import NoArmiesLockedForBattleError
 from src.back.l01_domain.maps.models.strategic import HexCoordinates
 from src.back.l01_domain.protocols.events import EventBusProtocol
 from src.back.l01_domain.world.models.reports import GlobalTurnReport

@@ -23,10 +23,7 @@ from src.back.l01_domain.maps.models.strategic import (
     hex_ring,
 )
 
-from src.back.l01_domain.exceptions import (
-    InvalidCubeCoordinatesError,
-    InvalidRadiusError,
-)
+from src.back.l01_domain.exceptions.maps import InvalidCubeCoordinatesError, InvalidRadiusError
 
 
 class TestHexCoordinates:

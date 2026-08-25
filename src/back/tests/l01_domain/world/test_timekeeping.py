@@ -8,7 +8,7 @@ from src.back.l01_domain.combat.constants import TimeOfDay
 from src.back.l01_domain.world.constants import DAYS_PER_CYCLE, GREY_HOURS_COUNT, HOURS_PER_DAY
 from src.back.l01_domain.world.models.timekeeping import GameTime
 
-from src.back.l01_domain.exceptions import TimeRewindForbiddenError
+from src.back.l01_domain.exceptions.timekeeping import TimeRewindForbiddenError
 
 
 class TestGameTime:

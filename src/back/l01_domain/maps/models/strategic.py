@@ -16,7 +16,7 @@ from src.back.l01_domain.maps.constants import (
     TerritoryZoneType,
 )
 
-from src.back.l01_domain.exceptions import InvalidRadiusError, InvalidCubeCoordinatesError
+from src.back.l01_domain.exceptions.maps import InvalidCubeCoordinatesError, InvalidRadiusError
 
 
 class HexCoordinates(BaseModel):

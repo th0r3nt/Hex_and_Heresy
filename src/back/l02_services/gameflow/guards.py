@@ -4,7 +4,7 @@
 
 from typing import Any, Callable, Optional
 
-from src.back.l01_domain.exceptions import DomainError
+from src.back.l01_domain.exceptions.base import DomainError
 from src.back.l01_domain.world.models.gameflow import (
     CombatTransitionPayload,
     DiplomacyTransitionPayload,

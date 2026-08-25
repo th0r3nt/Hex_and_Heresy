@@ -12,7 +12,7 @@ from src.back.l01_domain.army.models.characters.artifacts import HeroArtifact
 from src.back.l01_domain.common import MechanicalModifier
 from src.back.l01_domain.army.constants import MAX_HERO_LEVEL
 
-from src.back.l01_domain.exceptions import HeroLevelTooLowError
+from src.back.l01_domain.exceptions.army import HeroLevelTooLowError
 
 
 class HeroArchetype(BaseModel):

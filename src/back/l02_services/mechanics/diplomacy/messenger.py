@@ -10,7 +10,7 @@ import math
 from random import Random
 from typing import Optional
 
-from src.back.l01_domain.exceptions import (
+from src.back.l01_domain.exceptions.diplomacy import (
     FactionCapitalUnknownError,
     SelfDiplomacyForbiddenError,
 )

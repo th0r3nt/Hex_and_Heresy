@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field, ConfigDict
 
 from src.back.l01_domain.common import MechanicalModifier
 
-from src.back.l01_domain.exceptions import NegativeExperienceError
+from src.back.l01_domain.exceptions.army import NegativeExperienceError
 
 
 class CommanderGenerationType(str, Enum):

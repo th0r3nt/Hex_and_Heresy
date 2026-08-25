@@ -12,7 +12,7 @@ from src.back.l01_domain.world.constants import (
     HOURS_PER_DAY,
 )
 
-from src.back.l01_domain.exceptions import TimeRewindForbiddenError
+from src.back.l01_domain.exceptions.timekeeping import TimeRewindForbiddenError
 
 class GameTime(BaseModel):
     """

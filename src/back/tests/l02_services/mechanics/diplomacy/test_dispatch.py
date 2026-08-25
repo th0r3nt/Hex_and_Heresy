@@ -8,11 +8,11 @@ from random import Random
 import pytest
 
 from src.back.l01_domain.army.models.strategic import StrategicArmy
-from src.back.l01_domain.exceptions import (
+from src.back.l01_domain.exceptions.diplomacy import (
     FactionCapitalUnknownError,
-    InsufficientResourcesError,
     SelfDiplomacyForbiddenError,
 )
+from src.back.l01_domain.exceptions.factions import InsufficientResourcesError
 from src.back.l01_domain.factions.constants import (
     DISPATCH_BASE_COST_GOLD,
     DISPATCH_COST_GOLD_PER_HEX,

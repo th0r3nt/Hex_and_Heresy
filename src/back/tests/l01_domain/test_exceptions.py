@@ -1,5 +1,5 @@
 """
-Модульные тесты для иерархии доменных исключений src/back/l01_domain/exceptions.py.
+Модульные тесты для иерархии доменных исключений src/back/l01_domain/exceptions/.
 
 Проверяет:
 1. Корректность дерева наследования всех доменных ошибок относительно DomainError.
@@ -9,41 +9,47 @@
 
 import pytest
 
-from src.back.l01_domain.exceptions import (
-    AmbassadorUnavailableError,
+from src.back.l01_domain.exceptions.army import (
     ArmyError,
-    BattlefieldDepletedError,
-    BuildingMaxLevelReachedError,
-    BuildingSlotsExhaustedError,
+    CommanderAlreadyAssignedError,
+    HeroAlreadyWoundedError,
+    HeroLevelTooLowError,
+    InvalidEquipmentSlotError,
+    NegativeExperienceError,
+    SquadDepletedError,
+)
+from src.back.l01_domain.exceptions.base import DomainError
+from src.back.l01_domain.exceptions.combat import (
     CellOccupiedError,
     CellOutOfBoundsError,
     CombatError,
-    CommanderAlreadyAssignedError,
+    InvalidBattlePhaseError,
+    InvalidReactionError,
+    OrderNotAllowedError,
+)
+from src.back.l01_domain.exceptions.diplomacy import (
+    AmbassadorUnavailableError,
     DiplomacyError,
     DiplomaticRelationNotFoundError,
-    DomainError,
-    FactionError,
-    HeroAlreadyWoundedError,
-    HeroLevelTooLowError,
-    HexOutOfBoundsError,
-    InsufficientResourcesError,
-    InvalidBattlePhaseError,
-    InvalidCubeCoordinatesError,
-    InvalidEquipmentSlotError,
-    InvalidRadiusError,
-    InvalidReactionError,
-    MapGeometryError,
-    NegativeExperienceError,
-    NegativeResourceAmountError,
-    OrderNotAllowedError,
     PactForbiddenDuringWarError,
-    SquadDepletedError,
-    TimekeepingError,
-    TimeRewindForbiddenError,
     WarAllianceWithEnemyForbiddenError,
-    WorldStateError,
+)
+from src.back.l01_domain.exceptions.factions import (
+    BuildingMaxLevelReachedError,
+    BuildingSlotsExhaustedError,
+    FactionError,
+    InsufficientResourcesError,
+    NegativeResourceAmountError,
     ZoneNotControlledError,
 )
+from src.back.l01_domain.exceptions.maps import (
+    HexOutOfBoundsError,
+    InvalidCubeCoordinatesError,
+    InvalidRadiusError,
+    MapGeometryError,
+)
+from src.back.l01_domain.exceptions.timekeeping import TimeRewindForbiddenError, TimekeepingError
+from src.back.l01_domain.exceptions.world import BattlefieldDepletedError, WorldStateError
 
 
 class TestExceptionsHierarchy:

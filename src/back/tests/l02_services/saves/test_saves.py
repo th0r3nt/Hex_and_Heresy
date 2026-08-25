@@ -10,7 +10,7 @@ from src.back.l01_domain.army.constants import EquipmentSlot
 from src.back.l01_domain.army.models.card.equipment import Equipment
 from src.back.l01_domain.army.models.strategic import StrategicArmy
 from src.back.l01_domain.common import FactionRace
-from src.back.l01_domain.exceptions import (
+from src.back.l01_domain.exceptions.saves import (
     EmptySaveNameError,
     SaveDuringBattleForbiddenError,
     SaveNotFoundError,

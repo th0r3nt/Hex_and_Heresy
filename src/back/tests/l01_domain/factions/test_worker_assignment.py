@@ -4,7 +4,7 @@
 
 import pytest
 
-from src.back.l01_domain.exceptions import ExpeditionRecallForbiddenError
+from src.back.l01_domain.exceptions.workers import ExpeditionRecallForbiddenError
 from src.back.l01_domain.factions.constants import (
     ResourceType,
     WorkerAssignmentStatus,

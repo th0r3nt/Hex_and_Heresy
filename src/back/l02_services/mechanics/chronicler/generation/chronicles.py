@@ -9,7 +9,8 @@
 
 from typing import Optional
 
-from src.back.l01_domain.exceptions import ChronicleGenerationFailedError, LLMError
+from src.back.l01_domain.exceptions.chronicler import ChronicleGenerationFailedError
+from src.back.l01_domain.exceptions.llm import LLMError
 from src.back.l01_domain.factions.models.faction import Faction
 from src.back.l01_domain.protocols.llm import LLMClientProtocol
 from src.back.l01_domain.world.models.battle_log import BattleDossier

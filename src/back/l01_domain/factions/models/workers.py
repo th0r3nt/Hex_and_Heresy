@@ -6,7 +6,7 @@ from typing import Optional
 from uuid import uuid4
 from pydantic import BaseModel, ConfigDict, Field
 
-from src.back.l01_domain.exceptions import ExpeditionRecallForbiddenError
+from src.back.l01_domain.exceptions.workers import ExpeditionRecallForbiddenError
 from src.back.l01_domain.factions.constants import (
     STATIONARY_WARMUP_TICKS,
     ResourceType,

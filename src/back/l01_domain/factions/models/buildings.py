@@ -26,7 +26,7 @@ from src.back.l01_domain.factions.constants import (
     MAX_BUILDING_UNLOCK_TIER,
 )
 
-from src.back.l01_domain.exceptions import BuildingMaxLevelReachedError
+from src.back.l01_domain.exceptions.factions import BuildingMaxLevelReachedError
 
 
 class BuildingUpgrade(BaseModel):

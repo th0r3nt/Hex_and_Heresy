@@ -17,7 +17,7 @@ from src.back.l01_domain.army.models.card.squad import Squad
 from src.back.l01_domain.combat.constants import FacingAngle, ReactionType
 from src.back.l01_domain.combat.models.reports import TacticalTurnReport
 from src.back.l01_domain.combat.models.state import TacticalBattleState
-from src.back.l01_domain.exceptions import BattleDossierNotFoundError
+from src.back.l01_domain.exceptions.chronicler import BattleDossierNotFoundError
 from src.back.l01_domain.maps.constants import ALLIED_LANDS_RING_RADIUS
 from src.back.l01_domain.maps.models.strategic import HexCoordinates, hex_distance
 from src.back.l01_domain.world.battle_summary import render_battle_summary

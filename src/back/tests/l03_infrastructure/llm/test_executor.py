@@ -10,7 +10,7 @@ from typing import List, Optional
 import pytest
 from pydantic import BaseModel
 
-from src.back.l01_domain.exceptions import (
+from src.back.l01_domain.exceptions.llm import (
     LLMAuthorizationError,
     LLMRequestFailedError,
     LLMResponseFormatError,
