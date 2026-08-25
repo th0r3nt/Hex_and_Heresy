@@ -1,15 +1,15 @@
 """
-Статический реестр путей к файлам промптов.
-Обеспечивает строгую типизацию и защиту от опечаток при сборке контекста для LLM.
+Статический каталог базовых промптов и модуль динамического обнаружения файлов.
 """
 
+from pathlib import Path
 from typing import Optional
 
 from src.back.l01_domain.common import FactionRace
 
 
 class PromptCatalog:
-    """Корневой каталог всех markdown-файлов промптов."""
+    """Корневой каталог статических markdown-файлов ядра системы промптов."""
 
     class BASE:
         PERSONA = "base/persona.md"
@@ -21,7 +21,6 @@ class PromptCatalog:
 
     class FACTIONS:
         BARONIAL_TROOPS = "factions/baronial_troops.md"
-        BARONIES = "factions/baronies.md"
         CONGREGATION_OF_THE_METEORITE = "factions/congregation_of_the_meteorite.md"
         ELFS = "factions/elfs.md"
         GREENSKINS = "factions/greenskins.md"
@@ -93,8 +92,6 @@ class PromptCatalog:
             RUMORS = "roles/chronicler/rumors.md"
 
             class WRITING:
-                """Стиль записи летописца: у каждой расы свой носитель, почерк и тон."""
-
                 NEUTRAL = "roles/chronicler/neutral/writing.md"
                 BARONIAL_TROOPS = "roles/chronicler/baronial_troops/writing.md"
                 CONGREGATION_OF_THE_METEORITE = (
@@ -105,87 +102,78 @@ class PromptCatalog:
                 HUMANS = "roles/chronicler/humans/writing.md"
                 MERCENARIES = "roles/chronicler/mercenaries/writing.md"
 
-    class TRAITS:
-        class PSYCHOLOGICAL:
-            CRAVEN = "traits/psychological/craven.md"
-            CYNIC = "traits/psychological/cynic.md"
-            FATALIST = "traits/psychological/fatalist.md"
-            GREEDY = "traits/psychological/greedy.md"
-            HEDONIST = "traits/psychological/hedonist.md"
-            MEGALOMANIAC = "traits/psychological/megalomaniac.md"
-            PARANOID = "traits/psychological/paranoid.md"
-            PERFECTIONIST = "traits/psychological/perfectionist.md"
-            PRAGMATIST = "traits/psychological/pragmatist.md"
-            SADIST = "traits/psychological/sadist.md"
-            VENGEFUL = "traits/psychological/vengeful.md"
 
-        class STRATEGIC:
-            AMBUSHER = "traits/strategic/ambusher.md"
-            DEFENDER = "traits/strategic/defender.md"
-            STRATEGIST = "traits/strategic/strategist.md"
-            WARMONGER = "traits/strategic/warmonger.md"
+class PromptDiscovery:
+    """
+    Инструмент динамического обнаружения файлов промптов на диске.
+    Обеспечивает сбор коллекций трейтов, личностей и лора для мастера игры.
+    """
 
-        class TACTICAL:
-            BUTCHER = "traits/tactical/butcher.md"
-            DEFENDER = "traits/tactical/defender.md"
+    def __init__(self, base_dir: Optional[Path] = None) -> None:
+        self._base_dir = base_dir or Path(__file__).parent
 
-        class UNIQUE:
-            class BACKGROUNDS:
-                ARISTOCRAT = "traits/unique/backgrounds/aristocrat.md"
-                BUREAUCRAT = "traits/unique/backgrounds/bureaucrat.md"
-                DESERTER = "traits/unique/backgrounds/deserter.md"
-                GLADIATOR = "traits/unique/backgrounds/gladiator.md"
-                INQUISITOR = "traits/unique/backgrounds/inquisitor.md"
+    def get_traits(self, category: Optional[str] = None) -> list[str]:
+        """
+        Возвращает относительные пути ко всем markdown-файлам черт характера.
+        Если указана категория (например, 'psychological', 'unique/backgrounds',
+        'unique/cursed_genes'), поиск ограничивается ею.
+        """
 
-            class CURSED_GENES:
-                CHAOS = "traits/unique/cursed_genes/chaos.md"
-                DECAY = "traits/unique/cursed_genes/decay.md"
-                DESICCATION = "traits/unique/cursed_genes/desiccation.md"
-                HYPERPLASIA = "traits/unique/cursed_genes/hyperplasia.md"
-                LYCANTHROPY = "traits/unique/cursed_genes/lycanthropy.md"
-                MONOLITH = "traits/unique/cursed_genes/monolith.md"
-                NECROSIS = "traits/unique/cursed_genes/necrosis.md"
-                RESONANCE = "traits/unique/cursed_genes/resonance.md"
+        target_dir = self._base_dir / "traits"
+        if category:
+            target_dir = target_dir / category
 
-    class UNIQUE_PERSONALITIES:
-        # Для простоты обращаемся к папкам, но можно детализировать до конкретных файлов
-        class BARONIES:
-            COMMANDERS = "unique_personalities/baronies/commanders/"
-            HEROES = "unique_personalities/baronies/heroes/"
-            LORDS = "unique_personalities/baronies/lords/"
+        return self._collect_relative_md_files(target_dir)
 
-        class CONGREGATION_OF_THE_METEORITE:
-            COMMANDERS = "unique_personalities/congregation_of_the_meteorite/commanders/"
-            HEROES = "unique_personalities/congregation_of_the_meteorite/heroes/"
-            LORDS = "unique_personalities/congregation_of_the_meteorite/lords/"
+    def get_unique_personalities(
+        self,
+        race: Optional[FactionRace] = None,
+        role: Optional[str] = None,
+    ) -> list[str]:
+        """
+        Возвращает относительные пути к файлам уникальных личностей.
+        Поддерживает фильтрацию по расе и роли (commanders, heroes, lords).
+        """
 
-        class ELFS:
-            COMMANDERS = "unique_personalities/elfs/commanders/"
-            HEROES = "unique_personalities/elfs/heroes/"
-            LORDS = "unique_personalities/elfs/lords/"
+        target_dir = self._base_dir / "unique_personalities"
+        if race:
+            target_dir = target_dir / race.value
+        if role:
+            target_dir = target_dir / role
 
-        class GREENSKINS:
-            COMMANDERS = "unique_personalities/greenskins/commanders/"
-            HEROES = "unique_personalities/greenskins/heroes/"
-            LORDS = "unique_personalities/greenskins/lords/"
+        return self._collect_relative_md_files(target_dir)
 
-        class HUMANS:
-            COMMANDERS = "unique_personalities/humans/commanders/"
-            HEROES = "unique_personalities/humans/heroes/"
-            LORDS = "unique_personalities/humans/lords/"
+    def get_all_md_files(self, sub_dir: str = "") -> list[str]:
+        """
+        Рекурсивно возвращает относительные пути ко всем markdown-файлам
+        в заданной поддиректории.
+        """
 
-        class MERCENARIES:
-            HEROES = "unique_personalities/mercenaries/heroes/"
+        target_dir = self._base_dir / sub_dir if sub_dir else self._base_dir
+        return self._collect_relative_md_files(target_dir)
+
+    def _collect_relative_md_files(self, directory: Path) -> list[str]:
+        if not directory.exists() or not directory.is_dir():
+            return []
+
+        results: list[str] = []
+        for file_path in sorted(directory.rglob("*.md")):
+            if file_path.is_file():
+                rel_path = file_path.relative_to(self._base_dir).as_posix()
+                results.append(rel_path)
+        return results
 
 
 def get_faction_prompt_path(race: FactionRace) -> str:
-    """Удобный маппинг расы фракции на её лорный файл-описание."""
+    """Сопоставляет расу фракции с ее файлом описания."""
     mapping = {
         FactionRace.HUMANS: PromptCatalog.FACTIONS.HUMANS,
         FactionRace.GREENSKINS: PromptCatalog.FACTIONS.GREENSKINS,
         FactionRace.ELFS: PromptCatalog.FACTIONS.ELFS,
         FactionRace.BARONIAL_TROOPS: PromptCatalog.FACTIONS.BARONIAL_TROOPS,
-        FactionRace.CONGREGATION_OF_THE_METEORITE: PromptCatalog.FACTIONS.CONGREGATION_OF_THE_METEORITE,
+        FactionRace.CONGREGATION_OF_THE_METEORITE: (
+            PromptCatalog.FACTIONS.CONGREGATION_OF_THE_METEORITE
+        ),
         FactionRace.MERCENARIES: PromptCatalog.FACTIONS.MERCENARIES,
     }
     return mapping[race]
@@ -193,10 +181,9 @@ def get_faction_prompt_path(race: FactionRace) -> str:
 
 def get_chronicler_writing_path(race: Optional[FactionRace]) -> str:
     """
-    Стилистический файл летописца для расы фракции.
-    Без фракции летопись пишется нейтрально: так бывает для боев наемников
-    и стычек на ничьей земле, где нет своего писаря.
+    Возвращает путь к файлу стиля записи летописца для конкретной расы.
     """
+    
     if race is None:
         return PromptCatalog.ROLES.CHRONICLER.WRITING.NEUTRAL
 

@@ -6,6 +6,8 @@ from typing import Optional
 from uuid import uuid4
 from pydantic import BaseModel, Field
 
+from src.back.l01_domain.army.models.characters.commanders import Commander
+from src.back.l01_domain.army.models.characters.heroes import Hero
 from src.back.l01_domain.army.models.card.equipment import Equipment
 from src.back.l01_domain.army.models.strategic import StrategicArmy
 from src.back.l01_domain.factions.models.diplomacy.messengers import (
@@ -67,6 +69,16 @@ class WorldState(BaseModel):
     custom_equipment: dict[str, Equipment] = Field(
         default_factory=dict,
         description="Уникальные чертежи экипировки текущей партии (equipment_id -> Equipment)",
+    )
+
+    # Реестры созданных/доступных для найма персонажей (таверна / ставка найма)
+    available_commanders: dict[str, Commander] = Field(
+        default_factory=dict,
+        description="Пул доступных для найма полководцев (commander_id -> Commander)",
+    )
+    available_heroes: dict[str, Hero] = Field(
+        default_factory=dict,
+        description="Пул доступных для найма героев (hero_id -> Hero)",
     )
 
     # ==================================================================
@@ -266,3 +278,19 @@ class WorldState(BaseModel):
         Сбрасывает счетчик тишины: пока идут бои, летописцу не до слухов.
         """
         self.ticks_since_last_battle = 0
+
+    # ==================================================================
+    # МЕТОДЫ ПОЛКОВОДЦЕВ И ГЕРОЕВ
+    # ==================================================================
+    
+    def add_available_commander(self, commander: Commander) -> None:
+        self.available_commanders[commander.id] = commander
+
+    def remove_available_commander(self, commander_id: str) -> Optional[Commander]:
+        return self.available_commanders.pop(commander_id, None)
+
+    def add_available_hero(self, hero: Hero) -> None:
+        self.available_heroes[hero.id] = hero
+
+    def remove_available_hero(self, hero_id: str) -> Optional[Hero]:
+        return self.available_heroes.pop(hero_id, None)

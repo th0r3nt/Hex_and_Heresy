@@ -12,9 +12,6 @@ def build_commander_context(
     commander: Commander,
     army: StrategicArmy,
 ) -> list[ContextBlock]:
-
-    blocks = []
-
     personal_lines = [
         f"Ты — полководец {commander.name}.",
         f"Твой архетип: {commander.archetype.name}. {commander.archetype.description}",
@@ -22,13 +19,20 @@ def build_commander_context(
         f"Боевой опыт: {commander.state.experience}.",
     ]
 
-    blocks.append(
+    if commander.custom_biography:
+        personal_lines.append(f"Твоя предыстория: {commander.custom_biography}")
+
+    if commander.personality_prompt_override:
+        personal_lines.append(
+            f"Особые черты характера: {commander.personality_prompt_override}"
+        )
+
+    blocks = [
         ContextBlock(
             title="Твое положение", body="\n".join(f"- {line}" for line in personal_lines)
-        )
-    )
-
-    blocks.append(build_army_block(army))
-    blocks.append(build_world_block(world_state))
+        ),
+        build_army_block(army),
+        build_world_block(world_state),
+    ]
 
     return blocks

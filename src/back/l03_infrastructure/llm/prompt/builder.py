@@ -1,27 +1,37 @@
 """
 Сборщик статических промптов из markdown-файлов.
-Использует ленивую загрузку и кэширование, чтобы минимизировать дисковые операции.
+Использует ленивую загрузку и кэширование, а также предоставляет доступ к PromptDiscovery.
 """
 
 from pathlib import Path
 from typing import Optional
 
+from src.back.l03_infrastructure.llm.prompt.catalog import PromptDiscovery
 from src.back.utils.logger import main_logger
 
 
 class PromptBuilder:
     """
-    Отвечает за сборку системного промпта из отдельных файлов (ролей, лора, черт).
+    Отвечает за чтение и склейку системных промптов из отдельных файлов (ролей, лора, черт).
     """
 
-    def __init__(self, base_dir: Optional[Path] = None) -> None:
-        # По умолчанию берем директорию, в которой лежит этот файл
+    def __init__(
+        self,
+        base_dir: Optional[Path] = None,
+        discovery: Optional[PromptDiscovery] = None,
+    ) -> None:
         self._base_dir = base_dir or Path(__file__).parent
+        self._discovery = discovery or PromptDiscovery(base_dir=self._base_dir)
         self._cache: dict[str, str] = {}
+
+    @property
+    def discovery(self) -> PromptDiscovery:
+        """Инструмент динамического обнаружения файлов промптов."""
+        return self._discovery
 
     def build(self, keys: list[str]) -> str:
         """
-        Принимает список относительных путей (констант из PromptCatalog)
+        Принимает список относительных путей (констант каталога или путей от discovery)
         и склеивает их содержимое в единый текст с двойным переносом строки.
         """
         blocks: list[str] = []
@@ -31,27 +41,30 @@ class PromptBuilder:
             if content:
                 blocks.append(content)
 
-        # Склеиваем блоки, чтобы они были разделены пустой строкой
         return "\n\n".join(blocks)
+
+    def clear_cache(self) -> None:
+        """Очищает кэш прочитанных файлов."""
+        self._cache.clear()
 
     def _load_file(self, relative_path: str) -> str:
         """
         Лениво читает файл с диска или отдает его из кэша.
         """
-        if relative_path in self._cache:
-            return self._cache[relative_path]
+        normalized_path = Path(relative_path).as_posix()
+
+        if normalized_path in self._cache:
+            return self._cache[normalized_path]
 
         file_path = self._base_dir / relative_path
 
         if not file_path.exists() or not file_path.is_file():
             main_logger.error(f"[PromptBuilder] Файл промпта не найден: {file_path}")
-            # Возвращаем пустую строку, чтобы не ронять всю игру из-за одного битого пути,
-            # но оставляем след в логах для отладки
             return ""
 
         try:
             content = file_path.read_text(encoding="utf-8").strip()
-            self._cache[relative_path] = content
+            self._cache[normalized_path] = content
             return content
         except OSError as error:
             main_logger.error(f"[PromptBuilder] Ошибка при чтении файла {file_path}: {error}")

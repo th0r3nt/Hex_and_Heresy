@@ -18,8 +18,16 @@ class FactionRace(str, Enum):
     MERCENARIES = "mercenaries"
 
 
+class CharacterGenerationType(str, Enum):
+    """Способ появления персонажа в игре."""
+
+    PROCEDURAL = "procedural"  # Собран процедурно
+    CUSTOM = "custom"  # Сгенерирован мастером игры на основе биографии игрока
+    LEGENDARY = "legendary"  # Уникальная лорная личность, созданная вручную
+
+
 class StatName(str, Enum):
-    """Характеристики, которые может задевать `MechanicalModifier`."""
+    """Характеристики, которые может задевать MechanicalModifier."""
 
     MORALE = "morale"
     ARMOR = "armor"
@@ -37,8 +45,10 @@ class StatName(str, Enum):
 
 
 class MechanicalModifier(BaseModel):
-    """Математический бонус/штраф, полученный за подвиг/перк/архетип/вещь."""
+    """Математический бонус или штраф, полученный за подвиг, перк, архетип или вещь."""
 
-    stat_name: StatName = Field(..., description="Изменяемый стат (morale, armor, damage, ...)")
+    stat_name: StatName = Field(
+        ..., description="Изменяемый стат (morale, armor, damage, ...)"
+    )
     value: float = Field(..., description="Значение (абсолютное или относительное)")
     is_percentage: bool = Field(default=False, description="Процентный ли модификатор")

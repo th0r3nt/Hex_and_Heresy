@@ -13,14 +13,17 @@ def build_hero_context(
     hero: Hero,
     battle_state: Optional[TacticalBattleState] = None,
 ) -> list[ContextBlock]:
-
-    blocks = []
-
     personal_lines = [
         f"Ты — герой {hero.name}.",
         f"Твой архетип: {hero.archetype.name}. {hero.archetype.special_rule}",
         f"Текущее здоровье: {hero.state.current_hp:.1f} из {hero.max_hp:.1f}.",
     ]
+
+    if hero.custom_biography:
+        personal_lines.append(f"Твоя предыстория: {hero.custom_biography}")
+
+    if hero.personality_prompt_override:
+        personal_lines.append(f"Особые черты характера: {hero.personality_prompt_override}")
 
     if hero.chosen_perks:
         perks = ", ".join(p.name for p in hero.chosen_perks)
@@ -30,11 +33,11 @@ def build_hero_context(
         scars_info = ", ".join(f"{s.name} ({s.description})" for s in hero.state.scars)
         personal_lines.append(f"Твои увечья и шрамы: {scars_info}.")
 
-    blocks.append(
+    blocks = [
         ContextBlock(
             title="Твое положение", body="\n".join(f"- {line}" for line in personal_lines)
         )
-    )
+    ]
 
     if battle_state:
         blocks.append(build_battle_block(battle_state))

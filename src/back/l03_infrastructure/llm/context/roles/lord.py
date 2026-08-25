@@ -15,9 +15,6 @@ def build_lord_context(
     counterpart_faction: Optional[Faction] = None,
     ambassador: Optional[Ambassador] = None,
 ) -> list[ContextBlock]:
-    """
-    Контекст для правителя, принимающего дипломатическое решение.
-    """
     lord = lord_faction.lord
 
     personal_lines = [
@@ -26,6 +23,12 @@ def build_lord_context(
         f"Характер: {lord.trait.name} ({lord.trait.text_fragment}).",
         f"Ты находишься в своей цитадели «{lord_faction.headquarters.name}».",
     ]
+
+    if lord.custom_biography:
+        personal_lines.append(f"Твоя предыстория: {lord.custom_biography}")
+
+    if lord.personality_prompt_override:
+        personal_lines.append(f"Особые черты характера: {lord.personality_prompt_override}")
 
     blocks = [
         ContextBlock(
@@ -48,7 +51,7 @@ def build_lord_context(
         ambassador_lines = [
             f"Перед твоим троном стоит посол по имени {ambassador.name}.",
             f"Его характерные черты: {traits}.",
-            "Помни, что ты вправе приказать казнить его за дерзость, но это будет означать немедленную войну, поэтому обдумывай свои решения.",
+            "Помни, что ты вправе приказать казнить его за дерзость, но это будет означать немедленную войну.",
         ]
         blocks.append(
             ContextBlock(
