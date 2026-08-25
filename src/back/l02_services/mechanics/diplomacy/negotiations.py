@@ -38,8 +38,12 @@ from src.back.l01_domain.protocols.events import EventBusProtocol
 from src.back.l01_domain.protocols.llm import LLMClientProtocol
 from src.back.l01_domain.world.models.state import WorldState
 
+from src.back.l03_infrastructure.llm.context.builder import ContextBuilder
 from src.back.l03_infrastructure.llm.prompt.builder import PromptBuilder
-from src.back.l03_infrastructure.llm.prompt.catalog import PromptCatalog, get_faction_prompt_path
+from src.back.l03_infrastructure.llm.prompt.catalog import (
+    PromptCatalog,
+    get_faction_prompt_path,
+)
 
 # ==================================================================
 # СЕРВИС
@@ -56,10 +60,12 @@ class NegotiationService:
         llm_client: LLMClientProtocol,
         event_bus: Optional[EventBusProtocol] = None,
         prompt_builder: Optional[PromptBuilder] = None,
+        context_builder: Optional[ContextBuilder] = None,
     ) -> None:
         self._llm = llm_client
         self._event_bus = event_bus
         self._prompt_builder = prompt_builder or PromptBuilder()
+        self._context_builder = context_builder or ContextBuilder()
 
     async def answer_dispatch(
         self, world_state: WorldState, dispatch: Dispatch
@@ -89,12 +95,12 @@ class NegotiationService:
         чужой лорд отвечает.
         """
         envoy_faction = self._require_faction(world_state, ambassador.faction_id)
-        host_faction = self._require_faction(
-            world_state, ambassador.target_faction_id or ""
+        host_faction = self._require_faction(world_state, ambassador.target_faction_id or "")
+
+        sys_prompt = self._build_lord_prompt(
+            world_state, host_faction, envoy_faction, ambassador
         )
 
-        sys_prompt = self._build_lord_prompt(world_state, host_faction, envoy_faction, ambassador)
-        
         response = await self._llm.generate_structured(
             system_prompt=sys_prompt,
             user_prompt=f"Посол {ambassador.name} говорит:\n{player_text}",
@@ -118,11 +124,11 @@ class NegotiationService:
         игрока, пока лорд не примет решение или не кончатся раунды.
         """
         envoy_faction = self._require_faction(world_state, ambassador.faction_id)
-        host_faction = self._require_faction(
-            world_state, ambassador.target_faction_id or ""
-        )
+        host_faction = self._require_faction(world_state, ambassador.target_faction_id or "")
 
-        envoy_prompt = self._build_envoy_prompt(world_state, ambassador, envoy_faction, host_faction)
+        envoy_prompt = self._build_envoy_prompt(
+            world_state, ambassador, envoy_faction, host_faction
+        )
         lord_prompt = self._build_lord_prompt(
             world_state, host_faction, envoy_faction, ambassador
         )
@@ -136,9 +142,7 @@ class NegotiationService:
                 user_prompt=f"Слова чужого лорда:\n{last_lord_words}",
                 temperature=0.9,
             )
-            transcript.lines.append(
-                NegotiationLine(speaker="ambassador", text=envoy_text)
-            )
+            transcript.lines.append(NegotiationLine(speaker="ambassador", text=envoy_text))
 
             response = await self._llm.generate_structured(
                 system_prompt=lord_prompt,
@@ -146,12 +150,13 @@ class NegotiationService:
                 response_model=LLMDiplomaticResponse,
                 temperature=0.8,
             )
-            transcript.lines.append(
-                NegotiationLine(speaker="lord", text=response.reply_text)
-            )
+            transcript.lines.append(NegotiationLine(speaker="lord", text=response.reply_text))
             transcript.final_response = response
 
-            if response.action is not None and response.action.kind != DiplomaticActionType.NONE:
+            if (
+                response.action is not None
+                and response.action.kind != DiplomaticActionType.NONE
+            ):
                 await self.apply_action(
                     world_state, envoy_faction.id, host_faction.id, response.action
                 )
@@ -278,28 +283,21 @@ class NegotiationService:
         counterpart_faction: Faction,
         ambassador: Optional[Ambassador] = None,
     ) -> str:
-        # Собираем статический базис
-        static_context = self._prompt_builder.build([
-            PromptCatalog.BASE.PERSONA,
-            PromptCatalog.BASE.MECHANICS.STRATEGIC,
-            PromptCatalog.ROLES.LORD,
-            get_faction_prompt_path(lord_faction.race),
-            PromptCatalog.LORE.BASIC.MEDIUM
-        ])
-
-        lord = lord_faction.lord
-        guest = ""
-        if ambassador is not None:
-            traits = ", ".join(ambassador.traits) if ambassador.traits else "неизвестны"
-            guest = f" Перед тобой посол {ambassador.name} (черты: {traits})."
-
-        dynamic_context = (
-            f"Ты - {lord.display_name}, правитель фракции '{lord_faction.name}'.\n"
-            f"Твой архетип: {lord.archetype.name}. {lord.archetype.description}\n"
-            f"Твоя черта: {lord.trait.name}. {lord.trait.text_fragment}\n\n"
-            f"С тобой ведет переговоры фракция '{counterpart_faction.name}'.{guest}\n\n"
-            f"{self._render_relation_context(world_state, lord_faction, counterpart_faction)}"
+        static_context = self._prompt_builder.build(
+            [
+                PromptCatalog.BASE.PERSONA,
+                PromptCatalog.BASE.MECHANICS.STRATEGIC,
+                PromptCatalog.ROLES.LORD,
+                get_faction_prompt_path(lord_faction.race),
+                PromptCatalog.LORE.BASIC.MEDIUM,
+            ]
         )
+
+        # Запрашиваем динамические блоки у билдера
+        blocks = self._context_builder.build_lord_context(
+            world_state, lord_faction, counterpart_faction, ambassador
+        )
+        dynamic_context = self._context_builder.render(blocks)
 
         return f"{static_context}\n\n{dynamic_context}"
 
@@ -310,56 +308,21 @@ class NegotiationService:
         envoy_faction: Faction,
         host_faction: Faction,
     ) -> str:
-        static_context = self._prompt_builder.build([
-            PromptCatalog.BASE.PERSONA,
-            PromptCatalog.BASE.MECHANICS.STRATEGIC,
-            PromptCatalog.ROLES.DIPLOMAT,
-            get_faction_prompt_path(envoy_faction.race)
-        ])
-
-        traits = ", ".join(ambassador.traits) if ambassador.traits else "обычные"
-        directive = ambassador.directive or "Добиться мира на любых разумных условиях."
-
-        dynamic_context = (
-            f"Ты - {ambassador.name}, посол фракции '{envoy_faction.name}'. Твои черты: {traits}.\n"
-            f"Ты стоишь в цитадели фракции '{host_faction.name}' перед ее правителем.\n\n"
-            f"Директива твоего лорда: {directive}\n\n"
-            f"{self._render_relation_context(world_state, envoy_faction, host_faction)}"
+        static_context = self._prompt_builder.build(
+            [
+                PromptCatalog.BASE.PERSONA,
+                PromptCatalog.BASE.MECHANICS.STRATEGIC,
+                PromptCatalog.ROLES.DIPLOMAT,
+                get_faction_prompt_path(envoy_faction.race),
+            ]
         )
 
+        blocks = self._context_builder.build_ambassador_context(
+            world_state, ambassador, envoy_faction, host_faction
+        )
+        dynamic_context = self._context_builder.render(blocks)
+
         return f"{static_context}\n\n{dynamic_context}"
-
-    def _render_relation_context(
-        self, world_state: WorldState, faction: Faction, counterpart: Faction
-    ) -> str:
-        """
-        Короткая сводка текущих отношений двух фракций для промпта.
-        """
-        relation = world_state.get_relation(faction.id, counterpart.id)
-        if relation is None:
-            return "Между вами нет ни договоров, ни объявленной войны."
-
-        active_pacts = [
-            name
-            for name, pact in (
-                ("торговое соглашение", relation.trade_agreement),
-                ("договор о ненападении", relation.non_aggression_pact),
-                ("право прохода", relation.right_of_passage),
-                ("вассалитет", relation.vassal_pact),
-                ("обмен разведданными", relation.intelligence_sharing),
-                ("обмен заложниками", relation.hostage_exchange),
-                ("военный союз", relation.war_alliance),
-            )
-            if pact is not None
-        ]
-
-        lines = [f"Текущее состояние отношений: {relation.stance.value}."]
-        if active_pacts:
-            lines.append("Действующие соглашения: " + ", ".join(active_pacts) + ".")
-        if relation.tribute_demanded_gold:
-            lines.append(f"Не закрыто требование дани: {relation.tribute_demanded_gold} золота.")
-
-        return "\n".join(lines)
 
     # ==================================================================
     # ХЕЛПЕРЫ

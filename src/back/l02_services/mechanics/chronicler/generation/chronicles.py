@@ -19,6 +19,7 @@ from src.back.l01_domain.world.models.chronicle import (
     LLMChronicleResponse,
     LLMEpitaphResponse,
 )
+from src.back.l03_infrastructure.llm.context.builder import ContextBuilder
 from src.back.l03_infrastructure.llm.prompt.builder import PromptBuilder
 from src.back.l03_infrastructure.llm.prompt.catalog import (
     PromptCatalog,
@@ -38,10 +39,14 @@ class ChronicleGenerator:
     """
 
     def __init__(
-        self, llm_client: LLMClientProtocol, prompt_builder: Optional[PromptBuilder] = None
+        self,
+        llm_client: LLMClientProtocol,
+        prompt_builder: Optional[PromptBuilder] = None,
+        context_builder: Optional[ContextBuilder] = None,
     ) -> None:
         self._llm = llm_client
         self._prompt_builder = prompt_builder or PromptBuilder()
+        self._context_builder = context_builder or ContextBuilder()
 
     async def generate_chronicle(
         self,
@@ -107,21 +112,12 @@ class ChronicleGenerator:
 
         static_context = self._prompt_builder.build(blocks)
 
-        dynamic_lines: list[str] = []
-
-        if faction is not None:
-            dynamic_lines.append(
-                f"Ты служишь фракции '{faction.name}': чужие потери считай заслуженными."
-            )
-        if dossier.is_siege:
-            dynamic_lines.append("Это был штурм цитадели - событие, которое запомнят надолго.")
-        if dossier.is_massacre:
-            dynamic_lines.append("Одну из сторон вырезали почти полностью: это была резня.")
-
-        if not dynamic_lines:
+        dynamic_context = self._context_builder.render(
+            self._context_builder.build_chronicle_context(dossier, faction)
+        )
+        if not dynamic_context:
             return static_context
 
-        dynamic_context = "\n".join(dynamic_lines)
         return f"{static_context}\n\n{dynamic_context}"
 
     def _build_epitaph_prompt(self, subject: FallenSubject, faction: Optional[Faction]) -> str:

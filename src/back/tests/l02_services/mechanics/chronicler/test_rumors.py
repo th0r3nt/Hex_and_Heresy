@@ -46,8 +46,8 @@ class TestWorldContext:
 
         context = generator.render_world_context(world)
 
-        assert "Время: Год 1" in context
-        assert "Боев не было тактов: 4" in context
+        assert "Текущее время: Год 1" in context
+        assert "Тактов без боев: 4" in context
 
     def test_context_mentions_active_events(self, generator, world):
         world.add_event(
@@ -72,12 +72,12 @@ class TestWorldContext:
 
         context = generator.render_world_context(world, humans)
 
-        assert "голодают" in context
+        assert "нехватки провизии" in context
 
     def test_well_fed_faction_does_not_complain(self, generator, world, humans):
         humans.resources[ResourceType.FOOD] = 500.0
 
-        assert "голодают" not in generator.render_world_context(world, humans)
+        assert "нехватки провизии" not in generator.render_world_context(world, humans)
 
 
 class TestRumorGeneration:

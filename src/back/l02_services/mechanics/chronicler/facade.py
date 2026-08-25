@@ -44,6 +44,7 @@ from src.back.l02_services.mechanics.chronicler.generation.battles import Battle
 from src.back.l02_services.mechanics.chronicler.generation.chronicles import ChronicleGenerator
 from src.back.l02_services.mechanics.chronicler.generation.rumors import RumorGenerator
 
+from src.back.l03_infrastructure.llm.context.builder import ContextBuilder
 from src.back.l03_infrastructure.llm.prompt.builder import PromptBuilder
 
 
@@ -58,6 +59,7 @@ class ChroniclerFacade:
         repository: Optional[ChroniclerRepositoryProtocol] = None,
         event_bus: Optional[EventBusProtocol] = None,
         prompt_builder: Optional[PromptBuilder] = None,
+        context_builder: Optional[ContextBuilder] = None,
     ) -> None:
         self._event_bus = event_bus
         self._collector = BattleLogCollector()
@@ -65,10 +67,13 @@ class ChroniclerFacade:
         self._hall = HallOfFallen(repository=repository, event_bus=event_bus)
 
         pb = prompt_builder or PromptBuilder()
+        cb = context_builder or ContextBuilder()
         self._chronicles = (
-            ChronicleGenerator(llm_client, pb) if llm_client is not None else None
+            ChronicleGenerator(llm_client, pb, cb) if llm_client is not None else None
         )
-        self._rumors = RumorGenerator(llm_client, pb) if llm_client is not None else None
+        self._rumors = (
+            RumorGenerator(llm_client, pb, cb) if llm_client is not None else None
+        )
 
     # ==================================================================
     # ХОД БОЯ

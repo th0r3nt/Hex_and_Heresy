@@ -10,12 +10,14 @@ from src.back.l01_domain.factions.constants import ResourceType
 from src.back.l01_domain.protocols.events import EventBusProtocol
 from src.back.l01_domain.protocols.llm import LLMClientProtocol
 from src.back.l01_domain.world.models.state import WorldState
+from src.back.l01_domain.factions.models.faction import Faction
 from src.back.l02_services.mechanics.gunsmith.crafting import LLMGunsmithResponse
 from src.back.l02_services.mechanics.gunsmith.blueprints import BlueprintRegistry
 from src.back.l02_services.mechanics.gunsmith.validation.balance import EquipmentBalancer
 from src.back.l02_services.mechanics.gunsmith.validation.economy import EquipmentEconomist
 from src.back.l03_infrastructure.llm.prompt.builder import PromptBuilder
 from src.back.l03_infrastructure.llm.prompt.catalog import PromptCatalog, get_faction_prompt_path
+from src.back.l03_infrastructure.llm.context.builder import ContextBuilder
 from src.back.utils.event.registry import GameEvents
 
 
@@ -25,10 +27,12 @@ class GunsmithFacade:
         llm_client: LLMClientProtocol,
         event_bus: Optional[EventBusProtocol] = None,
         prompt_builder: Optional[PromptBuilder] = None,
+        context_builder: Optional[ContextBuilder] = None,
     ) -> None:
         self._llm = llm_client
         self._event_bus = event_bus
         self._prompt_builder = prompt_builder or PromptBuilder()
+        self._context_builder = context_builder or ContextBuilder()
 
     async def draft_blueprint(
         self, world_state: WorldState, faction_id: str, user_request: str
@@ -37,7 +41,7 @@ class GunsmithFacade:
         if not faction:
             raise ValueError(f"Фракция {faction_id} не найдена")
 
-        system_prompt = self._build_gunsmith_system_prompt(faction)
+        system_prompt = self._build_gunsmith_system_prompt(world_state, faction)
 
         # Вызываем LLM
         response = await self._llm.generate_structured(
@@ -101,8 +105,8 @@ class GunsmithFacade:
                 cost_material=draft.cost_material,
             )
 
-    def _build_gunsmith_system_prompt(self, faction) -> str:
-        # Собираем статический базис из файлов
+    def _build_gunsmith_system_prompt(self, world_state: WorldState, faction: Faction) -> str:
+        # Статика
         static_context = self._prompt_builder.build([
             PromptCatalog.BASE.PERSONA,
             PromptCatalog.BASE.MECHANICS.ECONOMY,
@@ -111,7 +115,8 @@ class GunsmithFacade:
             PromptCatalog.LORE.BASIC.MEDIUM
         ])
 
-        # Динамическая обвязка: имя фракции модель узнает только отсюда
-        dynamic_context = f"Твоя фракция: {faction.name}."
+        # Динамика через билдер
+        blocks = self._context_builder.build_gunsmith_context(world_state, faction)
+        dynamic_context = self._context_builder.render(blocks)
 
         return f"{static_context}\n\n{dynamic_context}"

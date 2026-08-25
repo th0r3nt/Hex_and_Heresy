@@ -9,12 +9,12 @@
 from typing import Optional
 
 from src.back.l01_domain.exceptions import LLMError
-from src.back.l01_domain.factions.constants import DiplomaticStance, ResourceType
 from src.back.l01_domain.factions.models.faction import Faction
 from src.back.l01_domain.protocols.llm import LLMClientProtocol
 from src.back.l01_domain.world.constants import RUMOR_IDLE_TICKS_THRESHOLD
 from src.back.l01_domain.world.models.chronicle import RumorEntry
 from src.back.l01_domain.world.models.state import WorldState
+from src.back.l03_infrastructure.llm.context.builder import ContextBuilder
 from src.back.l03_infrastructure.llm.prompt.builder import PromptBuilder
 from src.back.l03_infrastructure.llm.prompt.catalog import (
     PromptCatalog,
@@ -29,9 +29,6 @@ RUMOR_TEMPERATURE = 0.95
 # в RumorEntry, но лишние токены тратить незачем
 RUMOR_MAX_TOKENS = 200
 
-# Ниже этого запаса еды фракция считается голодающей: слухи о пустых амбарах
-RUMOR_HUNGER_THRESHOLD = 50.0
-
 # TODO: завязать слухи летописца на реальных событиях (напр. если барон отправит караван-экспедицию)
 
 
@@ -41,10 +38,14 @@ class RumorGenerator:
     """
 
     def __init__(
-        self, llm_client: LLMClientProtocol, prompt_builder: Optional[PromptBuilder] = None
+        self,
+        llm_client: LLMClientProtocol,
+        prompt_builder: Optional[PromptBuilder] = None,
+        context_builder: Optional[ContextBuilder] = None,
     ) -> None:
         self._llm = llm_client
         self._prompt_builder = prompt_builder or PromptBuilder()
+        self._context_builder = context_builder or ContextBuilder()
 
     def should_speak(
         self,
@@ -95,51 +96,8 @@ class RumorGenerator:
         """
         Короткая сводка обстановки: время, кризисы, войны и нужда.
         """
-        lines = [
-            f"- Время: {world_state.time.format_timestamp()}.",
-            f"- Боев не было тактов: {world_state.ticks_since_last_battle}.",
-        ]
-
-        events = [event for event in world_state.active_events if event.is_active]
-        if events:
-            names = ", ".join(f"«{event.name}»" for event in events[:5])
-            lines.append(f"- Идут события: {names}.")
-
-        wars = self._render_wars(world_state)
-        if wars:
-            lines.append(f"- Войны: {wars}.")
-
-        if faction is not None:
-            lines.append(
-                f"- Ты пишешь для фракции '{faction.name}' (раса: {faction.race.value})."
-            )
-            food = faction.resources.get(ResourceType.FOOD, 0.0)
-            if food < RUMOR_HUNGER_THRESHOLD:
-                lines.append(f"- В закромах фракции осталось еды: {food:.0f}. Люди голодают.")
-
-        battlefields = [
-            site for site in world_state.battlefield_sites.values() if not site.is_depleted
-        ]
-        if battlefields:
-            lines.append(f"- На карте гниют поля брани: {len(battlefields)}.")
-
-        return "\n".join(lines)
-
-    def _render_wars(self, world_state: WorldState) -> str:
-        """
-        Перечисляет воюющие пары фракций человеческими именами.
-        """
-        wars = []
-        for relation in world_state.diplomatic_relations:
-            if relation.stance != DiplomaticStance.WAR:
-                continue
-            first = world_state.get_faction(relation.faction_a_id)
-            second = world_state.get_faction(relation.faction_b_id)
-            wars.append(
-                f"{first.name if first else relation.faction_a_id} против "
-                f"{second.name if second else relation.faction_b_id}"
-            )
-        return "; ".join(wars)
+        blocks = self._context_builder.build_rumor_context(world_state, faction)
+        return self._context_builder.render(blocks)
 
     def _build_prompt(self, faction: Optional[Faction]) -> str:
         blocks = [
