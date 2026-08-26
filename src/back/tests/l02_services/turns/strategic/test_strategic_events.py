@@ -6,7 +6,6 @@ import pytest
 
 from src.back.l01_domain.army.models.characters.heroes import (
     Hero,
-    HeroArchetype,
     Scar,
 )
 from src.back.l01_domain.army.models.strategic import StrategicArmy
@@ -77,11 +76,11 @@ class TestStrategicEventsService:
     @pytest.mark.asyncio
     async def test_hero_recovery_after_wound(self, fake_bus):
         world_state = WorldState()
-        archetype = HeroArchetype(
-            id="arch_hero", name="Герой", description="...", special_rule="..."
-        )
         hero = Hero.create_new(
-            name="Конрад", faction_id="humans", archetype=archetype, max_hp=100.0
+            name="Конрад",
+            faction_id="humans",
+            max_hp=100.0,
+            special_rule="Неукротимый",
         )
         scar = Scar(
             name="Шрам",

@@ -17,7 +17,7 @@ from src.back.l01_domain.factions.models.buildings import (
     RegionalHall,
 )
 from src.back.l01_domain.factions.models.faction import Faction
-from src.back.l01_domain.factions.models.lord import Lord, LordArchetype, LordTrait
+from src.back.l01_domain.factions.models.lord import Lord
 
 
 @pytest.fixture
@@ -26,8 +26,6 @@ def faction() -> Faction:
         faction_id="test_fac",
         name="Лорд",
         title="Барон",
-        archetype=LordArchetype(id="arch", name="A", description="D"),
-        trait=LordTrait(id="tr", name="T", text_fragment="..."),
     )
     hq = Headquarters(faction_id="test_fac", name="Цитадель", level=1)
     f = Faction(
@@ -64,17 +62,14 @@ class TestFactionResourceInvariants:
 class TestBuildingLevelAndSlotsInvariants:
     def test_headquarters_slots_and_max_level_six(self):
         hq = Headquarters(faction_id="f1", name="Цитадель", level=1)
-        # Уровень 1: 4 слота
         assert hq.building_slots == 4
 
-        # Апгрейд до 6 уровня: 4 + (6 - 1) * 1 = 9 слотов
         for _ in range(5):
             hq.upgrade()
 
         assert hq.level == 6
         assert hq.building_slots == 9
 
-        # Попытка улучшить выше максимального 6 уровня
         with pytest.raises(BuildingMaxLevelReachedError) as exc_info:
             hq.upgrade()
 
@@ -83,21 +78,17 @@ class TestBuildingLevelAndSlotsInvariants:
 
     def test_regional_hall_slots_and_max_level_three(self):
         hall = RegionalHall(faction_id="f1", zone_id="zone_01", name="Ратуша", level=1)
-        # Уровень 1: 1 слот
         assert hall.building_slots == 1
 
         hall.upgrade()
-        # Уровень 2: 2 слота
         assert hall.level == 2
         assert hall.building_slots == 2
 
         hall.upgrade()
-        # Уровень 3: 3 слота - заявленный в building.md максимум теперь достижим
         assert hall.level == 3
         assert hall.building_slots == 3
         assert hall.building_slots == TOWNHALL_MAX_BUILDING_SLOTS
 
-        # Попытка улучшить выше максимального 3 уровня
         with pytest.raises(BuildingMaxLevelReachedError) as exc_info:
             hall.upgrade()
 

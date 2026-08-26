@@ -4,15 +4,13 @@
 
 from src.back.l01_domain.army.models.characters.commanders import (
     Commander,
-    CommanderArchetype,
-    CommanderTrait,
 )
-from src.back.l01_domain.army.models.characters.heroes import Hero, HeroArchetype
+from src.back.l01_domain.army.models.characters.heroes import Hero
 from src.back.l01_domain.common import CharacterGenerationType, FactionRace
 from src.back.l01_domain.factions.models.buildings import Headquarters
 from src.back.l01_domain.factions.models.diplomacy.relation import DiplomaticRelation
 from src.back.l01_domain.factions.models.faction import Faction
-from src.back.l01_domain.factions.models.lord import Lord, LordArchetype, LordTrait
+from src.back.l01_domain.factions.models.lord import Lord
 from src.back.l01_domain.maps.models.strategic import HexCoordinates
 from src.back.l01_domain.world.constants import GlobalEventCategory
 from src.back.l01_domain.world.models.battleground import BattlefieldLootSite
@@ -25,8 +23,6 @@ def _make_dummy_faction(faction_id: str, name: str, is_player: bool = False) -> 
         faction_id=faction_id,
         name="Правитель",
         title="Барон",
-        archetype=LordArchetype(id="arch_tyrant", name="Тиран", description="..."),
-        trait=LordTrait(id="trait_harsh", name="Суровый", text_fragment="..."),
     )
     hq = Headquarters(faction_id=faction_id, name="Замок")
     return Faction(
@@ -59,9 +55,8 @@ class TestWorldState:
             id="cmd_custom_hans",
             name="Сержант Ганс",
             faction_id="humans",
+            role_title="Ветеран",
             generation_type=CharacterGenerationType.CUSTOM,
-            archetype=CommanderArchetype(id="arch_vet", name="Ветеран", description="..."),
-            trait=CommanderTrait(id="trait_cynic", name="Циник", text_fragment="..."),
             custom_biography="Потерял глаз в резне с гоблинами.",
             personality_prompt_override="Грубый и подозрительный ветеран.",
         )
@@ -69,15 +64,12 @@ class TestWorldState:
         hero = Hero.create_new(
             name="Илай",
             faction_id="congregation_of_the_meteorite",
-            archetype=HeroArchetype(
-                id="arch_seer", name="Видящий", description="...", special_rule="..."
-            ),
+            special_rule="Видящий",
             max_hp=80.0,
             generation_type=CharacterGenerationType.CUSTOM,
             custom_biography="Бывший хирург Империи.",
         )
 
-        # Добавление в пул доступных
         world.add_available_commander(commander)
         world.add_available_hero(hero)
 
@@ -86,7 +78,6 @@ class TestWorldState:
         assert len(world.available_heroes) == 1
         assert world.available_heroes[hero.id].name == "Илай"
 
-        # Извлечение из пула (например, при найме)
         removed_cmd = world.remove_available_commander("cmd_custom_hans")
         assert removed_cmd is commander
         assert len(world.available_commanders) == 0

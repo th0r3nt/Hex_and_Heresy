@@ -15,9 +15,11 @@ def build_hero_context(
 ) -> list[ContextBlock]:
     personal_lines = [
         f"Ты — герой {hero.name}.",
-        f"Твой архетип: {hero.archetype.name}. {hero.archetype.special_rule}",
         f"Текущее здоровье: {hero.state.current_hp:.1f} из {hero.max_hp:.1f}.",
     ]
+    
+    if hero.special_rule:
+        personal_lines.append(f"Твоя особая способность: {hero.special_rule}.")
 
     if hero.custom_biography:
         personal_lines.append(f"Твоя предыстория: {hero.custom_biography}")
@@ -32,6 +34,10 @@ def build_hero_context(
     if hero.state.scars:
         scars_info = ", ".join(f"{s.name} ({s.description})" for s in hero.state.scars)
         personal_lines.append(f"Твои увечья и шрамы: {scars_info}.")
+
+    if hero.traits:
+        traits_str = ", ".join(t.name for t in hero.traits)
+        personal_lines.append(f"Твои врожденные черты: {traits_str}.")
 
     blocks = [
         ContextBlock(

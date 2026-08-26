@@ -13,14 +13,10 @@ from src.back.l01_domain.army.models.card.equipment import EquipmentStats
 from src.back.l01_domain.army.models.characters.artifacts import HeroArtifact
 from src.back.l01_domain.army.models.characters.commanders import (
     Commander,
-    CommanderArchetype,
-    CommanderArchetypeStats,
     CommanderCharacteristics,
-    CommanderTrait,
 )
 from src.back.l01_domain.army.models.characters.heroes import (
     Hero,
-    HeroArchetype,
     Perk,
     Scar,
 )
@@ -30,27 +26,16 @@ from src.back.l01_domain.common import (
     StatName,
 )
 from src.back.l01_domain.exceptions.army import HeroLevelTooLowError, NegativeExperienceError
-from src.back.l01_domain.factions.models.lord import (
-    Lord,
-    LordArchetype,
-    LordArchetypeStats,
-    LordTrait,
-)
+from src.back.l01_domain.factions.models.lord import Lord
 
 
 @pytest.fixture
 def sample_hero() -> Hero:
-    archetype = HeroArchetype(
-        id="arch_warrior",
-        name="Воин",
-        description="...",
-        special_rule="Ярость",
-        trigger_modifier=MechanicalModifier(stat_name=StatName.DAMAGE, value=5.0),
-    )
     return Hero.create_new(
         name="Варг",
         faction_id="greenskins",
-        archetype=archetype,
+        special_rule="Ярость",
+        trigger_modifier=MechanicalModifier(stat_name=StatName.DAMAGE, value=5.0),
         max_hp=150.0,
         generation_type=CharacterGenerationType.CUSTOM,
         custom_biography="Бывший раб гладиаторских ям.",
@@ -133,7 +118,6 @@ class TestHeroCustomizationAndInvariants:
 
         assert len(modifiers) == 3
         assert stat_values["speed"] == -0.5
-        assert stat_values["damage"] in (10.0, 5.0)
 
     def test_learn_perk_level_invariants(self, sample_hero: Hero):
         perk_high_level = Perk(
@@ -160,13 +144,6 @@ class TestLordAndCommanderCustomizationInvariants:
             name="Бенедикт",
             title="Канцлер",
             generation_type=CharacterGenerationType.CUSTOM,
-            archetype=LordArchetype(
-                id="arch_bureaucrat",
-                name="Бюрократ",
-                description="...",
-                stats=LordArchetypeStats(tax_rate_bias=0.2),
-            ),
-            trait=LordTrait(id="trait_greedy", name="Скупой", text_fragment="..."),
             custom_biography="Поднялся из счетоводов гильдии.",
             personality_prompt_override="Помешан на проверке налоговых деклараций.",
         )
@@ -180,14 +157,8 @@ class TestLordAndCommanderCustomizationInvariants:
         commander = Commander(
             name="Ольгерд",
             faction_id="baronial_troops",
+            role_title="Защитник",
             generation_type=CharacterGenerationType.PROCEDURAL,
-            archetype=CommanderArchetype(
-                id="arch_defender",
-                name="Защитник",
-                description="...",
-                stats=CommanderArchetypeStats(ambush_resistance_modifier=0.3),
-            ),
-            trait=CommanderTrait(id="trait_stoic", name="Стойкий", text_fragment="..."),
         )
 
         commander.gain_experience(0)

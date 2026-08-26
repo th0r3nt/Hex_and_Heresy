@@ -19,8 +19,7 @@ def build_lord_context(
 
     personal_lines = [
         f"Твое имя: {lord.name}, титул: {lord.title}.",
-        f"Архетип: {lord.archetype.name} ({lord.archetype.description}).",
-        f"Характер: {lord.trait.name} ({lord.trait.text_fragment}).",
+        f"Твои черты: {', '.join(t.name for t in lord.traits) if lord.traits else 'нет'}.",
         f"Ты находишься в своей цитадели «{lord_faction.headquarters.name}».",
     ]
 

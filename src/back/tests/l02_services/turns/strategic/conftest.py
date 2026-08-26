@@ -4,7 +4,12 @@
 
 import pytest
 
-from src.back.l01_domain.army.constants import EquipmentSlot, StrategicMovementPace, WeaponCategory, EquipmentTag
+from src.back.l01_domain.army.constants import (
+    EquipmentSlot,
+    StrategicMovementPace,
+    WeaponCategory,
+    EquipmentTag,
+)
 from src.back.l01_domain.army.models.card.equipment import Equipment, EquipmentStats
 from src.back.l01_domain.army.models.card.squad import Squad
 from src.back.l01_domain.army.models.card.unit import BaseUnitStats, UnitArchetype
@@ -12,9 +17,10 @@ from src.back.l01_domain.army.models.strategic import StrategicArmy
 from src.back.l01_domain.factions.constants import ResourceType
 from src.back.l01_domain.factions.models.buildings import Headquarters
 from src.back.l01_domain.factions.models.faction import Faction
-from src.back.l01_domain.factions.models.lord import Lord, LordArchetype, LordTrait
+from src.back.l01_domain.factions.models.lord import Lord
 from src.back.l01_domain.maps.models.strategic import HexCoordinates
 from src.back.l01_domain.common import FactionRace
+
 
 class FakeEventBus:
     """Фейковая шина событий для фиксации опубликованных сообщений в тестах."""
@@ -37,8 +43,6 @@ def human_faction() -> Faction:
         faction_id="humans",
         name="Валленштейн",
         title="Лорд-командующий",
-        archetype=LordArchetype(id="arch_lord", name="Бюрократ", description="..."),
-        trait=LordTrait(id="trait_lord", name="Расчетливый", text_fragment="..."),
     )
     hq = Headquarters(faction_id="humans", name="Цитадель")
     faction = Faction(
@@ -61,8 +65,6 @@ def orc_faction() -> Faction:
         faction_id="greenskins",
         name="Гром",
         title="Вождь",
-        archetype=LordArchetype(id="arch_orc", name="Тиран", description="..."),
-        trait=LordTrait(id="trait_orc", name="Жестокий", text_fragment="..."),
     )
     hq = Headquarters(faction_id="greenskins", name="Шатер Вождя")
     faction = Faction(

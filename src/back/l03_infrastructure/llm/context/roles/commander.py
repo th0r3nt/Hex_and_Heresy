@@ -12,10 +12,11 @@ def build_commander_context(
     commander: Commander,
     army: StrategicArmy,
 ) -> list[ContextBlock]:
+    
     personal_lines = [
         f"Ты — полководец {commander.name}.",
-        f"Твой архетип: {commander.archetype.name}. {commander.archetype.description}",
-        f"Твоя черта: {commander.trait.name}. {commander.trait.text_fragment}",
+        f"Твое воинское звание: {commander.role_title}.",
+        f"Твои черты характера: {', '.join(t.name for t in commander.traits) if commander.traits else 'нет'}.",
         f"Боевой опыт: {commander.state.experience}.",
     ]
 

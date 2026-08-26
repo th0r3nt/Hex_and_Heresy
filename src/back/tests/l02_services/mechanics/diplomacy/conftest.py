@@ -11,7 +11,7 @@ from src.back.l01_domain.common import FactionRace
 from src.back.l01_domain.factions.constants import ResourceType
 from src.back.l01_domain.factions.models.buildings import Headquarters
 from src.back.l01_domain.factions.models.faction import Faction
-from src.back.l01_domain.factions.models.lord import Lord, LordArchetype, LordTrait
+from src.back.l01_domain.factions.models.lord import Lord
 from src.back.l01_domain.maps.models.strategic import HexCoordinates
 from src.back.l01_domain.world.models.state import WorldState
 
@@ -53,8 +53,6 @@ def _make_faction(
         faction_id=faction_id,
         name=f"Лорд {name}",
         title="Правитель",
-        archetype=LordArchetype(id=f"arch_{faction_id}", name="Прагматик", description="..."),
-        trait=LordTrait(id=f"trait_{faction_id}", name="Расчетливый", text_fragment="..."),
     )
     faction = Faction(
         id=faction_id,

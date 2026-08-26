@@ -17,7 +17,7 @@ from src.back.l01_domain.exceptions.saves import (
 )
 from src.back.l01_domain.factions.models.buildings import Headquarters
 from src.back.l01_domain.factions.models.faction import Faction
-from src.back.l01_domain.factions.models.lord import Lord, LordArchetype, LordTrait
+from src.back.l01_domain.factions.models.lord import Lord
 from src.back.l01_domain.maps.models.strategic import HexCoordinates
 from src.back.l01_domain.world.models.state import WorldState
 from src.back.l02_services.saves.dumper import WorldStateDumper
@@ -70,7 +70,7 @@ class FakeEventBus:
 
 
 def _make_faction() -> Faction:
-    return Faction(
+   return Faction(
         id="humans",
         race=FactionRace.HUMANS,
         name="Священная Империя",
@@ -79,8 +79,6 @@ def _make_faction() -> Faction:
             faction_id="humans",
             name="Валленштейн",
             title="Лорд-командующий",
-            archetype=LordArchetype(id="arch_lord", name="Бюрократ", description="..."),
-            trait=LordTrait(id="trait_lord", name="Расчетливый", text_fragment="..."),
         ),
         headquarters=Headquarters(faction_id="humans", name="Цитадель"),
     )

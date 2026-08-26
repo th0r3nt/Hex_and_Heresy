@@ -2,7 +2,6 @@
 Загрузчик статической геймдаты.
 Считывает словари из пакета src.back.gamedata, валидирует их через Pydantic
 и предоставляет in-memory реестр, реализующий GameDataRepositoryProtocol.
-Также содержит SessionGameDataRepository для объединения статики и кастомных предметов сессии.
 """
 
 import importlib
@@ -11,10 +10,6 @@ from typing import Callable, Optional
 from src.back.gamedata.common import RACES
 from src.back.l01_domain.army.models.card.equipment import Equipment
 from src.back.l01_domain.army.models.card.unit import UnitArchetype
-from src.back.l01_domain.army.models.characters.commanders import (
-    CommanderArchetype,
-    CommanderTrait,
-)
 from src.back.l01_domain.common import FactionRace
 from src.back.l01_domain.factions.models.buildings import Building
 from src.back.l01_domain.protocols.gamedata import GameDataRepositoryProtocol
@@ -22,17 +17,12 @@ from src.back.utils.logger import main_logger
 
 
 class StaticGameDataRegistry(GameDataRepositoryProtocol):
-    """
-    Read-only реестр статических данных игры.
-    Инициализируется один раз при старте сервера.
-    """
+    """Read-only реестр статических данных игры."""
 
     def __init__(self) -> None:
         self._units: dict[str, UnitArchetype] = {}
         self._equipment: dict[str, Equipment] = {}
         self._buildings: dict[str, Building] = {}
-        self._commander_archetypes: dict[str, CommanderArchetype] = {}
-        self._commander_traits: dict[str, CommanderTrait] = {}
 
         self._faction_units_index: dict[str, list[UnitArchetype]] = {}
         self._faction_equipment_index: dict[str, list[Equipment]] = {}
@@ -47,12 +37,6 @@ class StaticGameDataRegistry(GameDataRepositoryProtocol):
     def get_building(self, building_id: str) -> Optional[Building]:
         return self._buildings.get(building_id)
 
-    def get_commander_archetype(self, archetype_id: str) -> Optional[CommanderArchetype]:
-        return self._commander_archetypes.get(archetype_id)
-
-    def get_commander_trait(self, trait_id: str) -> Optional[CommanderTrait]:
-        return self._commander_traits.get(trait_id)
-
     def list_faction_units(self, faction_id: str) -> list[UnitArchetype]:
         return self._faction_units_index.get(faction_id, [])
 
@@ -62,7 +46,6 @@ class StaticGameDataRegistry(GameDataRepositoryProtocol):
     def list_faction_buildings(self, faction_id: str) -> list[Building]:
         return self._faction_buildings_index.get(faction_id, [])
 
-    # Методы для заполнения реестра при загрузке
     def _add_unit(self, unit: UnitArchetype) -> None:
         self._units[unit.id] = unit
         if unit.faction_id:
@@ -78,11 +61,7 @@ class StaticGameDataRegistry(GameDataRepositoryProtocol):
 
 
 class SessionGameDataRepository(GameDataRepositoryProtocol):
-    """
-    Репозиторий, объединяющий статические данные и кастомные предметы
-    (созданные Оружейником), которые принадлежат конкретной игровой сессии.
-    Именно этот класс будет инжектироваться в сервисы при активной игре.
-    """
+    """Репозиторий, объединяющий статику и кастомную сессионную экипировку."""
 
     def __init__(
         self, static_registry: StaticGameDataRegistry, custom_equipment: list[Equipment]
@@ -94,7 +73,6 @@ class SessionGameDataRepository(GameDataRepositoryProtocol):
         return self._static.get_unit_archetype(unit_id)
 
     def get_equipment(self, equipment_id: str) -> Optional[Equipment]:
-        # Сначала проверяем сессионные кастомные чертежи, затем статику
         if equipment_id in self._custom_equipment:
             return self._custom_equipment[equipment_id]
         return self._static.get_equipment(equipment_id)
@@ -102,17 +80,10 @@ class SessionGameDataRepository(GameDataRepositoryProtocol):
     def get_building(self, building_id: str) -> Optional[Building]:
         return self._static.get_building(building_id)
 
-    def get_commander_archetype(self, archetype_id: str) -> Optional[CommanderArchetype]:
-        return self._static.get_commander_archetype(archetype_id)
-
-    def get_commander_trait(self, trait_id: str) -> Optional[CommanderTrait]:
-        return self._static.get_commander_trait(trait_id)
-
     def list_faction_units(self, faction_id: str) -> list[UnitArchetype]:
         return self._static.list_faction_units(faction_id)
 
     def list_faction_equipment(self, faction_id: str) -> list[Equipment]:
-        # Смешиваем статическую экипировку фракции с кастомной сессионной
         static_eq = self._static.list_faction_equipment(faction_id)
         custom_eq = [eq for eq in self._custom_equipment.values() if eq.is_custom]
         return static_eq + custom_eq
@@ -122,10 +93,7 @@ class SessionGameDataRepository(GameDataRepositoryProtocol):
 
 
 def build_static_registry() -> StaticGameDataRegistry:
-    """
-    Сканирует пакеты геймдаты, собирает все словари, валидирует их
-    и формирует итоговый статический реестр. Вызывается при запуске приложения.
-    """
+    """Сканирует пакеты геймдаты и строит статический реестр."""
     registry = StaticGameDataRegistry()
 
     for race in RACES:
@@ -153,11 +121,6 @@ def _load_faction_module(
     dict_name: str,
     loader_func: Callable[[StaticGameDataRegistry, FactionRace, dict], None],
 ) -> None:
-    """
-    Безопасно импортирует модуль геймдаты и передает его парсеру.
-    Имя пакета в каталоге gamedata совпадает со значением FactionRace.
-    """
-
     module_path = f"src.back.gamedata.{race.value}.{module_suffix}"
     try:
         mod = importlib.import_module(module_path)
@@ -165,8 +128,6 @@ def _load_faction_module(
         for raw_data in data_dict.values():
             loader_func(registry, race, raw_data)
     except ModuleNotFoundError as e:
-        # Если отсутствует сам файл или любая из его родительских папок
-        # (например, у наемников или нейтралов нет папки buildings), безопасно пропускаем
         if e.name and module_path.startswith(e.name):
             return
         main_logger.error(f"Ошибка импорта зависимостей внутри {module_path}: {e}")

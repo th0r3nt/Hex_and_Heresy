@@ -5,15 +5,13 @@
 
 import pytest
 
+from src.back.l01_domain.army.models.characters.traits import get_trait
 from src.back.l01_domain.army.models.card.squad import Squad
 from src.back.l01_domain.army.models.card.unit import BaseUnitStats, UnitArchetype
 from src.back.l01_domain.army.models.characters.commanders import (
     Commander,
-    CommanderArchetype,
-    CommanderArchetypeStats,
     CommanderCharacteristics,
     CommanderGenerationType,
-    CommanderTrait,
 )
 from src.back.l01_domain.army.models.strategic import StrategicArmy
 from src.back.l01_domain.common import FactionRace
@@ -157,19 +155,12 @@ class TestFamineAndDeficitConsequences:
     async def test_commander_upkeep_multiplier_increases_gold_expense(
         self, human_faction, sample_army, fake_bus
     ):
-        # Полководец с архетипом жадности (+30% к расходам на войско)
         greedy_commander = Commander(
             name="Жадный Барон",
             faction_id=human_faction.id,
             generation_type=CommanderGenerationType.PROCEDURAL,
-            archetype=CommanderArchetype(
-                id="arch_greedy",
-                name="Жадный",
-                description="...",
-                stats=CommanderArchetypeStats(upkeep_gold_modifier=1.3),
-            ),
-            trait=CommanderTrait(id="trait_gold", name="Сребролюбец", text_fragment="..."),
             characteristics=CommanderCharacteristics(),
+            traits=[get_trait("greedy")],
         )
         sample_army.commander = greedy_commander
         # Базовое содержание отряда: 50 золота -> с полководцем: 50 * 1.3 = 65 золота

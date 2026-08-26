@@ -8,9 +8,7 @@ import pytest
 from src.back.l01_domain.army.constants import VETERANCY_SERVICE_DAYS_THRESHOLD
 from src.back.l01_domain.army.models.characters.commanders import (
     Commander,
-    CommanderArchetype,
     CommanderGenerationType,
-    CommanderTrait,
 )
 from src.back.l01_domain.world.constants import HOURS_PER_DAY
 from src.back.l01_domain.world.models.state import WorldState
@@ -22,8 +20,6 @@ def _make_commander(faction_id: str) -> Commander:
         name="Тестовый Полководец",
         faction_id=faction_id,
         generation_type=CommanderGenerationType.PROCEDURAL,
-        archetype=CommanderArchetype(id="arch_test", name="A", description="D"),
-        trait=CommanderTrait(id="trait_test", name="T", text_fragment="..."),
     )
 
 

@@ -1,14 +1,16 @@
 """
-Интеграционные тесты целостности каталога промптов против реальной файловой системы.
-Гарантируют отсутствие рассинхронизации между константами кода и файлами .md на диске.
+Интеграционные тесты целостности каталога промптов и единого реестра черт.
 """
 
 from pathlib import Path
-
 import pytest
 
+from src.back.l01_domain.army.models.characters.traits import (
+    TRAITS_CATALOG,
+    TraitCategory,
+    list_traits,
+)
 from src.back.l01_domain.common import FactionRace
-from src.back.l03_infrastructure.llm.prompt.builder import PromptBuilder
 from src.back.l03_infrastructure.llm.prompt.catalog import (
     PromptCatalog,
     PromptDiscovery,
@@ -18,9 +20,7 @@ from src.back.l03_infrastructure.llm.prompt.catalog import (
 
 
 def _collect_all_catalog_constants(cls: type) -> list[str]:
-    """
-    Рекурсивно извлекает все строковые константы из вложенных классов каталога.
-    """
+    """Рекурсивно извлекает все строковые константы из вложенных классов каталога."""
     constants: list[str] = []
     for attr_name in dir(cls):
         if attr_name.startswith("_"):
@@ -43,10 +43,7 @@ def prompt_base_dir() -> Path:
 
 class TestPromptCatalogIntegrity:
     def test_all_catalog_constants_exist_on_disk(self, prompt_base_dir: Path):
-        """
-        Проверяет, что каждый путь, объявленный в PromptCatalog,
-        указывает на реально существующий файл (а не директорию).
-        """
+        """Проверяет, что каждый путь, объявленный в PromptCatalog, указывает на реальный файл."""
         all_paths = _collect_all_catalog_constants(PromptCatalog)
         assert len(all_paths) > 0, "Каталог промптов не должен быть пустым"
 
@@ -85,28 +82,30 @@ class TestPromptCatalogIntegrity:
         assert file_path.is_file(), f"Стиль летописца для {race} не найден: {rel_path}"
 
 
-class TestPromptDiscovery:
-    def test_discovery_finds_all_traits(self, prompt_base_dir: Path):
-        discovery = PromptDiscovery(base_dir=prompt_base_dir)
-        traits = discovery.get_traits()
+class TestTraitsCatalogIntegrity:
+    def test_traits_catalog_contains_all_twenty_four_traits(self):
+        """Проверяет, что реестр содержит ровно 24 сбалансированные черты."""
+        assert len(TRAITS_CATALOG) == 24
 
-        assert len(traits) >= 20, "Ожидалось не менее 20 файлов черт характера"
-        for trait_path in traits:
-            assert trait_path.startswith("traits/"), f"Некорректный путь трейта: {trait_path}"
-            assert trait_path.endswith(".md")
-            assert (prompt_base_dir / trait_path).is_file()
+        for trait_id, trait in TRAITS_CATALOG.items():
+            assert trait.id.startswith("trait_")
+            assert len(trait.name) > 0
+            assert len(trait.prompt_text) >= 20, f"Промпт черты {trait_id} слишком короткий"
+            assert "### Черта:" in trait.format_prompt()
 
-    def test_discovery_traits_by_category(self, prompt_base_dir: Path):
-        discovery = PromptDiscovery(base_dir=prompt_base_dir)
+    def test_traits_catalog_categories(self):
+        """Проверяет разбиение черт по категориям."""
+        psychological = list_traits(TraitCategory.PSYCHOLOGICAL)
+        assert len(psychological) == 11
 
-        psychological = discovery.get_traits("psychological")
-        assert len(psychological) >= 10
-        assert all("psychological" in path for path in psychological)
+        backgrounds = list_traits(TraitCategory.BACKGROUND)
+        assert len(backgrounds) == 5
 
-        cursed_genes = discovery.get_traits("unique/cursed_genes")
+        cursed_genes = list_traits(TraitCategory.CURSED_GENE)
         assert len(cursed_genes) == 8
-        assert all("cursed_genes" in path for path in cursed_genes)
 
+
+class TestPromptDiscovery:
     def test_discovery_finds_unique_personalities(self, prompt_base_dir: Path):
         discovery = PromptDiscovery(base_dir=prompt_base_dir)
         personalities = discovery.get_unique_personalities()
@@ -124,12 +123,3 @@ class TestPromptDiscovery:
         )
         assert len(human_commanders) >= 3
         assert all("humans/commanders" in path for path in human_commanders)
-
-    def test_prompt_builder_loads_discovered_files(self, prompt_base_dir: Path):
-        builder = PromptBuilder(base_dir=prompt_base_dir)
-        traits = builder.discovery.get_traits("unique/backgrounds")
-
-        assert len(traits) >= 5
-        content = builder.build(traits)
-        assert "Аристократ" in content
-        assert "Инквизитор" in content

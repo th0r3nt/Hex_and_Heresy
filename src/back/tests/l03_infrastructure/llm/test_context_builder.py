@@ -9,11 +9,9 @@ from src.back.l01_domain.army.models.card.squad import Squad
 from src.back.l01_domain.army.models.card.unit import BaseUnitStats, UnitArchetype
 from src.back.l01_domain.army.models.characters.commanders import (
     Commander,
-    CommanderArchetype,
     CommanderGenerationType,
-    CommanderTrait,
 )
-from src.back.l01_domain.army.models.characters.heroes import Hero, HeroArchetype, HeroState
+from src.back.l01_domain.army.models.characters.heroes import Hero, HeroState
 from src.back.l01_domain.army.models.strategic import StrategicArmy
 from src.back.l01_domain.combat.models.state import TacticalBattleState
 from src.back.l01_domain.common import CharacterGenerationType, FactionRace
@@ -21,7 +19,7 @@ from src.back.l01_domain.factions.constants import DiplomaticStance
 from src.back.l01_domain.factions.models.buildings import Headquarters
 from src.back.l01_domain.factions.models.diplomacy.messengers import Ambassador
 from src.back.l01_domain.factions.models.faction import Faction
-from src.back.l01_domain.factions.models.lord import Lord, LordArchetype, LordTrait
+from src.back.l01_domain.factions.models.lord import Lord
 from src.back.l01_domain.llm.models.context import ContextBlock
 from src.back.l01_domain.maps.models.strategic import HexCoordinates
 from src.back.l01_domain.world.models.battle_log import BattleDossier
@@ -48,11 +46,10 @@ def make_faction(faction_id: str, race: FactionRace, name: str) -> Faction:
             faction_id=faction_id,
             name=f"Лорд {name}",
             title="Лорд-командующий",
-            archetype=LordArchetype(id="arch_lord", name="Бюрократ", description="..."),
-            trait=LordTrait(id="trait_lord", name="Расчетливый", text_fragment="..."),
         ),
         headquarters=Headquarters(faction_id=faction_id, name="Цитадель"),
     )
+
 
 
 @pytest.fixture
@@ -102,9 +99,8 @@ def commander() -> Commander:
     return Commander(
         name="Валленштейн",
         faction_id="humans",
+        role_title="Осторожный",
         generation_type=CommanderGenerationType.PROCEDURAL,
-        archetype=CommanderArchetype(id="arch", name="Осторожный", description="..."),
-        trait=CommanderTrait(id="trait", name="Педант", text_fragment="..."),
     )
 
 
@@ -203,9 +199,7 @@ class TestOtherRoles:
         hero = Hero(
             name="Зигфрид",
             faction_id="humans",
-            archetype=HeroArchetype(
-                id="arch_hero", name="Витязь", description="...", special_rule="..."
-            ),
+            special_rule="Витязь",
             max_hp=100.0,
             state=HeroState(current_hp=80.0),
         )
@@ -395,9 +389,8 @@ class TestRender:
         commander = Commander(
             name="Ганс",
             faction_id="humans",
+            role_title="Осторожный",
             generation_type=CharacterGenerationType.CUSTOM,
-            archetype=CommanderArchetype(id="arch", name="Осторожный", description="..."),
-            trait=CommanderTrait(id="trait", name="Педант", text_fragment="..."),
             custom_biography="Выжил в резне с гоблинами.",
             personality_prompt_override="Ненавидит зеленокожих и пьет дешевый ром.",
         )
@@ -411,14 +404,11 @@ class TestRender:
     def test_custom_hero_biography_and_override_in_context(
         self, builder: ContextBuilder, world_state: WorldState
     ):
-        hero = Hero(
+        hero = Hero.create_new(
             name="Варг",
             faction_id="greenskins",
-            archetype=HeroArchetype(
-                id="arch_warrior", name="Воин", description="...", special_rule="..."
-            ),
+            special_rule="Всегда ищет драки один на один.",
             max_hp=100.0,
-            state=HeroState(current_hp=100.0),
             custom_biography="Бывший гладиатор арены.",
             personality_prompt_override="Всегда ищет драки один на один.",
         )

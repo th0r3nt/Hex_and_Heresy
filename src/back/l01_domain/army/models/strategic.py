@@ -82,7 +82,7 @@ class StrategicArmy(BaseModel):
         """
         base_speed = STRATEGIC_PACE_SPEED_HEXES[self.pace]
         if self.commander is not None:
-            base_speed += self.commander.archetype.stats.strategic_map_range_bonus
+            base_speed += self.commander.strategic_movement_bonus
         return max(1, base_speed)
 
     def add_squad(self, squad: Squad) -> None:

@@ -39,10 +39,12 @@ class TacticalInitiativeService:
         if squad.accessory is not None:
             total_initiative += squad.accessory.stats.initiative_modifier
 
-        # Влияние полководца (архетип и тактическое чутье)
+        # Влияние полководца
         if commander is not None:
-            total_initiative += commander.archetype.stats.initiative_modifier
             total_initiative += commander.characteristics.tactical_acumen // 10
+            for modifier in commander.get_active_modifiers():
+                if modifier.stat_name == StatName.INITIATIVE:
+                    total_initiative += int(modifier.value)
 
         # Влияние прикрепленного героя
         if hero is not None and hero.state.attached_squad_id == squad.id:

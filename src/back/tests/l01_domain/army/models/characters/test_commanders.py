@@ -5,31 +5,15 @@
 import pytest
 from pydantic import ValidationError
 
-from src.back.l01_domain.common import MechanicalModifier, StatName
 from src.back.l01_domain.army.models.characters.commanders import (
     Commander,
-    CommanderArchetype,
-    CommanderArchetypeStats,
     CommanderCharacteristics,
     CommanderGenerationType,
     CommanderState,
     CommanderTrait,
 )
-
+from src.back.l01_domain.common import MechanicalModifier, StatName
 from src.back.l01_domain.exceptions.army import NegativeExperienceError
-
-
-@pytest.fixture
-def strategist_archetype() -> CommanderArchetype:
-    return CommanderArchetype(
-        id="archetype_strategist",
-        name="Стратег",
-        description="+1 к дальности перемещения, штраф к урону в ближнем бою.",
-        stats=CommanderArchetypeStats(
-            strategic_map_range_bonus=1,
-            melee_damage_modifier=-0.1,
-        ),
-    )
 
 
 @pytest.fixture
@@ -42,37 +26,14 @@ def cynic_trait() -> CommanderTrait:
 
 
 @pytest.fixture
-def procedural_commander(strategist_archetype, cynic_trait) -> Commander:
+def procedural_commander(cynic_trait) -> Commander:
     return Commander(
         name="Тестовый Полководец",
         faction_id="humans",
+        role_title="Стратег",
         generation_type=CommanderGenerationType.PROCEDURAL,
-        archetype=strategist_archetype,
-        trait=cynic_trait,
+        traits=[cynic_trait],
     )
-
-
-class TestCommanderArchetypeStats:
-    def test_defaults_are_neutral(self):
-        stats = CommanderArchetypeStats()
-
-        assert stats.strategic_map_range_bonus == 0
-        assert stats.melee_damage_modifier == 0.0
-        assert stats.upkeep_gold_modifier == 1.0
-
-    def test_ambush_resistance_is_bounded(self):
-        with pytest.raises(ValidationError):
-            CommanderArchetypeStats(ambush_resistance_modifier=1.5)
-
-    def test_upkeep_modifier_must_be_positive(self):
-        with pytest.raises(ValidationError):
-            CommanderArchetypeStats(upkeep_gold_modifier=0)
-
-    def test_is_frozen(self):
-        stats = CommanderArchetypeStats()
-
-        with pytest.raises(ValidationError):
-            stats.strategic_map_range_bonus = 5
 
 
 class TestCommanderTrait:
@@ -80,7 +41,6 @@ class TestCommanderTrait:
         assert cynic_trait.modifier is None
 
     def test_trait_can_carry_a_mechanical_modifier(self):
-        # "Труслив" - не только нарративная черта, но и числовой эффект.
         trait = CommanderTrait(
             id="trait_craven",
             name="Труслив",
@@ -88,6 +48,7 @@ class TestCommanderTrait:
             modifier=MechanicalModifier(stat_name=StatName.AMBUSH_RESISTANCE, value=-0.1),
         )
 
+        assert trait.modifier is not None
         assert trait.modifier.stat_name == StatName.AMBUSH_RESISTANCE
 
 
@@ -117,29 +78,21 @@ class TestCommanderState:
 
 
 class TestCommander:
-    def test_each_commander_gets_a_unique_id(self, strategist_archetype, cynic_trait):
+    def test_each_commander_gets_a_unique_id(self, cynic_trait):
         first = Commander(
             name="Первый",
             faction_id="humans",
             generation_type=CommanderGenerationType.PROCEDURAL,
-            archetype=strategist_archetype,
-            trait=cynic_trait,
+            traits=[cynic_trait],
         )
         second = Commander(
             name="Второй",
             faction_id="humans",
             generation_type=CommanderGenerationType.PROCEDURAL,
-            archetype=strategist_archetype,
-            trait=cynic_trait,
+            traits=[cynic_trait],
         )
 
         assert first.id != second.id
-
-    def test_upkeep_multiplier_mirrors_archetype(self, procedural_commander):
-        assert (
-            procedural_commander.upkeep_gold_multiplier
-            == procedural_commander.archetype.stats.upkeep_gold_modifier
-        )
 
     def test_gain_experience_accumulates(self, procedural_commander):
         procedural_commander.gain_experience(50)
@@ -163,16 +116,13 @@ class TestCommander:
         assert procedural_commander.legendary_prompt_ref is None
         assert procedural_commander.fixed_equipment_ids == []
 
-    def test_legendary_commander_can_carry_fixed_equipment(
-        self, strategist_archetype, cynic_trait
-    ):
-        # Как Гром "Железное брюхо" с несъёмным пушечным ядром в животе.
+    def test_legendary_commander_can_carry_fixed_equipment(self, cynic_trait):
         commander = Commander(
             name='Гром "Железное брюхо"',
             faction_id="greenskins",
+            role_title="Вождь",
             generation_type=CommanderGenerationType.LEGENDARY,
-            archetype=strategist_archetype,
-            trait=cynic_trait,
+            traits=[cynic_trait],
             is_legendary=True,
             legendary_prompt_ref="prompt/GREENSKINS/COMMANDERS/LEGENDARY/GROM.md",
             fixed_equipment_ids=["cannonball_stuck_in_belly"],

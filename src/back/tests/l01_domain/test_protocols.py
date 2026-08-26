@@ -8,22 +8,13 @@ import pytest
 
 from src.back.l01_domain.army.models.card.equipment import Equipment
 from src.back.l01_domain.army.models.card.unit import UnitArchetype
-from src.back.l01_domain.army.models.characters.commanders import (
-    CommanderArchetype,
-    CommanderTrait,
-)
 from src.back.l01_domain.factions.models.buildings import Building
-
 from src.back.l01_domain.protocols.chronicler import ChroniclerRepositoryProtocol
 from src.back.l01_domain.protocols.events import EventBusProtocol
 from src.back.l01_domain.protocols.gamedata import GameDataRepositoryProtocol
 from src.back.l01_domain.protocols.llm import LLMClientProtocol
 from src.back.l01_domain.protocols.saves import SaveGameRepositoryProtocol
 from src.back.l01_domain.world.models.state import WorldState
-
-# ==================================================================
-# FAKE IMPLEMENTATIONS ДЛЯ ТЕСТИРОВАНИЯ КОНТРАКТОВ
-# ==================================================================
 
 
 class FakeLLMClient:
@@ -54,12 +45,6 @@ class FakeGameDataRepository:
         return None
 
     def get_building(self, building_id: str) -> Optional[Building]:
-        return None
-
-    def get_commander_archetype(self, archetype_id: str) -> Optional[CommanderArchetype]:
-        return None
-
-    def get_commander_trait(self, trait_id: str) -> Optional[CommanderTrait]:
         return None
 
     def list_faction_units(self, faction_id: str) -> list[UnitArchetype]:
@@ -132,15 +117,8 @@ class FakeEventBus:
 
 
 class IncompleteClient:
-    """Неполный класс для проверки отклонения несовместимых реализаций."""
-
     def generate_text(self) -> str:
         return ""
-
-
-# ==================================================================
-# ТЕСТЫ
-# ==================================================================
 
 
 class TestProtocolsCompliance:

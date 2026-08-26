@@ -1,40 +1,27 @@
 """
-Модель геройских карточек — уникальных боевых единиц с деревом навыков,
-слотами артефактов и механикой травм.
+Модель геройских карточек: уникальных боевых единиц с перками,
+слотами артефактов, шрамами и модульными чертами.
 """
 
-from typing import Optional
+from typing import Any, Optional
 from uuid import uuid4
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from pydantic import BaseModel, Field, ConfigDict
-
-from src.back.l01_domain.army.models.characters.artifacts import HeroArtifact
-from src.back.l01_domain.common import CharacterGenerationType, MechanicalModifier
 from src.back.l01_domain.army.constants import MAX_HERO_LEVEL
+from src.back.l01_domain.army.models.characters.artifacts import HeroArtifact
+from src.back.l01_domain.army.models.characters.traits import (
+    Trait,
+    format_traits_prompt,
+)
+from src.back.l01_domain.common import (
+    CharacterGenerationType,
+    MechanicalModifier,
+)
 from src.back.l01_domain.exceptions.army import HeroLevelTooLowError
 
 
-class HeroArchetype(BaseModel):
-    """
-    Уникальный архетип героя.
-    """
-
-    model_config = ConfigDict(frozen=True)
-
-    id: str = Field(..., min_length=1)
-    name: str = Field(..., min_length=1)
-    description: str = Field(..., description="Лорное описание архетипа")
-    special_rule: str = Field(
-        ...,
-        description="Текст уникальной механики",
-    )
-    trigger_modifier: Optional[MechanicalModifier] = Field(default=None)
-
-
 class Perk(BaseModel):
-    """
-    Узел дерева навыков. На каждом уровне (1–20) игрок выбирает 1 из 2 перков.
-    """
+    """Узел дерева навыков (1–20 уровень)."""
 
     model_config = ConfigDict(frozen=True)
 
@@ -49,7 +36,7 @@ class Perk(BaseModel):
 
 
 class Scar(BaseModel):
-    """Шрам — постоянный след тяжелого ранения. Шрамы у героя складываются."""
+    """Шрам: постоянный след тяжелого ранения."""
 
     model_config = ConfigDict(frozen=True)
 
@@ -67,73 +54,99 @@ class HeroState(BaseModel):
     is_alive: bool = Field(default=True)
     is_heavily_wounded: bool = Field(default=False)
     wounded_ticks_remaining: int = Field(
-        default=0, ge=0, description="Сколько тактов герой еще выбыл после тяжелого ранения"
+        default=0, ge=0, description="Сколько тактов герой восстанавливается в лазарете"
     )
     attached_squad_id: Optional[str] = Field(
-        default=None, description="ID отряда, к которому прикреплен герой (командует им)"
+        default=None, description="ID отряда, к которому прикреплен герой"
     )
     scars: list[Scar] = Field(default_factory=list)
 
 
 class Hero(BaseModel):
-    """
-    Агрегат геройской карточки.
-    Занимает 1 гекс на тактической карте, по силе сопоставим с отрядом солдат.
-    """
+    """Агрегат геройской карточки."""
 
     id: str = Field(default_factory=lambda: str(uuid4()))
     name: str = Field(..., min_length=1)
     faction_id: str = Field(...)
-
-    generation_type: CharacterGenerationType = Field(
-        default=CharacterGenerationType.PROCEDURAL
+    special_rule: str = Field(
+        default="",
+        description="Текст уникальной механики героя на тактическом поле боя",
     )
-    archetype: HeroArchetype = Field(...)
+    trigger_modifier: Optional[MechanicalModifier] = Field(
+        default=None, description="Пассивный механический бонус героя"
+    )
     max_hp: float = Field(..., gt=0)
+
+    # Модульные черты характера
+    traits: list[Trait] = Field(default_factory=list)
 
     # 3 слота артефактов
     weapon: Optional[HeroArtifact] = Field(default=None)
     armor: Optional[HeroArtifact] = Field(default=None)
     accessory: Optional[HeroArtifact] = Field(default=None)
 
-    chosen_perks: list[Perk] = Field(
-        default_factory=list,
-        description="Перки, выбранные по мере левел-апа",
-    )
-
+    chosen_perks: list[Perk] = Field(default_factory=list)
     state: HeroState = Field(...)
 
+    generation_type: CharacterGenerationType = Field(
+        default=CharacterGenerationType.PROCEDURAL
+    )
     is_legendary: bool = Field(default=False)
     legendary_prompt_ref: Optional[str] = Field(default=None)
     personality_prompt_override: Optional[str] = Field(
         default=None,
-        description="Сгенерированный мастером игры текст характера для кастомного героя",
+        description="Индивидуальный текст характера для кастомного героя",
     )
     custom_biography: Optional[str] = Field(
         default=None, description="Исходный текст биографии от игрока"
     )
-
     lore_description: str = Field(default="")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_input(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            if "archetype" in data and data["archetype"] is not None:
+                arch = data.pop("archetype")
+                if isinstance(arch, dict):
+                    data.setdefault("special_rule", arch.get("special_rule", ""))
+                    data.setdefault("trigger_modifier", arch.get("trigger_modifier", None))
+                elif hasattr(arch, "special_rule"):
+                    data.setdefault("special_rule", getattr(arch, "special_rule", ""))
+                    data.setdefault(
+                        "trigger_modifier", getattr(arch, "trigger_modifier", None)
+                    )
+        return data
 
     @classmethod
     def create_new(
         cls,
         name: str,
         faction_id: str,
-        archetype: HeroArchetype,
         max_hp: float,
+        special_rule: str = "",
+        trigger_modifier: Optional[MechanicalModifier] = None,
+        traits: Optional[list[Trait]] = None,
         generation_type: CharacterGenerationType = CharacterGenerationType.PROCEDURAL,
         custom_biography: Optional[str] = None,
         personality_prompt_override: Optional[str] = None,
         is_legendary: bool = False,
         legendary_prompt_ref: Optional[str] = None,
+        archetype: Any = None,  # Для обратной совместимости
     ) -> "Hero":
-        """Фабричный метод создания нового героя."""
+        rule = special_rule
+        mod = trigger_modifier
+        if archetype is not None:
+            rule = getattr(archetype, "special_rule", special_rule)
+            mod = getattr(archetype, "trigger_modifier", trigger_modifier)
+
         return cls(
             name=name,
             faction_id=faction_id,
-            archetype=archetype,
             max_hp=max_hp,
+            special_rule=rule,
+            trigger_modifier=mod,
+            traits=traits or [],
             generation_type=generation_type,
             custom_biography=custom_biography,
             personality_prompt_override=personality_prompt_override,
@@ -153,9 +166,14 @@ class Hero(BaseModel):
     def get_active_modifiers(self) -> list[MechanicalModifier]:
         modifiers = [perk.modifier for perk in self.chosen_perks]
         modifiers.extend(scar.modifier for scar in self.state.scars)
-        if self.archetype.trigger_modifier is not None:
-            modifiers.append(self.archetype.trigger_modifier)
+        for trait in self.traits:
+            modifiers.extend(trait.modifiers)
+        if self.trigger_modifier is not None:
+            modifiers.append(self.trigger_modifier)
         return modifiers
+
+    def get_traits_prompt(self) -> str:
+        return format_traits_prompt(self.traits)
 
     def attach_to_squad(self, squad_id: str) -> None:
         self.state.attached_squad_id = squad_id

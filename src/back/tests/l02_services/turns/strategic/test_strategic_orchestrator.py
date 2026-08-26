@@ -57,17 +57,13 @@ class TestStrategicTurnOrchestrator:
     ):
         from src.back.l01_domain.army.models.characters.commanders import (
             Commander,
-            CommanderArchetype,
             CommanderGenerationType,
-            CommanderTrait,
         )
 
         sample_army.commander = Commander(
             name="Полководец",
             faction_id=human_faction.id,
             generation_type=CommanderGenerationType.PROCEDURAL,
-            archetype=CommanderArchetype(id="arch_1", name="A", description="D"),
-            trait=CommanderTrait(id="trait_1", name="T", text_fragment="..."),
         )
 
         world_state = WorldState()

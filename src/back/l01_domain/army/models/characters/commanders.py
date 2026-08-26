@@ -2,141 +2,106 @@
 Модель обычных и легендарных полководцев фракций.
 """
 
-from typing import Optional
+from typing import Any, Optional
 from uuid import uuid4
+from pydantic import BaseModel, Field, model_validator
 
-from pydantic import BaseModel, Field, ConfigDict
-
-from src.back.l01_domain.common import CharacterGenerationType, MechanicalModifier
+from src.back.l01_domain.army.models.characters.traits import (
+    Trait,
+    TraitCategory,
+    format_traits_prompt,
+)
+from src.back.l01_domain.common import (
+    CharacterGenerationType,
+    MechanicalModifier,
+    StatName,
+)
 from src.back.l01_domain.exceptions.army import NegativeExperienceError
 
-# Для обратной совместимости
 CommanderGenerationType = CharacterGenerationType
 
 
-class CommanderArchetypeStats(BaseModel):
-    """
-    Математические модификаторы архетипа.
-    """
+class CommanderTrait(Trait):
+    """Черта характера полководца (наследует Trait для совместимости)."""
 
-    model_config = ConfigDict(frozen=True)
+    category: TraitCategory = TraitCategory.PSYCHOLOGICAL
+    prompt_text: str = Field(default="")
 
-    strategic_map_range_bonus: int = Field(
-        default=0,
-        description="Дополнительная дальность перемещения возглавляемой армии по глобальной карте (в гексах)",
-    )
-    melee_damage_modifier: float = Field(
-        default=0.0,
-        description="Модификатор урона армии в ближнем бою (доля, может быть отрицательным)",
-    )
-    ambush_resistance_modifier: float = Field(
-        default=0.0, ge=-1.0, le=1.0, description="Снижение шанса армии попасть в засаду"
-    )
-    charge_damage_bonus: float = Field(
-        default=0.0, description="Бонус к урону армии от 'Натиска'"
-    )
-    defense_stance_penalty: float = Field(
-        default=0.0, description="Штраф к эффективности длительной обороны (темп x0)"
-    )
-    upkeep_gold_modifier: float = Field(
-        default=1.0,
-        gt=0,
-        description="Множитель стоимости содержания армии (например, 1.2 = +20%)",
-    )
-    initiative_modifier: int = Field(
-        default=0,
-        description="Модификатор инициативы полководца, если он появляется как героическая карточка",
-    )
+    def __init__(self, **data: Any) -> None:
+        if "text_fragment" in data and "prompt_text" not in data:
+            data["prompt_text"] = data["text_fragment"]
+        if "category" not in data:
+            data["category"] = TraitCategory.PSYCHOLOGICAL
+        if "modifier" in data:
+            mod = data.pop("modifier")
+            if mod is not None:
+                data.setdefault("modifiers", [mod])
+        super().__init__(**data)
 
+    @property
+    def text_fragment(self) -> str:
+        return self.prompt_text
 
-class CommanderArchetype(BaseModel):
-    """
-    Шаблон архетипа (например, 'Стратег', 'Параноик', 'Разжигатель войн').
-    """
-
-    model_config = ConfigDict(frozen=True)
-
-    id: str = Field(
-        ..., min_length=1, description="Уникальный ID (например, archetype_strategist)"
-    )
-    name: str = Field(..., min_length=1)
-    description: str = Field(..., description="Краткое лорное описание архетипа")
-    stats: CommanderArchetypeStats = Field(default_factory=CommanderArchetypeStats)
-
-
-class CommanderTrait(BaseModel):
-    """
-    Черта личности полководца.
-    """
-
-    model_config = ConfigDict(frozen=True)
-
-    id: str = Field(..., min_length=1)
-    name: str = Field(..., min_length=1)
-    text_fragment: str = Field(
-        ..., description="Текст, вшиваемый в системный промпт полководца"
-    )
-    modifier: Optional[MechanicalModifier] = Field(default=None)
+    @property
+    def modifier(self) -> Optional[MechanicalModifier]:
+        return self.modifiers[0] if self.modifiers else None
 
 
 class CommanderCharacteristics(BaseModel):
-    """
-    Базовые характеристики полководца.
-    """
+    """Базовые числовые характеристики полководца (0..100)."""
 
     authority: int = Field(
         default=10,
         ge=0,
         le=100,
-        description="Авторитет — аура морали армии, вес слов в дипломатии",
+        description="Авторитет: аура морали армии и вес слова в переговорах",
     )
     tactical_acumen: int = Field(
         default=10,
         ge=0,
         le=100,
-        description="Тактическое чутье — инициатива отрядов, качество советов игроку",
+        description="Тактическое чутье: инициатива отрядов и качество донесений",
     )
     resilience: int = Field(
         default=10,
         ge=0,
         le=100,
-        description="Живучесть — сопротивление страху, шанс выжить при ранении",
+        description="Живучесть: сопротивление страху и стойкость в обороне",
     )
     cunning: int = Field(
         default=10,
         ge=0,
         le=100,
-        description="Хитрость — успех засад, переговоров, вымогательства",
+        description="Хитрость: успех засад и скрытных маневров",
     )
 
 
 class CommanderState(BaseModel):
-    """
-    Динамическое состояние полководца.
-    """
+    """Динамическое состояние полководца."""
 
     experience: int = Field(default=0, ge=0)
     level: int = Field(default=1, ge=1)
     is_alive: bool = Field(default=True)
     army_id: Optional[str] = Field(
-        default=None, description="ID армии на глобальной карте, которой он сейчас командует"
+        default=None, description="ID армии на глобальной карте под его командованием"
     )
 
 
 class Commander(BaseModel):
-    """
-    Агрегат полководца фракции.
-    """
+    """Агрегат полководца фракции."""
 
     id: str = Field(default_factory=lambda: str(uuid4()))
     name: str = Field(..., min_length=1)
     faction_id: str = Field(..., description="ID фракции-нанимателя")
+    role_title: str = Field(
+        default="Полководец",
+        description="Воинское звание или роль (напр. Сержант стражи, Капитан лансьеров)",
+    )
 
     generation_type: CharacterGenerationType = Field(
         default=CharacterGenerationType.PROCEDURAL
     )
-    archetype: CommanderArchetype = Field(...)
-    trait: CommanderTrait = Field(...)
+    traits: list[Trait] = Field(default_factory=list)
     characteristics: CommanderCharacteristics = Field(default_factory=CommanderCharacteristics)
     state: CommanderState = Field(default_factory=CommanderState)
 
@@ -144,26 +109,72 @@ class Commander(BaseModel):
     legendary_prompt_ref: Optional[str] = Field(default=None)
     personality_prompt_override: Optional[str] = Field(
         default=None,
-        description="Текст характера для полководца (либо генерируется гейм мастером, либо берется лорный из .md файла личности)",
+        description="Индивидуальный текст характера для кастомных полководцев",
     )
     fixed_equipment_ids: list[str] = Field(
         default_factory=list,
-        description="ID предметов из реестра экипировки, которые нельзя снять",
+        description="ID предметов, которые нельзя снять (для легендарных личностей)",
     )
     custom_biography: Optional[str] = Field(
         default=None, description="Исходный текст биографии от игрока"
     )
-
     lore_description: str = Field(default="")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_input(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            if "trait" in data and data["trait"] is not None:
+                t = data.pop("trait")
+                traits_list = data.setdefault("traits", [])
+                if t not in traits_list:
+                    traits_list.append(t)
+            if "archetype" in data and data["archetype"] is not None:
+                arch = data.pop("archetype")
+                if isinstance(arch, dict) and "name" in arch:
+                    data.setdefault("role_title", arch["name"])
+                elif hasattr(arch, "name"):
+                    data.setdefault("role_title", arch.name)
+        return data
 
     @property
     def display_name(self) -> str:
         return self.name
 
     @property
+    def trait(self) -> Optional[Trait]:
+        return self.traits[0] if self.traits else None
+
+    @property
+    def strategic_movement_bonus(self) -> int:
+        """Бонус к дальности марша армии от активных черт."""
+        bonus = 0
+        for trait in self.traits:
+            for mod in trait.modifiers:
+                if mod.stat_name == StatName.MOVEMENT_SPEED:
+                    bonus += int(mod.value)
+        return bonus
+
+    @property
     def upkeep_gold_multiplier(self) -> float:
-        """Итоговый множитель содержания армии от архетипа."""
-        return self.archetype.stats.upkeep_gold_modifier
+        """Итоговый множитель содержания армии от черт."""
+        multiplier = 1.0
+        for trait in self.traits:
+            for mod in trait.modifiers:
+                if mod.stat_name == StatName.UPKEEP_GOLD:
+                    multiplier += mod.value if mod.is_percentage else mod.value * 0.1
+        return max(0.5, multiplier)
+
+    def get_active_modifiers(self) -> list[MechanicalModifier]:
+        """Возвращает все модификаторы от активных черт полководца."""
+        modifiers: list[MechanicalModifier] = []
+        for trait in self.traits:
+            modifiers.extend(trait.modifiers)
+        return modifiers
+
+    def get_traits_prompt(self) -> str:
+        """Возвращает форматированный блок черт для системного промпта."""
+        return format_traits_prompt(self.traits)
 
     def gain_experience(self, amount: int) -> None:
         if amount < 0:
