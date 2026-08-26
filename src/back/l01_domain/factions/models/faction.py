@@ -70,6 +70,27 @@ class Faction(BaseModel):
         """
         Списывает указанный объем ресурса.
         """
+        self._require(resource, amount)
+        self.resources[resource] -= amount
+
+    def spend_all(self, costs: dict[ResourceType, float]) -> None:
+        """
+        Списывает набор ресурсов разом.
+
+        Покупка неделима: не хватило хотя бы одного ресурса - казна остается
+        нетронутой целиком. Иначе игрок платил бы золотом за предмет, которого
+        так и не получит из-за нехватки материалов.
+
+        Ошибка называет первый ресурс, которого не хватило, в порядке costs.
+        """
+        for resource, amount in costs.items():
+            self._require(resource, amount)
+
+        for resource, amount in costs.items():
+            self.resources[resource] -= amount
+
+    def _require(self, resource: ResourceType, amount: float) -> None:
+        """Убеждается, что ресурса хватает, или роняет доменную ошибку."""
         if not self.can_afford(resource, amount):
             raise InsufficientResourcesError(
                 resource=resource.value,
@@ -77,7 +98,6 @@ class Faction(BaseModel):
                 available=self.resources.get(resource, 0.0),
                 faction_id=self.id,
             )
-        self.resources[resource] -= amount
 
     def earn(self, resource: ResourceType, amount: float) -> None:
         """

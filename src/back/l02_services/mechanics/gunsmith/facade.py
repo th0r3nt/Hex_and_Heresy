@@ -53,8 +53,15 @@ class GunsmithFacade:
             temperature=0.7,
         )
 
-        # Мастер отказался делать этот бред
-        if not response.is_approved or response.priorities is None or response.tier is None:
+        # Мастер отказался делать этот бред - либо ответил так, что считать нечего:
+        # без приоритетов не собрать статы, без тира - бюджет и цену,
+        # без слота домен не примет карточку
+        if (
+            not response.is_approved
+            or response.priorities is None
+            or response.tier is None
+            or response.slot is None
+        ):
             if self._event_bus:
                 await self._event_bus.publish(
                     GameEvents.Gunsmith.BLUEPRINT_REJECTED,
@@ -89,10 +96,15 @@ class GunsmithFacade:
         if not faction:
             raise ValueError(f"Фракция {faction_id} не найдена")
 
-        # Плата за исследования и внедрение (Research & Development)
-        # Списываем разово стоимость крафта 1 предмета
-        faction.spend(ResourceType.GOLD, draft.cost_gold)
-        faction.spend(ResourceType.MATERIAL, draft.cost_material)
+        # Плата за исследования и внедрение (Research & Development).
+        # Списываем разово стоимость крафта 1 предмета - и сразу оба ресурса:
+        # заплатить золотом и остаться без чертежа из-за нехватки материалов нельзя.
+        faction.spend_all(
+            {
+                ResourceType.GOLD: draft.cost_gold,
+                ResourceType.MATERIAL: draft.cost_material,
+            }
+        )
 
         # Добавляем в реестр кастомных предметов текущей партии
         world_state.add_custom_equipment(draft)
