@@ -17,9 +17,9 @@ from src.back.l02_services.mechanics.game_master.custom.lords import (
     CustomLordDraftResponse,
     CustomLordFactory,
 )
+from src.back.tests.l02_services.fakes import FakePromptBuilder
 from src.back.tests.l02_services.mechanics.game_master.test_custom_commanders import (
     FakeLLMClient,
-    FakePromptBuilder,
 )
 
 

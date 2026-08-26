@@ -23,7 +23,11 @@ from src.back.l01_domain.factions.models.diplomacy.negotiations import (
     NegotiationTranscript,
 )
 from src.back.l01_domain.protocols.events import EventBusProtocol
-from src.back.l01_domain.protocols.llm import LLMClientProtocol
+from src.back.l01_domain.protocols.llm import (
+    ContextBuilderProtocol,
+    LLMClientProtocol,
+    PromptBuilderProtocol,
+)
 from src.back.l01_domain.world.models.reports import DiplomacyTickReport
 from src.back.l01_domain.world.models.state import WorldState
 from src.back.l02_services.mechanics.diplomacy.ambassador import AmbassadorService
@@ -44,6 +48,8 @@ class DiplomacyFacade:
     def __init__(
         self,
         llm_client: Optional[LLMClientProtocol] = None,
+        prompt_builder: Optional[PromptBuilderProtocol] = None,
+        context_builder: Optional[ContextBuilderProtocol] = None,
         event_bus: Optional[EventBusProtocol] = None,
         rng: Optional[Random] = None,
     ) -> None:
@@ -51,11 +57,22 @@ class DiplomacyFacade:
         self._dispatches = DispatchService(event_bus=event_bus, rng=rng)
         self._ambassadors = AmbassadorService(event_bus=event_bus)
         self._pacts = PactUpkeepService(event_bus=event_bus)
-        self._negotiations = (
-            NegotiationService(llm_client=llm_client, event_bus=event_bus)
-            if llm_client is not None
-            else None
-        )
+        self._negotiations: Optional[NegotiationService] = None
+
+        # Сборщики промптов нужны только переговорам и приходят снаружи:
+        # фасад не поднимает инфраструктуру сам.
+        if llm_client is not None:
+            if prompt_builder is None or context_builder is None:
+                raise ValueError(
+                    "DiplomacyFacade с языковой моделью требует "
+                    "prompt_builder и context_builder"
+                )
+            self._negotiations = NegotiationService(
+                llm_client=llm_client,
+                prompt_builder=prompt_builder,
+                context_builder=context_builder,
+                event_bus=event_bus,
+            )
 
     # ==================================================================
     # ДЕЙСТВИЯ ИГРОКА

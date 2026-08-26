@@ -20,8 +20,15 @@ def bus() -> EventBus:
 
 
 @pytest.fixture
-def facade(fake_llm, fake_repository) -> ChroniclerFacade:
-    return ChroniclerFacade(llm_client=fake_llm, repository=fake_repository)
+def facade(
+    fake_llm, fake_repository, fake_prompt_builder, fake_context_builder
+) -> ChroniclerFacade:
+    return ChroniclerFacade(
+        llm_client=fake_llm,
+        repository=fake_repository,
+        prompt_builder=fake_prompt_builder,
+        context_builder=fake_context_builder,
+    )
 
 
 @pytest.fixture
@@ -234,7 +241,15 @@ class TestBackgroundMode:
 
     @pytest.mark.asyncio
     async def test_broken_model_does_not_kill_the_task(
-        self, world, bus, battle_state, battle_squads, battle_hex, make_report
+        self,
+        world,
+        bus,
+        battle_state,
+        battle_squads,
+        battle_hex,
+        make_report,
+        fake_prompt_builder,
+        fake_context_builder,
     ):
         class BrokenLLM:
             async def generate_text(self, *args, **kwargs):
@@ -244,7 +259,12 @@ class TestBackgroundMode:
                 raise LLMRequestFailedError("local", "model", "нет сети")
 
         listener = ChroniclerListener(
-            ChroniclerFacade(llm_client=BrokenLLM()), run_in_background=True
+            ChroniclerFacade(
+                llm_client=BrokenLLM(),
+                prompt_builder=fake_prompt_builder,
+                context_builder=fake_context_builder,
+            ),
+            run_in_background=True,
         )
         listener.bind_world_state(world)
         listener.register(bus)

@@ -7,17 +7,19 @@ from typing import Optional
 
 from src.back.l01_domain.army.models.card.equipment import Equipment
 from src.back.l01_domain.factions.constants import ResourceType
+from src.back.l01_domain.llm.prompts import PromptCatalog, get_faction_prompt_key
 from src.back.l01_domain.protocols.events import EventBusProtocol
-from src.back.l01_domain.protocols.llm import LLMClientProtocol
+from src.back.l01_domain.protocols.llm import (
+    ContextBuilderProtocol,
+    LLMClientProtocol,
+    PromptBuilderProtocol,
+)
 from src.back.l01_domain.world.models.state import WorldState
 from src.back.l01_domain.factions.models.faction import Faction
 from src.back.l02_services.mechanics.gunsmith.crafting import LLMGunsmithResponse
 from src.back.l02_services.mechanics.gunsmith.blueprints import BlueprintRegistry
 from src.back.l02_services.mechanics.gunsmith.validation.balance import EquipmentBalancer
 from src.back.l02_services.mechanics.gunsmith.validation.economy import EquipmentEconomist
-from src.back.l03_infrastructure.llm.prompt.builder import PromptBuilder
-from src.back.l03_infrastructure.llm.prompt.catalog import PromptCatalog, get_faction_prompt_path
-from src.back.l03_infrastructure.llm.context.builder import ContextBuilder
 from src.back.utils.event.registry import GameEvents
 
 
@@ -25,14 +27,14 @@ class GunsmithFacade:
     def __init__(
         self,
         llm_client: LLMClientProtocol,
+        prompt_builder: PromptBuilderProtocol,
+        context_builder: ContextBuilderProtocol,
         event_bus: Optional[EventBusProtocol] = None,
-        prompt_builder: Optional[PromptBuilder] = None,
-        context_builder: Optional[ContextBuilder] = None,
     ) -> None:
         self._llm = llm_client
+        self._prompt_builder = prompt_builder
+        self._context_builder = context_builder
         self._event_bus = event_bus
-        self._prompt_builder = prompt_builder or PromptBuilder()
-        self._context_builder = context_builder or ContextBuilder()
 
     async def draft_blueprint(
         self, world_state: WorldState, faction_id: str, user_request: str
@@ -111,7 +113,7 @@ class GunsmithFacade:
             PromptCatalog.BASE.PERSONA,
             PromptCatalog.BASE.MECHANICS.ECONOMY,
             PromptCatalog.ROLES.GUNSMITH,
-            get_faction_prompt_path(faction.race),
+            get_faction_prompt_key(faction.race),
             PromptCatalog.LORE.BASIC.MEDIUM
         ])
 

@@ -22,6 +22,7 @@ from src.back.l01_domain.factions.models.diplomacy.negotiations import (
 )
 from src.back.l02_services.mechanics.diplomacy.facade import DiplomacyFacade
 from src.back.l02_services.mechanics.diplomacy.negotiations import NegotiationService
+from src.back.tests.l02_services.fakes import FakeContextBuilder, FakePromptBuilder
 from src.back.utils.event.registry import GameEvents
 
 
@@ -70,10 +71,30 @@ def _reply(text: str, action: Optional[DiplomaticAction] = None) -> LLMDiplomati
     return LLMDiplomaticResponse(reply_text=text, action=action)
 
 
+def _service(llm, event_bus=None) -> NegotiationService:
+    """Сервис переговоров на доменных фейках сборщиков."""
+    return NegotiationService(
+        llm_client=llm,
+        prompt_builder=FakePromptBuilder(),
+        context_builder=FakeContextBuilder(),
+        event_bus=event_bus,
+    )
+
+
+def _facade(llm=None, event_bus=None) -> DiplomacyFacade:
+    """Фасад дипломатии: сборщики нужны только вместе с моделью."""
+    return DiplomacyFacade(
+        llm_client=llm,
+        prompt_builder=FakePromptBuilder() if llm is not None else None,
+        context_builder=FakeContextBuilder() if llm is not None else None,
+        event_bus=event_bus,
+    )
+
+
 class TestApplyAction:
     @pytest.mark.asyncio
     async def test_trade_action_creates_agreement(self, world, fake_bus):
-        service = NegotiationService(llm_client=FakeLLMClient(), event_bus=fake_bus)
+        service = _service(FakeLLMClient(), fake_bus)
 
         applied = await service.apply_action(
             world,
@@ -97,7 +118,7 @@ class TestApplyAction:
 
     @pytest.mark.asyncio
     async def test_war_and_peace_switch_stance(self, world):
-        service = NegotiationService(llm_client=FakeLLMClient())
+        service = _service(FakeLLMClient())
 
         await service.apply_action(
             world, "humans", "elfs", DiplomaticAction(kind=DiplomaticActionType.DECLARE_WAR)
@@ -112,7 +133,7 @@ class TestApplyAction:
 
     @pytest.mark.asyncio
     async def test_right_of_passage_goes_to_initiator(self, world):
-        service = NegotiationService(llm_client=FakeLLMClient())
+        service = _service(FakeLLMClient())
 
         await service.apply_action(
             world,
@@ -133,7 +154,7 @@ class TestApplyAction:
 
     @pytest.mark.asyncio
     async def test_tribute_demand_is_recorded(self, world, fake_bus):
-        service = NegotiationService(llm_client=FakeLLMClient(), event_bus=fake_bus)
+        service = _service(FakeLLMClient(), fake_bus)
 
         await service.apply_action(
             world,
@@ -147,7 +168,7 @@ class TestApplyAction:
 
     @pytest.mark.asyncio
     async def test_empty_action_changes_nothing(self, world):
-        service = NegotiationService(llm_client=FakeLLMClient())
+        service = _service(FakeLLMClient())
 
         assert await service.apply_action(world, "humans", "elfs", None) is False
         assert (
@@ -159,7 +180,7 @@ class TestApplyAction:
 
     @pytest.mark.asyncio
     async def test_incomplete_trade_action_is_ignored(self, world):
-        service = NegotiationService(llm_client=FakeLLMClient())
+        service = _service(FakeLLMClient())
 
         applied = await service.apply_action(
             world,
@@ -174,9 +195,7 @@ class TestApplyAction:
 
 class TestDispatchAnswer:
     @pytest.mark.asyncio
-    async def test_lord_answers_letter_and_declares_war(
-        self, world, fake_bus, fake_prompt_builder
-    ):
+    async def test_lord_answers_letter_and_declares_war(self, world, fake_bus):
         llm = FakeLLMClient(
             structured_replies=[
                 _reply(
@@ -185,9 +204,7 @@ class TestDispatchAnswer:
                 )
             ]
         )
-        service = NegotiationService(
-            llm_client=llm, event_bus=fake_bus, prompt_builder=fake_prompt_builder
-        )
+        service = _service(llm, fake_bus)
         dispatch = Dispatch(
             sender_faction_id="humans",
             recipient_faction_id="elfs",
@@ -201,9 +218,9 @@ class TestDispatchAnswer:
 
         system_prompt, user_prompt = llm.calls[0]
         # Проверяем, что в системный промпт лорда ушли правильные блоки файлов:
-        assert "[base/persona.md]" in system_prompt
-        assert "[roles/lord/prompt.md]" in system_prompt
-        assert "[factions/elfs.md]" in system_prompt
+        assert "[base.persona]" in system_prompt
+        assert "[roles.lord.prompt]" in system_prompt
+        assert "[factions.elfs]" in system_prompt
         assert "Уберите своих сборщиков податей." in user_prompt
 
 
@@ -228,7 +245,7 @@ class TestAutoNegotiation:
                 "Хорошо, восемьсот - но это последнее слово.",
             ],
         )
-        facade = DiplomacyFacade(llm_client=llm, event_bus=fake_bus)
+        facade = _facade(llm, fake_bus)
         ambassador = await facade.send_ambassador(
             world,
             faction_id="humans",
@@ -263,7 +280,7 @@ class TestAutoNegotiation:
                 )
             ]
         )
-        facade = DiplomacyFacade(llm_client=llm, event_bus=fake_bus)
+        facade = _facade(llm, fake_bus)
         ambassador = await facade.send_ambassador(
             world, "humans", "Граф Вальтер", "elfs", negotiation_mode=NegotiationMode.MANUAL
         )
@@ -278,7 +295,7 @@ class TestAutoNegotiation:
 
     @pytest.mark.asyncio
     async def test_ambassador_in_transit_cannot_negotiate(self, world):
-        facade = DiplomacyFacade(llm_client=FakeLLMClient())
+        facade = _facade(FakeLLMClient())
         ambassador = await facade.send_ambassador(world, "humans", "Граф Вальтер", "elfs")
 
         with pytest.raises(AmbassadorUnavailableError):
@@ -286,8 +303,13 @@ class TestAutoNegotiation:
 
     @pytest.mark.asyncio
     async def test_negotiations_require_llm_client(self, world):
-        facade = DiplomacyFacade()
+        facade = _facade()
         ambassador = await facade.send_ambassador(world, "humans", "Граф Вальтер", "elfs")
 
         with pytest.raises(ValueError):
             await facade.run_auto_negotiation(world, ambassador.id)
+
+    def test_llm_client_without_builders_is_rejected(self):
+        """Сборку графа зависимостей делает корень компоновки, а не фасад."""
+        with pytest.raises(ValueError):
+            DiplomacyFacade(llm_client=FakeLLMClient())

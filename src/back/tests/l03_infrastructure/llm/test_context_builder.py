@@ -15,15 +15,18 @@ from src.back.l01_domain.army.models.characters.heroes import Hero, HeroState
 from src.back.l01_domain.army.models.strategic import StrategicArmy
 from src.back.l01_domain.combat.models.state import TacticalBattleState
 from src.back.l01_domain.common import CharacterGenerationType, FactionRace
-from src.back.l01_domain.factions.constants import DiplomaticStance
+from src.back.l01_domain.factions.constants import DiplomaticStance, ResourceType
 from src.back.l01_domain.factions.models.buildings import Headquarters
 from src.back.l01_domain.factions.models.diplomacy.messengers import Ambassador
 from src.back.l01_domain.factions.models.faction import Faction
 from src.back.l01_domain.factions.models.lord import Lord
 from src.back.l01_domain.llm.models.context import ContextBlock
 from src.back.l01_domain.maps.models.strategic import HexCoordinates
+from src.back.l01_domain.protocols.llm import ContextBuilderProtocol
 from src.back.l01_domain.world.models.battle_log import BattleDossier
+from src.back.l01_domain.world.constants import GlobalEventCategory
 from src.back.l01_domain.world.models.battleground import BattlefieldLootSite
+from src.back.l01_domain.world.models.events import GlobalEvent
 from src.back.l01_domain.world.models.state import WorldState
 from src.back.l03_infrastructure.llm.context.builder import ContextBuilder
 
@@ -115,6 +118,12 @@ def squad() -> Squad:
         base_stats=BaseUnitStats(max_hp=20.0),
     )
     return Squad.create_new(archetype=archetype)
+
+
+class TestDomainContract:
+    def test_builder_satisfies_context_builder_protocol(self, builder: ContextBuilder):
+        """Сервисы видят сборщик контекста только через протокол домена."""
+        assert isinstance(builder, ContextBuilderProtocol)
 
 
 class TestLord:
@@ -292,6 +301,49 @@ class TestChronicler:
         blocks = builder.build_rumor_context(world_state)
 
         assert "поля брани: 1" in body(blocks, "Обстановка в мире")
+
+    def test_rumor_context_lists_time_and_silence(
+        self, builder: ContextBuilder, world_state: WorldState
+    ):
+        world_state.ticks_since_last_battle = 4
+
+        context = builder.render(builder.build_rumor_context(world_state))
+
+        assert "Текущее время: Год 1" in context
+        assert "Тактов без боев: 4" in context
+
+    def test_rumor_context_mentions_active_events(
+        self, builder: ContextBuilder, world_state: WorldState
+    ):
+        world_state.add_event(
+            GlobalEvent(
+                name="Магнитная буря",
+                description="Небо трещит.",
+                category=GlobalEventCategory.WEATHER,
+            )
+        )
+
+        context = builder.render(builder.build_rumor_context(world_state))
+
+        assert "«Магнитная буря»" in context
+
+    def test_rumor_context_notices_hunger(
+        self, builder: ContextBuilder, world_state: WorldState, faction: Faction
+    ):
+        faction.resources[ResourceType.FOOD] = 10.0
+
+        context = builder.render(builder.build_rumor_context(world_state, faction))
+
+        assert "нехватки провизии" in context
+
+    def test_well_fed_faction_does_not_complain(
+        self, builder: ContextBuilder, world_state: WorldState, faction: Faction
+    ):
+        faction.resources[ResourceType.FOOD] = 500.0
+
+        context = builder.render(builder.build_rumor_context(world_state, faction))
+
+        assert "нехватки провизии" not in context
 
     def test_chronicle_context_marks_a_siege_massacre(
         self, builder: ContextBuilder, faction: Faction

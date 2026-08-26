@@ -1,35 +1,17 @@
 """
-Тесты статического реестра и сборщика промптов (LLM).
+Тесты сборщика промптов (LLM): разрешение логических ключей в файлы,
+склейка, кэш и поведение при пропаже файла.
 """
 
-from src.back.l01_domain.common import FactionRace
+from src.back.l01_domain.llm.prompts import PromptCatalog
+from src.back.l01_domain.protocols.llm import PromptBuilderProtocol
 from src.back.l03_infrastructure.llm.prompt.builder import PromptBuilder
-from src.back.l03_infrastructure.llm.prompt.catalog import (
-    PromptCatalog,
-    get_faction_prompt_path,
-)
 
 
-class TestPromptCatalog:
-    def test_get_faction_prompt_path_maps_all_races(self):
-        assert get_faction_prompt_path(FactionRace.HUMANS) == PromptCatalog.FACTIONS.HUMANS
-        assert get_faction_prompt_path(FactionRace.ELFS) == PromptCatalog.FACTIONS.ELFS
-        assert (
-            get_faction_prompt_path(FactionRace.GREENSKINS)
-            == PromptCatalog.FACTIONS.GREENSKINS
-        )
-        assert (
-            get_faction_prompt_path(FactionRace.BARONIAL_TROOPS)
-            == PromptCatalog.FACTIONS.BARONIAL_TROOPS
-        )
-        assert (
-            get_faction_prompt_path(FactionRace.CONGREGATION_OF_THE_METEORITE)
-            == PromptCatalog.FACTIONS.CONGREGATION_OF_THE_METEORITE
-        )
-        assert (
-            get_faction_prompt_path(FactionRace.MERCENARIES)
-            == PromptCatalog.FACTIONS.MERCENARIES
-        )
+class TestDomainContract:
+    def test_builder_satisfies_prompt_builder_protocol(self):
+        """Сервисы видят сборщик только через протокол домена."""
+        assert isinstance(PromptBuilder(), PromptBuilderProtocol)
 
 
 class TestPromptBuilder:
@@ -87,3 +69,12 @@ class TestPromptBuilder:
         result = builder.build(["ghost.md", "valid.md"])
 
         assert result == "Существующий файл"
+
+    def test_logical_key_is_resolved_to_a_nested_file(self, tmp_path):
+        """Сервисы приносят ключи каталога, а не пути: 'base.persona' -> base/persona.md."""
+        (tmp_path / "base").mkdir()
+        (tmp_path / "base" / "persona.md").write_text("Ты - хронист.", encoding="utf-8")
+
+        builder = PromptBuilder(base_dir=tmp_path)
+
+        assert builder.build([PromptCatalog.BASE.PERSONA]) == "Ты - хронист."

@@ -24,9 +24,9 @@ from src.back.l02_services.mechanics.game_master.events import (
     DynamicGlobalEventResponse,
 )
 from src.back.l02_services.mechanics.game_master.facade import GameMasterFacade
+from src.back.tests.l02_services.fakes import FakeContextBuilder, FakePromptBuilder
 from src.back.tests.l02_services.mechanics.game_master.test_custom_commanders import (
     FakeLLMClient,
-    FakePromptBuilder,
 )
 from src.back.utils.event.bus import EventBus
 from src.back.utils.event.registry import GameEvents
@@ -71,6 +71,7 @@ class TestGameMasterFacade:
         facade = GameMasterFacade(
             llm_client=llm,
             prompt_builder=FakePromptBuilder(),
+            context_builder=FakeContextBuilder(),
             event_bus=bus,
         )
         world = _setup_world()
@@ -100,6 +101,7 @@ class TestGameMasterFacade:
         facade = GameMasterFacade(
             llm_client=llm,
             prompt_builder=FakePromptBuilder(),
+            context_builder=FakeContextBuilder(),
         )
         world = _setup_world()
 
@@ -125,6 +127,7 @@ class TestGameMasterFacade:
         facade = GameMasterFacade(
             llm_client=llm,
             prompt_builder=FakePromptBuilder(),
+            context_builder=FakeContextBuilder(),
         )
         world = _setup_world()
 
@@ -152,6 +155,7 @@ class TestGameMasterFacade:
         facade = GameMasterFacade(
             llm_client=llm,
             prompt_builder=FakePromptBuilder(),
+            context_builder=FakeContextBuilder(),
         )
         world = _setup_world()
 

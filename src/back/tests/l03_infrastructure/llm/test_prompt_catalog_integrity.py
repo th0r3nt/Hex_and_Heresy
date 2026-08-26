@@ -1,5 +1,8 @@
 """
 Интеграционные тесты целостности каталога промптов и единого реестра черт.
+
+Каталог логических ключей живет в домене, файлы - в инфраструктуре: здесь
+проверяется, что каждый доменный ключ разрешается в реальный непустой файл.
 """
 
 from pathlib import Path
@@ -11,16 +14,19 @@ from src.back.l01_domain.army.models.characters.traits import (
     list_traits,
 )
 from src.back.l01_domain.common import FactionRace
-from src.back.l03_infrastructure.llm.prompt.catalog import (
+from src.back.l01_domain.llm.prompts import (
     PromptCatalog,
+    get_chronicler_writing_key,
+    get_faction_prompt_key,
+)
+from src.back.l03_infrastructure.llm.prompt.catalog import (
     PromptDiscovery,
-    get_chronicler_writing_path,
-    get_faction_prompt_path,
+    resolve_prompt_key,
 )
 
 
 def _collect_all_catalog_constants(cls: type) -> list[str]:
-    """Рекурсивно извлекает все строковые константы из вложенных классов каталога."""
+    """Рекурсивно извлекает все строковые ключи из вложенных классов каталога."""
     constants: list[str] = []
     for attr_name in dir(cls):
         if attr_name.startswith("_"):
@@ -41,34 +47,56 @@ def prompt_base_dir() -> Path:
     return base_dir
 
 
+class TestPromptKeyResolution:
+    def test_dotted_key_becomes_markdown_path(self):
+        assert resolve_prompt_key("roles.chronicler.rumors") == "roles/chronicler/rumors.md"
+        assert resolve_prompt_key("base.persona") == "base/persona.md"
+
+    def test_ready_paths_from_discovery_pass_through(self):
+        """PromptDiscovery отдает готовые относительные пути - их трогать нельзя."""
+        rel_path = "unique_personalities/humans/commanders/hoffmann.md"
+        assert resolve_prompt_key(rel_path) == rel_path
+
+
 class TestPromptCatalogIntegrity:
-    def test_all_catalog_constants_exist_on_disk(self, prompt_base_dir: Path):
-        """Проверяет, что каждый путь, объявленный в PromptCatalog, указывает на реальный файл."""
-        all_paths = _collect_all_catalog_constants(PromptCatalog)
-        assert len(all_paths) > 0, "Каталог промптов не должен быть пустым"
+    def test_all_catalog_keys_exist_on_disk(self, prompt_base_dir: Path):
+        """Проверяет, что каждый ключ PromptCatalog разрешается в реальный файл."""
+        all_keys = _collect_all_catalog_constants(PromptCatalog)
+        assert len(all_keys) > 0, "Каталог промптов не должен быть пустым"
 
         missing_or_invalid: list[str] = []
-        for rel_path in all_paths:
+        for key in all_keys:
+            rel_path = resolve_prompt_key(key)
             file_path = prompt_base_dir / rel_path
+
             if not file_path.exists():
-                missing_or_invalid.append(f"Файл не существует: {rel_path}")
+                missing_or_invalid.append(f"Файл не существует: {key} -> {rel_path}")
             elif not file_path.is_file():
                 missing_or_invalid.append(
-                    f"Путь указывает на директорию, а не файл: {rel_path}"
+                    f"Ключ указывает на директорию, а не файл: {key} -> {rel_path}"
                 )
             elif file_path.stat().st_size == 0:
-                missing_or_invalid.append(f"Файл пуст: {rel_path}")
+                missing_or_invalid.append(f"Файл пуст: {key} -> {rel_path}")
 
         assert (
             not missing_or_invalid
-        ), "Обнаружены невалидные пути в PromptCatalog:\n" + "\n".join(missing_or_invalid)
+        ), "Обнаружены невалидные ключи в PromptCatalog:\n" + "\n".join(missing_or_invalid)
+
+    def test_catalog_keys_carry_no_file_paths(self):
+        """
+        Домен не должен знать о markdown-файлах: ни расширений, ни слешей
+        в ключах быть не может.
+        """
+        for key in _collect_all_catalog_constants(PromptCatalog):
+            assert "/" not in key, f"Ключ каталога похож на путь: {key}"
+            assert not key.endswith(".md"), f"Ключ каталога несет расширение файла: {key}"
 
     @pytest.mark.parametrize("race", list(FactionRace))
     def test_all_factions_have_valid_prompt_files(
         self, prompt_base_dir: Path, race: FactionRace
     ):
         """Проверяет маппинг описаний фракций для всех доступных рас."""
-        rel_path = get_faction_prompt_path(race)
+        rel_path = resolve_prompt_key(get_faction_prompt_key(race))
         file_path = prompt_base_dir / rel_path
         assert file_path.is_file(), f"Файл фракции для {race.value} не найден: {rel_path}"
 
@@ -77,7 +105,7 @@ class TestPromptCatalogIntegrity:
         self, prompt_base_dir: Path, race: FactionRace | None
     ):
         """Проверяет стили написания летописца для всех рас и нейтрального режима."""
-        rel_path = get_chronicler_writing_path(race)
+        rel_path = resolve_prompt_key(get_chronicler_writing_key(race))
         file_path = prompt_base_dir / rel_path
         assert file_path.is_file(), f"Стиль летописца для {race} не найден: {rel_path}"
 

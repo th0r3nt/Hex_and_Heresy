@@ -29,24 +29,12 @@ from src.back.l01_domain.world.models.chronicle import (
 )
 from src.back.l01_domain.world.models.state import WorldState
 
-from src.back.l03_infrastructure.llm.prompt.builder import PromptBuilder
-
 # ==================================================================
-# ФЕЙКОВАЯ ИНФРАСТРУКТУРА
+# ФЕЙКОВОЕ ОКРУЖЕНИЕ
 # ==================================================================
 
-
-class FakePromptBuilder(PromptBuilder):
-    def __init__(self):
-        pass
-
-    def build(self, keys: list[str]) -> str:
-        return "\n\n".join(f"[{key}]" for key in keys)
-
-
-@pytest.fixture
-def fake_prompt_builder() -> FakePromptBuilder:
-    return FakePromptBuilder()
+# Сборщики промптов и контекста приезжают из tests/l02_services/conftest.py:
+# фикстуры fake_prompt_builder и fake_context_builder.
 
 
 class FakeEventBus:

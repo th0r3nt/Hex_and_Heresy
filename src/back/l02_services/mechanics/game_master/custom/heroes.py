@@ -14,12 +14,8 @@ from src.back.l01_domain.army.models.characters.traits import (
 )
 from src.back.l01_domain.common import CharacterGenerationType, FactionRace
 from src.back.l01_domain.exceptions.llm import LLMError
-from src.back.l01_domain.protocols.llm import LLMClientProtocol
-from src.back.l03_infrastructure.llm.prompt.builder import PromptBuilder
-from src.back.l03_infrastructure.llm.prompt.catalog import (
-    PromptCatalog,
-    get_faction_prompt_path,
-)
+from src.back.l01_domain.llm.prompts import PromptCatalog, get_faction_prompt_key
+from src.back.l01_domain.protocols.llm import LLMClientProtocol, PromptBuilderProtocol
 from src.back.utils.logger import main_logger
 
 
@@ -52,10 +48,10 @@ class CustomHeroFactory:
     def __init__(
         self,
         llm_client: LLMClientProtocol,
-        prompt_builder: Optional[PromptBuilder] = None,
+        prompt_builder: PromptBuilderProtocol,
     ) -> None:
         self._llm = llm_client
-        self._prompt_builder = prompt_builder or PromptBuilder()
+        self._prompt_builder = prompt_builder
 
     async def create_hero(
         self,
@@ -106,7 +102,7 @@ class CustomHeroFactory:
         blocks = [
             PromptCatalog.BASE.PERSONA,
             PromptCatalog.ROLES.GAME_MASTER,
-            get_faction_prompt_path(race),
+            get_faction_prompt_key(race),
             PromptCatalog.LORE.BASIC.MEDIUM,
         ]
         base_prompt = self._prompt_builder.build(blocks)

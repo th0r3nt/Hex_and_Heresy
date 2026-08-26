@@ -1,12 +1,13 @@
 """
 Сборщик статических промптов из markdown-файлов.
-Использует ленивую загрузку и кэширование, а также предоставляет доступ к PromptDiscovery.
+Реализация PromptBuilderProtocol: разрешает логические ключи каталога в файлы
+на диске, лениво читает их и кэширует. Также дает доступ к PromptDiscovery.
 """
 
 from pathlib import Path
 from typing import Optional
 
-from src.back.l03_infrastructure.llm.prompt.catalog import PromptDiscovery
+from src.back.l03_infrastructure.llm.prompt.catalog import PromptDiscovery, resolve_prompt_key
 from src.back.utils.logger import main_logger
 
 
@@ -31,13 +32,14 @@ class PromptBuilder:
 
     def build(self, keys: list[str]) -> str:
         """
-        Принимает список относительных путей (констант каталога или путей от discovery)
-        и склеивает их содержимое в единый текст с двойным переносом строки.
+        Принимает список логических ключей каталога (или готовых путей от
+        discovery) и склеивает их содержимое в единый текст с двойным
+        переносом строки.
         """
         blocks: list[str] = []
 
         for key in keys:
-            content = self._load_file(key)
+            content = self._load_file(resolve_prompt_key(key))
             if content:
                 blocks.append(content)
 

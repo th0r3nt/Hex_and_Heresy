@@ -10,7 +10,11 @@ from src.back.l01_domain.army.models.characters.heroes import Hero
 from src.back.l01_domain.factions.models.lord import Lord
 from src.back.l01_domain.protocols.events import EventBusProtocol
 from src.back.l01_domain.protocols.gamedata import GameDataRepositoryProtocol
-from src.back.l01_domain.protocols.llm import LLMClientProtocol
+from src.back.l01_domain.protocols.llm import (
+    ContextBuilderProtocol,
+    LLMClientProtocol,
+    PromptBuilderProtocol,
+)
 from src.back.l01_domain.world.models.events import GlobalEvent
 from src.back.l01_domain.world.models.state import WorldState
 from src.back.l02_services.mechanics.game_master.custom.advisers import (
@@ -30,8 +34,6 @@ from src.back.l02_services.mechanics.game_master.events import (
     DEFAULT_TICKS_BETWEEN_EVENTS,
     DynamicEventService,
 )
-from src.back.l03_infrastructure.llm.context.builder import ContextBuilder
-from src.back.l03_infrastructure.llm.prompt.builder import PromptBuilder
 from src.back.utils.event.registry import GameEvents
 from src.back.utils.logger import main_logger
 
@@ -46,8 +48,8 @@ class GameMasterFacade:
     def __init__(
         self,
         llm_client: LLMClientProtocol,
-        prompt_builder: Optional[PromptBuilder] = None,
-        context_builder: Optional[ContextBuilder] = None,
+        prompt_builder: PromptBuilderProtocol,
+        context_builder: ContextBuilderProtocol,
         gamedata_repository: Optional[GameDataRepositoryProtocol] = None,
         event_bus: Optional[EventBusProtocol] = None,
         event_evaluation_interval: int = DEFAULT_TICKS_BETWEEN_EVENTS,
@@ -55,29 +57,26 @@ class GameMasterFacade:
         self._llm = llm_client
         self._event_bus = event_bus
 
-        pb = prompt_builder or PromptBuilder()
-        cb = context_builder or ContextBuilder()
-
         self._commander_factory = CustomCommanderFactory(
             llm_client=llm_client,
-            prompt_builder=pb,
+            prompt_builder=prompt_builder,
         )
         self._hero_factory = CustomHeroFactory(
             llm_client=llm_client,
-            prompt_builder=pb,
+            prompt_builder=prompt_builder,
         )
         self._lord_factory = CustomLordFactory(
             llm_client=llm_client,
-            prompt_builder=pb,
+            prompt_builder=prompt_builder,
         )
         self._advisor_factory = CustomAdvisorFactory(
             llm_client=llm_client,
-            prompt_builder=pb,
+            prompt_builder=prompt_builder,
         )
         self._event_service = DynamicEventService(
             llm_client=llm_client,
-            prompt_builder=pb,
-            context_builder=cb,
+            prompt_builder=prompt_builder,
+            context_builder=context_builder,
             gamedata_repository=gamedata_repository,
             event_bus=event_bus,
             evaluation_interval=event_evaluation_interval,

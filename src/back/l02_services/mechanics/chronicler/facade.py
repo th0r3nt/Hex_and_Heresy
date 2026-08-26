@@ -25,7 +25,11 @@ from src.back.l01_domain.factions.models.faction import Faction
 from src.back.l01_domain.maps.models.strategic import HexCoordinates
 from src.back.l01_domain.protocols.chronicler import ChroniclerRepositoryProtocol
 from src.back.l01_domain.protocols.events import EventBusProtocol
-from src.back.l01_domain.protocols.llm import LLMClientProtocol
+from src.back.l01_domain.protocols.llm import (
+    ContextBuilderProtocol,
+    LLMClientProtocol,
+    PromptBuilderProtocol,
+)
 from src.back.l01_domain.world.constants import (
     CHRONICLE_HISTORY_PAGE_SIZE,
     CHRONICLE_MIN_SQUADS_PER_SIDE,
@@ -44,9 +48,6 @@ from src.back.l02_services.mechanics.chronicler.generation.battles import Battle
 from src.back.l02_services.mechanics.chronicler.generation.chronicles import ChronicleGenerator
 from src.back.l02_services.mechanics.chronicler.generation.rumors import RumorGenerator
 
-from src.back.l03_infrastructure.llm.context.builder import ContextBuilder
-from src.back.l03_infrastructure.llm.prompt.builder import PromptBuilder
-
 
 class ChroniclerFacade:
     """
@@ -58,22 +59,30 @@ class ChroniclerFacade:
         llm_client: Optional[LLMClientProtocol] = None,
         repository: Optional[ChroniclerRepositoryProtocol] = None,
         event_bus: Optional[EventBusProtocol] = None,
-        prompt_builder: Optional[PromptBuilder] = None,
-        context_builder: Optional[ContextBuilder] = None,
+        prompt_builder: Optional[PromptBuilderProtocol] = None,
+        context_builder: Optional[ContextBuilderProtocol] = None,
     ) -> None:
         self._event_bus = event_bus
         self._collector = BattleLogCollector()
         self._archive = ChronicleArchive(repository=repository, event_bus=event_bus)
         self._hall = HallOfFallen(repository=repository, event_bus=event_bus)
 
-        pb = prompt_builder or PromptBuilder()
-        cb = context_builder or ContextBuilder()
-        self._chronicles = (
-            ChronicleGenerator(llm_client, pb, cb) if llm_client is not None else None
-        )
-        self._rumors = (
-            RumorGenerator(llm_client, pb, cb) if llm_client is not None else None
-        )
+        self._chronicles: Optional[ChronicleGenerator] = None
+        self._rumors: Optional[RumorGenerator] = None
+
+        # Без модели летописец только ведет досье боев, и сборщики промптов
+        # ему не нужны. А вот с моделью их обязан передать корень компоновки:
+        # сам летописец инфраструктуру не создает.
+        if llm_client is not None:
+            if prompt_builder is None or context_builder is None:
+                raise ValueError(
+                    "ChroniclerFacade с языковой моделью требует "
+                    "prompt_builder и context_builder"
+                )
+            self._chronicles = ChronicleGenerator(
+                llm_client, prompt_builder, context_builder
+            )
+            self._rumors = RumorGenerator(llm_client, prompt_builder, context_builder)
 
     # ==================================================================
     # ХОД БОЯ

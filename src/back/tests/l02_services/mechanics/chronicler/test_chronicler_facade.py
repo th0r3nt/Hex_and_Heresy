@@ -13,12 +13,15 @@ from src.back.utils.event.registry import GameEvents
 
 
 @pytest.fixture
-def facade(fake_llm, fake_repository, fake_bus, fake_prompt_builder) -> ChroniclerFacade:
+def facade(
+    fake_llm, fake_repository, fake_bus, fake_prompt_builder, fake_context_builder
+) -> ChroniclerFacade:
     return ChroniclerFacade(
-        llm_client=fake_llm, 
-        repository=fake_repository, 
+        llm_client=fake_llm,
+        repository=fake_repository,
         event_bus=fake_bus,
-        prompt_builder=fake_prompt_builder
+        prompt_builder=fake_prompt_builder,
+        context_builder=fake_context_builder,
     )
 
 
@@ -137,7 +140,7 @@ class TestChronicleBattle:
         assert entry is not None
         assert entry.faction_id == "humans"
         # Проверяем, что в промпт ушел лорный файл людей, а не зеленокожих
-        assert "[factions/humans.md]" in fake_llm.structured_calls[0]["system_prompt"]
+        assert "[factions.humans]" in fake_llm.structured_calls[0]["system_prompt"]
 
     @pytest.mark.asyncio
     async def test_skirmish_is_not_written(
@@ -334,11 +337,24 @@ class TestWithoutLLM:
 
         assert await silent_facade.speak_rumor(world) is None
 
+    def test_llm_client_without_builders_is_rejected(self, fake_llm):
+        """Сборку графа зависимостей делает корень компоновки, а не фасад."""
+        with pytest.raises(ValueError):
+            ChroniclerFacade(llm_client=fake_llm)
+
 
 class TestLLMFailures:
     @pytest.mark.asyncio
     async def test_model_failure_does_not_break_the_battle(
-        self, world, battle_state, battle_squads, battle_hex, make_report, fake_bus
+        self,
+        world,
+        battle_state,
+        battle_squads,
+        battle_hex,
+        make_report,
+        fake_bus,
+        fake_prompt_builder,
+        fake_context_builder,
     ):
         class BrokenLLM:
             async def generate_text(self, *args, **kwargs):
@@ -347,7 +363,12 @@ class TestLLMFailures:
             async def generate_structured(self, *args, **kwargs):
                 raise LLMRequestFailedError("local", "model", "нет сети")
 
-        facade = ChroniclerFacade(llm_client=BrokenLLM(), event_bus=fake_bus)
+        facade = ChroniclerFacade(
+            llm_client=BrokenLLM(),
+            event_bus=fake_bus,
+            prompt_builder=fake_prompt_builder,
+            context_builder=fake_context_builder,
+        )
         facade.on_battle_started(world, battle_state, battle_squads, battle_hex)
 
         entry = await facade.chronicle_battle(world, wipe_defenders(make_report))
@@ -358,10 +379,22 @@ class TestLLMFailures:
 
     @pytest.mark.asyncio
     async def test_blank_body_is_rejected(
-        self, world, battle_state, battle_squads, battle_hex, make_report, fake_llm
+        self,
+        world,
+        battle_state,
+        battle_squads,
+        battle_hex,
+        make_report,
+        fake_llm,
+        fake_prompt_builder,
+        fake_context_builder,
     ):
         fake_llm.chronicle = LLMChronicleResponse(title="Заголовок", quote="", body="   ")
-        facade = ChroniclerFacade(llm_client=fake_llm)
+        facade = ChroniclerFacade(
+            llm_client=fake_llm,
+            prompt_builder=fake_prompt_builder,
+            context_builder=fake_context_builder,
+        )
         facade.on_battle_started(world, battle_state, battle_squads, battle_hex)
 
         entry = await facade.chronicle_battle(world, wipe_defenders(make_report))

@@ -12,20 +12,22 @@ from typing import Optional
 from src.back.l01_domain.exceptions.chronicler import ChronicleGenerationFailedError
 from src.back.l01_domain.exceptions.llm import LLMError
 from src.back.l01_domain.factions.models.faction import Faction
-from src.back.l01_domain.protocols.llm import LLMClientProtocol
+from src.back.l01_domain.llm.prompts import (
+    PromptCatalog,
+    get_chronicler_writing_key,
+    get_faction_prompt_key,
+)
+from src.back.l01_domain.protocols.llm import (
+    ContextBuilderProtocol,
+    LLMClientProtocol,
+    PromptBuilderProtocol,
+)
 from src.back.l01_domain.world.models.battle_log import BattleDossier
 from src.back.l01_domain.world.models.chronicle import (
     FallenKind,
     FallenSubject,
     LLMChronicleResponse,
     LLMEpitaphResponse,
-)
-from src.back.l03_infrastructure.llm.context.builder import ContextBuilder
-from src.back.l03_infrastructure.llm.prompt.builder import PromptBuilder
-from src.back.l03_infrastructure.llm.prompt.catalog import (
-    PromptCatalog,
-    get_chronicler_writing_path,
-    get_faction_prompt_path,
 )
 
 CHRONICLE_TEMPERATURE = 0.85
@@ -42,12 +44,12 @@ class ChronicleGenerator:
     def __init__(
         self,
         llm_client: LLMClientProtocol,
-        prompt_builder: Optional[PromptBuilder] = None,
-        context_builder: Optional[ContextBuilder] = None,
+        prompt_builder: PromptBuilderProtocol,
+        context_builder: ContextBuilderProtocol,
     ) -> None:
         self._llm = llm_client
-        self._prompt_builder = prompt_builder or PromptBuilder()
-        self._context_builder = context_builder or ContextBuilder()
+        self._prompt_builder = prompt_builder
+        self._context_builder = context_builder
 
     async def generate_chronicle(
         self,
@@ -109,7 +111,7 @@ class ChronicleGenerator:
         blocks = self._role_blocks(faction)
         blocks.append(PromptCatalog.BASE.MECHANICS.TACTICAL)
         if faction is not None:
-            blocks.append(get_faction_prompt_path(faction.race))
+            blocks.append(get_faction_prompt_key(faction.race))
 
         static_context = self._prompt_builder.build(blocks)
 
@@ -124,7 +126,7 @@ class ChronicleGenerator:
     def _build_epitaph_prompt(self, subject: FallenSubject, faction: Optional[Faction]) -> str:
         blocks = self._role_blocks(faction)
         if faction is not None:
-            blocks.append(get_faction_prompt_path(faction.race))
+            blocks.append(get_faction_prompt_key(faction.race))
 
         static_context = self._prompt_builder.build(blocks)
         who = "герое" if subject.kind == FallenKind.HERO else "именном отряде"
@@ -144,7 +146,7 @@ class ChronicleGenerator:
         return [
             PromptCatalog.BASE.PERSONA,
             PromptCatalog.ROLES.CHRONICLER.PROMPT,
-            get_chronicler_writing_path(faction.race if faction is not None else None),
+            get_chronicler_writing_key(faction.race if faction is not None else None),
         ]
 
     def _describe_subject(self, subject: FallenSubject) -> str:

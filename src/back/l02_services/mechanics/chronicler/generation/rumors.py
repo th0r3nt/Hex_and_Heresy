@@ -10,17 +10,19 @@ from typing import Optional
 
 from src.back.l01_domain.exceptions.llm import LLMError
 from src.back.l01_domain.factions.models.faction import Faction
-from src.back.l01_domain.protocols.llm import LLMClientProtocol
+from src.back.l01_domain.llm.prompts import (
+    PromptCatalog,
+    get_chronicler_writing_key,
+    get_faction_prompt_key,
+)
+from src.back.l01_domain.protocols.llm import (
+    ContextBuilderProtocol,
+    LLMClientProtocol,
+    PromptBuilderProtocol,
+)
 from src.back.l01_domain.world.constants import RUMOR_IDLE_TICKS_THRESHOLD
 from src.back.l01_domain.world.models.chronicle import RumorEntry
 from src.back.l01_domain.world.models.state import WorldState
-from src.back.l03_infrastructure.llm.context.builder import ContextBuilder
-from src.back.l03_infrastructure.llm.prompt.builder import PromptBuilder
-from src.back.l03_infrastructure.llm.prompt.catalog import (
-    PromptCatalog,
-    get_chronicler_writing_path,
-    get_faction_prompt_path,
-)
 from src.back.utils.logger import main_logger
 
 RUMOR_TEMPERATURE = 0.95
@@ -40,12 +42,12 @@ class RumorGenerator:
     def __init__(
         self,
         llm_client: LLMClientProtocol,
-        prompt_builder: Optional[PromptBuilder] = None,
-        context_builder: Optional[ContextBuilder] = None,
+        prompt_builder: PromptBuilderProtocol,
+        context_builder: ContextBuilderProtocol,
     ) -> None:
         self._llm = llm_client
-        self._prompt_builder = prompt_builder or PromptBuilder()
-        self._context_builder = context_builder or ContextBuilder()
+        self._prompt_builder = prompt_builder
+        self._context_builder = context_builder
 
     def should_speak(
         self,
@@ -103,11 +105,11 @@ class RumorGenerator:
         blocks = [
             PromptCatalog.BASE.PERSONA,
             PromptCatalog.ROLES.CHRONICLER.PROMPT,
-            get_chronicler_writing_path(faction.race if faction is not None else None),
+            get_chronicler_writing_key(faction.race if faction is not None else None),
             PromptCatalog.ROLES.CHRONICLER.RUMORS,
             PromptCatalog.LORE.BASIC.LOW,
         ]
         if faction is not None:
-            blocks.append(get_faction_prompt_path(faction.race))
+            blocks.append(get_faction_prompt_key(faction.race))
 
         return self._prompt_builder.build(blocks)

@@ -12,16 +12,18 @@ from src.back.l01_domain.army.models.card.unit import BaseUnitStats, UnitArchety
 from src.back.l01_domain.army.models.strategic import StrategicArmy
 from src.back.l01_domain.common import FactionRace, MechanicalModifier
 from src.back.l01_domain.exceptions.llm import LLMError
+from src.back.l01_domain.llm.prompts import PromptCatalog
 from src.back.l01_domain.maps.models.strategic import HexCoordinates
 from src.back.l01_domain.protocols.events import EventBusProtocol
 from src.back.l01_domain.protocols.gamedata import GameDataRepositoryProtocol
-from src.back.l01_domain.protocols.llm import LLMClientProtocol
+from src.back.l01_domain.protocols.llm import (
+    ContextBuilderProtocol,
+    LLMClientProtocol,
+    PromptBuilderProtocol,
+)
 from src.back.l01_domain.world.constants import GlobalEventCategory, GlobalEventScope
 from src.back.l01_domain.world.models.events import GlobalEvent
 from src.back.l01_domain.world.models.state import WorldState
-from src.back.l03_infrastructure.llm.context.builder import ContextBuilder
-from src.back.l03_infrastructure.llm.prompt.builder import PromptBuilder
-from src.back.l03_infrastructure.llm.prompt.catalog import PromptCatalog
 from src.back.utils.event.registry import GameEvents
 from src.back.utils.logger import main_logger
 
@@ -79,15 +81,15 @@ class DynamicEventService:
     def __init__(
         self,
         llm_client: LLMClientProtocol,
-        prompt_builder: Optional[PromptBuilder] = None,
-        context_builder: Optional[ContextBuilder] = None,
+        prompt_builder: PromptBuilderProtocol,
+        context_builder: ContextBuilderProtocol,
         gamedata_repository: Optional[GameDataRepositoryProtocol] = None,
         event_bus: Optional[EventBusProtocol] = None,
         evaluation_interval: int = DEFAULT_TICKS_BETWEEN_EVENTS,
     ) -> None:
         self._llm = llm_client
-        self._prompt_builder = prompt_builder or PromptBuilder()
-        self._context_builder = context_builder or ContextBuilder()
+        self._prompt_builder = prompt_builder
+        self._context_builder = context_builder
         self._gamedata = gamedata_repository
         self._event_bus = event_bus
         self._evaluation_interval = evaluation_interval

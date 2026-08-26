@@ -13,7 +13,6 @@ from src.back.l02_services.mechanics.game_master.custom.commanders import (
     CustomCommanderDraftResponse,
     CustomCommanderFactory,
 )
-from src.back.l03_infrastructure.llm.prompt.builder import PromptBuilder
 
 
 class FakeLLMClient(LLMClientProtocol):
@@ -49,19 +48,6 @@ class FakeLLMClient(LLMClientProtocol):
         if self.draft_response is None:
             return response_model.model_validate({})
         return self.draft_response
-
-
-class FakePromptBuilder(PromptBuilder):
-    def __init__(self) -> None:
-        pass
-
-    def build(self, keys: list[str]) -> str:
-        return "\n\n".join(f"[{key}]" for key in keys)
-
-
-@pytest.fixture
-def fake_prompt_builder() -> FakePromptBuilder:
-    return FakePromptBuilder()
 
 
 class TestCustomCommanderFactory:

@@ -17,9 +17,9 @@ from src.back.l02_services.mechanics.game_master.events import (
     DynamicEventService,
     DynamicGlobalEventResponse,
 )
+from src.back.tests.l02_services.fakes import FakeContextBuilder, FakePromptBuilder
 from src.back.tests.l02_services.mechanics.game_master.test_custom_commanders import (
     FakeLLMClient,
-    FakePromptBuilder,
 )
 from src.back.utils.event.bus import EventBus
 from src.back.utils.event.registry import GameEvents
@@ -96,6 +96,7 @@ class TestDynamicEventsService:
         service = DynamicEventService(
             llm_client=FakeLLMClient(draft_response=draft),
             prompt_builder=FakePromptBuilder(),
+            context_builder=FakeContextBuilder(),
             event_bus=bus,
         )
 
@@ -125,6 +126,7 @@ class TestDynamicEventsService:
         service = DynamicEventService(
             llm_client=FakeLLMClient(draft_response=draft),
             prompt_builder=FakePromptBuilder(),
+            context_builder=FakeContextBuilder(),
             gamedata_repository=DummyGameData(),
         )
 
@@ -151,6 +153,7 @@ class TestDynamicEventsService:
         service = DynamicEventService(
             llm_client=FakeLLMClient(draft_response=draft),
             prompt_builder=FakePromptBuilder(),
+            context_builder=FakeContextBuilder(),
         )
 
         event = await service.evaluate_and_spawn_event(world, force=True)
