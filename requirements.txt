@@ -6,3 +6,4 @@ aiosqlite
 openai>=1.40
 httpx
 fastapi
+uvicorn

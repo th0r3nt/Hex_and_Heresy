@@ -8,3 +8,4 @@ __pycache__
 _docs
 copy_code.py
 code.txt
+*.db
