@@ -9,6 +9,12 @@
 from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
 
+from src.back.l01_domain.exceptions.advisor import (
+    AdvisorDisabledError,
+    AdvisorGenerationFailedError,
+    AdvisorOptionNotFoundError,
+    AdvisorProposalNotFoundError,
+)
 from src.back.l01_domain.exceptions.base import DomainError
 from src.back.l01_domain.exceptions.chronicler import (
     BattleDossierNotFoundError,
@@ -87,6 +93,7 @@ ERROR_STATUS_MAP: tuple[tuple[type[DomainError], int], ...] = (
     (BattleDossierNotFoundError, status.HTTP_404_NOT_FOUND),
     (DiplomaticRelationNotFoundError, status.HTTP_404_NOT_FOUND),
     (FactionNotFoundError, status.HTTP_404_NOT_FOUND),
+    (AdvisorProposalNotFoundError, status.HTTP_404_NOT_FOUND),
     # 401 / 502 - провайдер языковой модели
     (LLMAuthorizationError, status.HTTP_401_UNAUTHORIZED),
     (LLMKeyMissingError, status.HTTP_401_UNAUTHORIZED),
@@ -95,6 +102,7 @@ ERROR_STATUS_MAP: tuple[tuple[type[DomainError], int], ...] = (
     (LLMResponseFormatError, status.HTTP_502_BAD_GATEWAY),
     (LLMRequestFailedError, status.HTTP_502_BAD_GATEWAY),
     (ChronicleGenerationFailedError, status.HTTP_502_BAD_GATEWAY),
+    (AdvisorGenerationFailedError, status.HTTP_502_BAD_GATEWAY),
     # 409 - действие противоречит текущему состоянию игры
     (SaveDuringBattleForbiddenError, status.HTTP_409_CONFLICT),
     (ActionForbiddenInCurrentStateError, status.HTTP_409_CONFLICT),
@@ -116,6 +124,7 @@ ERROR_STATUS_MAP: tuple[tuple[type[DomainError], int], ...] = (
     (BuildingWorkerCapacityExceededError, status.HTTP_409_CONFLICT),
     (ZoneNotControlledError, status.HTTP_409_CONFLICT),
     (SaveDataCorruptedError, status.HTTP_409_CONFLICT),
+    (AdvisorDisabledError, status.HTTP_409_CONFLICT),
     # 400 - игрок просит невозможного
     (InsufficientResourcesError, status.HTTP_400_BAD_REQUEST),
     (NegativeResourceAmountError, status.HTTP_400_BAD_REQUEST),
@@ -124,6 +133,7 @@ ERROR_STATUS_MAP: tuple[tuple[type[DomainError], int], ...] = (
     (FactionCapitalUnknownError, status.HTTP_400_BAD_REQUEST),
     (InvalidAssignmentTargetError, status.HTTP_400_BAD_REQUEST),
     (EmptySaveNameError, status.HTTP_400_BAD_REQUEST),
+    (AdvisorOptionNotFoundError, status.HTTP_400_BAD_REQUEST),
     (CellOutOfBoundsError, status.HTTP_400_BAD_REQUEST),
     (HexOutOfBoundsError, status.HTTP_400_BAD_REQUEST),
     (InvalidCubeCoordinatesError, status.HTTP_400_BAD_REQUEST),

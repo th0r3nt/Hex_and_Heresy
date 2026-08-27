@@ -14,6 +14,7 @@ from src.back.l01_domain.combat.models.state import TacticalBattleState
 from src.back.l01_domain.protocols.events import EventBusProtocol
 from src.back.l01_domain.world.models.state import WorldState
 from src.back.l02_services.gameflow.facade import GameFlowFacade
+from src.back.l02_services.mechanics.advisor.facade import AdvisorFacade
 from src.back.l02_services.mechanics.chronicler.facade import ChroniclerFacade
 from src.back.l02_services.mechanics.diplomacy.facade import DiplomacyFacade
 from src.back.l02_services.mechanics.game_master.facade import GameMasterFacade
@@ -73,6 +74,10 @@ def get_chronicler_facade(request: Request) -> ChroniclerFacade:
     return get_container(request).chronicler_facade
 
 
+def get_advisor_facade(request: Request) -> AdvisorFacade:
+    return get_container(request).advisor_facade
+
+
 def get_llm_facade(request: Request) -> LLMFacade:
     return get_container(request).llm_facade
 
@@ -127,6 +132,7 @@ Diplomacy = Annotated[DiplomacyFacade, Depends(get_diplomacy_facade)]
 Gunsmith = Annotated[GunsmithFacade, Depends(get_gunsmith_facade)]
 GameMaster = Annotated[GameMasterFacade, Depends(get_game_master_facade)]
 Chronicler = Annotated[ChroniclerFacade, Depends(get_chronicler_facade)]
+Advisor = Annotated[AdvisorFacade, Depends(get_advisor_facade)]
 LLM = Annotated[LLMFacade, Depends(get_llm_facade)]
 World = Annotated[WorldState, Depends(get_world_state)]
 Battle = Annotated[TacticalBattleState, Depends(get_battle_state)]

@@ -8,6 +8,7 @@
 from fastapi import APIRouter
 
 from src.back.l04_api.http.routers import (
+    advisor,
     chronicler,
     diplomacy,
     game_master,
@@ -30,6 +31,7 @@ for module in (
     gunsmith,
     game_master,
     chronicler,
+    advisor,
     settings,
 ):
     api_router.include_router(module.router)

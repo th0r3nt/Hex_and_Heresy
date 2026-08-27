@@ -158,6 +158,19 @@ class GameMasterEvents(str, Enum):
 
 
 # ==================================================================
+# 9. СОВЕТНИК (ADVISOR)
+# ==================================================================
+
+
+class AdvisorEvents(str, Enum):
+    """События окна советника: непрошеные предложения и их последствия."""
+
+    PROPOSAL_OFFERED = "advisor.proposal_offered"
+    PROPOSAL_ANSWERED = "advisor.proposal_answered"
+    ACTION_EXECUTED = "advisor.action_executed"
+
+
+# ==================================================================
 # ЕДИНЫЙ КОНТЕЙНЕР СОБЫТИЙ
 # ==================================================================
 
@@ -173,3 +186,4 @@ class GameEvents:
     Chronicler = ChroniclerEvents
     Gunsmith = GunsmithEvents
     GameMaster = GameMasterEvents
+    Advisor = AdvisorEvents

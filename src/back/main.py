@@ -8,6 +8,7 @@ from typing import Optional
 from src.back.l02_services.gameflow.facade import GameFlowFacade
 from src.back.l02_services.gameflow.fsm import GameFlowFSM
 from src.back.l02_services.gameflow.states import GameState
+from src.back.l02_services.mechanics.advisor.facade import AdvisorFacade
 from src.back.l02_services.mechanics.chronicler.facade import ChroniclerFacade
 from src.back.l02_services.mechanics.chronicler.listener import ChroniclerListener
 from src.back.l02_services.mechanics.diplomacy.facade import DiplomacyFacade
@@ -55,6 +56,7 @@ class AppContainer:
     # Сервисы и фасады
     chronicler_facade: ChroniclerFacade
     chronicler_listener: ChroniclerListener
+    advisor_facade: AdvisorFacade
     diplomacy_facade: DiplomacyFacade
     gunsmith_facade: GunsmithFacade
     game_master_facade: GameMasterFacade
@@ -83,6 +85,7 @@ class AppContainer:
         Отвязывает партию при выходе в главное меню.
         """
         self.gameflow_facade.unbind_world_state()
+        self.advisor_facade.forget_proposals()
 
 
 # =======================================================================
@@ -130,6 +133,13 @@ def create_app_container(
     )
 
     gunsmith_facade = GunsmithFacade(
+        llm_client=llm_facade,
+        prompt_builder=prompt_builder,
+        context_builder=context_builder,
+        event_bus=event_bus,
+    )
+
+    advisor_facade = AdvisorFacade(
         llm_client=llm_facade,
         prompt_builder=prompt_builder,
         context_builder=context_builder,
@@ -193,6 +203,7 @@ def create_app_container(
         diplomacy_facade=diplomacy_facade,
         gunsmith_facade=gunsmith_facade,
         game_master_facade=game_master_facade,
+        advisor_facade=advisor_facade,
         saves_facade=saves_facade,
         gameflow_fsm=gameflow_fsm,
         gameflow_facade=gameflow_facade,

@@ -44,6 +44,7 @@ class FakeContainer:
     gunsmith_facade: Any = None
     game_master_facade: Any = None
     chronicler_facade: Any = None
+    advisor_facade: Any = None
     llm_facade: Any = None
     event_bus: Any = None
 

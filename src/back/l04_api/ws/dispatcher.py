@@ -71,6 +71,9 @@ BROADCAST_EVENTS: tuple[Enum, ...] = (
     GameEvents.Gunsmith.BLUEPRINT_APPROVED,
     GameEvents.GameMaster.GLOBAL_EVENT_SPAWNED,
     GameEvents.GameMaster.CHARACTER_CREATED,
+    # Советник: непрошеный совет рождается между ходами и приходит сам
+    GameEvents.Advisor.PROPOSAL_OFFERED,
+    GameEvents.Advisor.ACTION_EXECUTED,
 )
 
 
