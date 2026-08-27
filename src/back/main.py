@@ -5,13 +5,6 @@
 from dataclasses import dataclass
 from typing import Optional
 
-from fastapi import Request
-
-from src.back.l01_domain.protocols.events import EventBusProtocol
-from src.back.l01_domain.protocols.gamedata import GameDataRepositoryProtocol
-from src.back.l01_domain.protocols.llm import (
-    LLMClientProtocol,
-)
 from src.back.l02_services.gameflow.facade import GameFlowFacade
 from src.back.l02_services.gameflow.fsm import GameFlowFSM
 from src.back.l02_services.gameflow.states import GameState
@@ -21,10 +14,14 @@ from src.back.l02_services.mechanics.diplomacy.facade import DiplomacyFacade
 from src.back.l02_services.mechanics.game_master.facade import GameMasterFacade
 from src.back.l02_services.mechanics.gunsmith.facade import GunsmithFacade
 from src.back.l02_services.saves.facade import SavesFacade
-from src.back.l02_services.saves.loader import SessionGameDataRepository
+from src.back.l02_services.saves.loader import (
+    LoadedSession,
+    SessionGameDataRepository,
+)  # TODO: VS Code ругается на импорт SessionGameDataRepository
 from src.back.l02_services.turns.facade import TurnsFacade
 from src.back.l02_services.turns.strategic.orchestrator import StrategicTurnOrchestrator
 from src.back.l02_services.turns.tactical.orchestrator import TacticalTurnOrchestrator
+
 from src.back.l03_infrastructure.databases.manager import DatabaseManager
 from src.back.l03_infrastructure.databases.sql.db import SQLDB
 from src.back.l03_infrastructure.gamedata.loader import (
@@ -34,6 +31,7 @@ from src.back.l03_infrastructure.gamedata.loader import (
 from src.back.l03_infrastructure.llm.context.builder import ContextBuilder
 from src.back.l03_infrastructure.llm.facade import LLMFacade
 from src.back.l03_infrastructure.llm.prompt.builder import PromptBuilder
+
 from src.back.utils.event.bus import EventBus
 from src.back.utils.logger import main_logger
 
@@ -64,6 +62,32 @@ class AppContainer:
     gameflow_fsm: GameFlowFSM
     gameflow_facade: GameFlowFacade
     turns_facade: TurnsFacade
+
+    # ==================================================================
+    # Активная партия
+    # ==================================================================
+
+    def bind_session(self, session: LoadedSession) -> None:
+        """
+        Рассылает мир начатой или загруженной партии по сервисам, которые
+        держат его у себя между запросами.
+
+        Знать полный список таких сервисов может только корень компоновки,
+        поэтому рассылка живет здесь, а не в роутере загрузки.
+        """
+        self.gameflow_facade.bind_world_state(session.world_state)
+        self.chronicler_listener.bind_world_state(session.world_state)
+
+    def unbind_session(self) -> None:
+        """
+        Отвязывает партию при выходе в главное меню.
+        """
+        self.gameflow_facade.unbind_world_state()
+
+
+# =======================================================================
+# ГЛАВНАЯ СБОРКА КОНТЕЙНЕРА ЗАВИСИМОСТЕЙ
+# =======================================================================
 
 
 def create_app_container(
@@ -96,7 +120,6 @@ def create_app_container(
         facade=chronicler_facade,
         run_in_background=True,
     )
-    # Регистрируем подписчика летописца на события шины
     chronicler_listener.register(event_bus)
 
     diplomacy_facade = DiplomacyFacade(
@@ -174,53 +197,3 @@ def create_app_container(
         gameflow_facade=gameflow_facade,
         turns_facade=turns_facade,
     )
-
-
-# ==================================================================
-# ФУНКЦИИ-ПРОВАЙДЕРЫ ДЛЯ FASTAPI DEPENDS
-# ==================================================================
-
-
-def get_container(request: Request) -> AppContainer:
-    """Извлекает собранный контейнер из состояния приложения."""
-    return request.app.state.container
-
-
-def get_gameflow_facade(request: Request) -> GameFlowFacade:
-    return get_container(request).gameflow_facade
-
-
-def get_turns_facade(request: Request) -> TurnsFacade:
-    return get_container(request).turns_facade
-
-
-def get_diplomacy_facade(request: Request) -> DiplomacyFacade:
-    return get_container(request).diplomacy_facade
-
-
-def get_gunsmith_facade(request: Request) -> GunsmithFacade:
-    return get_container(request).gunsmith_facade
-
-
-def get_game_master_facade(request: Request) -> GameMasterFacade:
-    return get_container(request).game_master_facade
-
-
-def get_chronicler_facade(request: Request) -> ChroniclerFacade:
-    return get_container(request).chronicler_facade
-
-
-def get_saves_facade(request: Request) -> SavesFacade:
-    return get_container(request).saves_facade
-
-
-def get_llm_client(request: Request) -> LLMClientProtocol:
-    return get_container(request).llm_facade
-
-
-def get_event_bus(request: Request) -> EventBusProtocol:
-    return get_container(request).event_bus
-
-
-def get_gamedata_registry(request: Request) -> GameDataRepositoryProtocol:
-    return get_container(request).static_registry

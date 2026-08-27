@@ -9,13 +9,21 @@ from src.back.l01_domain.army.models.characters.commanders import Commander
 from src.back.l01_domain.army.models.characters.heroes import Hero
 from src.back.l01_domain.combat.models.reports import TacticalTurnReport
 from src.back.l01_domain.combat.models.state import TacticalBattleState
+from src.back.l01_domain.exceptions.workers import InvalidAssignmentTargetError
 from src.back.l01_domain.exceptions.world import NoArmiesLockedForBattleError
-from src.back.l01_domain.maps.models.strategic import HexCoordinates
+from src.back.l01_domain.factions.models.workers import WorkerAssignment
+from src.back.l01_domain.maps.models.strategic import HexCoordinates, hex_line
 from src.back.l01_domain.protocols.events import EventBusProtocol
 from src.back.l01_domain.world.models.reports import GlobalTurnReport
 from src.back.l01_domain.world.models.state import WorldState
 from src.back.l02_services.turns.strategic.orchestrator import (
     StrategicTurnOrchestrator,
+)
+from src.back.l02_services.turns.strategic.workers.expedition import (
+    ExpeditionWorkerService,
+)
+from src.back.l02_services.turns.strategic.workers.stationary import (
+    StationaryWorkerService,
 )
 from src.back.l02_services.turns.tactical.orchestrator import TacticalTurnOrchestrator
 
@@ -39,6 +47,85 @@ class TurnsFacade:
         self._tactical_orchestrator = tactical_orchestrator or TacticalTurnOrchestrator(
             event_bus=event_bus
         )
+        self._stationary_workers = StationaryWorkerService(event_bus=event_bus)
+        self._expedition_workers = ExpeditionWorkerService(event_bus=event_bus)
+
+    # ==================================================================
+    # ПРИКАЗЫ ИГРОКА НА ГЛОБАЛЬНОЙ КАРТЕ
+    # ==================================================================
+
+    def order_army_march(
+        self,
+        world_state: WorldState,
+        army_id: str,
+        target_hex: HexCoordinates,
+    ) -> list[HexCoordinates]:
+        """
+        Прокладывает армии маршрут до гекса. Сам марш считается тактом
+        (execute_strategic_turn), здесь только выдается приказ.
+
+        Возвращает запланированный путь без гекса, на котором армия стоит.
+        """
+        army = world_state.get_army(army_id)
+        if army is None:
+            raise InvalidAssignmentTargetError(army_id, "армия не найдена")
+        if army.is_in_tactical_battle:
+            raise InvalidAssignmentTargetError(army_id, "армия связана тактическим боем")
+
+        army.target_hex = target_hex
+        army.planned_path = hex_line(army.current_hex, target_hex)[1:]
+        return army.planned_path
+
+    async def assign_worker(
+        self,
+        world_state: WorldState,
+        squad_id: str,
+        faction_id: str,
+        building_id: str,
+    ) -> WorkerAssignment:
+        """
+        Ставит отряд рабочих на экономическое здание.
+        """
+        return await self._stationary_workers.assign_squad_to_building(
+            world_state=world_state,
+            squad_id=squad_id,
+            faction_id=faction_id,
+            building_id=building_id,
+        )
+
+    async def unassign_worker(self, world_state: WorldState, squad_id: str) -> None:
+        """
+        Снимает отряд рабочих с производства.
+        """
+        await self._stationary_workers.unassign_squad_from_building(
+            world_state=world_state,
+            squad_id=squad_id,
+        )
+
+    async def dispatch_expedition(
+        self,
+        world_state: WorldState,
+        squad_id: str,
+        faction_id: str,
+        target_hex: HexCoordinates,
+        home_hex: HexCoordinates,
+        mining_duration_ticks: int,
+    ) -> WorkerAssignment:
+        """
+        Отправляет караван рабочих в экспедицию на нейтральный гекс.
+        """
+        return await self._expedition_workers.dispatch_expedition(
+            world_state=world_state,
+            squad_id=squad_id,
+            faction_id=faction_id,
+            target_hex=target_hex,
+            home_hex=home_hex,
+            mining_duration_ticks=mining_duration_ticks,
+        )
+
+    # ==================================================================
+    # РАСЧЕТ ХОДОВ
+    # ==================================================================
 
     async def execute_strategic_turn(
         self,

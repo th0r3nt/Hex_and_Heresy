@@ -88,6 +88,60 @@ class LLMFacade(LLMClientProtocol):
         self._fallback_ids = list(provider_ids)
 
     # ==================================================================
+    # ВИТРИНА ДЛЯ ЭКРАНА НАСТРОЕК
+    # ==================================================================
+
+    @property
+    def providers(self) -> List[LLMProviderConfig]:
+        """Зарегистрированные провайдеры в порядке добавления."""
+        return list(self._providers.values())
+
+    @property
+    def active_provider_id(self) -> Optional[str]:
+        return self._active_id
+
+    @property
+    def fallback_chain(self) -> List[str]:
+        return list(self._fallback_ids)
+
+    def keys_count(self, provider_id: str) -> int:
+        """
+        Сколько ключей заведено провайдеру. Сами ключи наружу не отдаются:
+        экран настроек показывает только их количество.
+        """
+        rotator = self._rotators.get(provider_id)
+        return rotator.total_keys() if rotator is not None else 0
+
+    async def ping(self, provider_id: Optional[str] = None) -> bool:
+        """
+        Проверяет, отвечает ли провайдер: короткий запрос к модели.
+
+        Провайдер без ключей и незарегистрированный провайдер - ошибка
+        настройки, а не отказ сети, поэтому они летят наружу исключением.
+        """
+        target_id = provider_id or self._active_id
+        if target_id is None:
+            raise LLMProviderNotConfiguredError()
+        if target_id not in self._providers:
+            raise LLMProviderNotConfiguredError(target_id)
+
+        config = self._providers[target_id]
+        if config.requires_api_key and self.keys_count(target_id) == 0:
+            raise LLMKeyMissingError(target_id)
+
+        executor = self._get_or_create_executor(target_id)
+        try:
+            await executor.generate_text(
+                system_prompt="Ты проверяешь связь.",
+                user_prompt="Ответь одним словом: готов.",
+                temperature=0.0,
+                max_tokens=8,
+            )
+        except LLMError:
+            return False
+        return True
+
+    # ==================================================================
     # РЕАЛИЗАЦИЯ LLMClientProtocol
     # ==================================================================
 

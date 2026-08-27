@@ -49,6 +49,27 @@ class GameFlowFacade:
         """
         return self._fsm.current_state
 
+    @property
+    def world_state(self) -> Optional[WorldState]:
+        """
+        Мир активной партии или None, если партия не начата.
+        """
+        return self._world_state
+
+    @property
+    def active_battle_state(self) -> Optional[TacticalBattleState]:
+        """
+        Состояние идущего тактического боя.
+
+        Живет в контексте перехода конечного автомата: тем же объектом, что
+        ушел в enter_tactical_combat, - поэтому раунды продолжают считаться
+        по нему же, а не по копии.
+        """
+        payload = self._fsm.current_payload
+        if isinstance(payload, CombatTransitionPayload):
+            return payload.battle_state
+        return None
+
     # ==================================================================
     # ПРИВЯЗКА АКТИВНОЙ ПАРТИИ
     # ==================================================================
