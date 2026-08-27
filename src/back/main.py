@@ -166,6 +166,7 @@ def create_app_container(
     # 4. Оркестрация ходов
     strategic_orchestrator = StrategicTurnOrchestrator(
         diplomacy_facade=diplomacy_facade,
+        gamedata=registry,
         event_bus=event_bus,
     )
     tactical_orchestrator = TacticalTurnOrchestrator(

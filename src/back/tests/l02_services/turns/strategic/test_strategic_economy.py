@@ -53,7 +53,8 @@ class TestStrategicEconomyService:
     async def test_upkeep_deduction_and_deficit_handling(
         self, human_faction, sample_army, fake_bus
     ):
-        human_faction.resources[ResourceType.GOLD] = 30.0
+        # Казна пуста: за такт в нее упадет только налог с цитадели (30 золота)
+        human_faction.resources[ResourceType.GOLD] = 0.0
         human_faction.resources[ResourceType.FOOD] = 200.0
 
         world_state = WorldState()
@@ -64,6 +65,7 @@ class TestStrategicEconomyService:
         reports = await service.process_factions_economy(world_state)
 
         report = reports[human_faction.id]
+        assert report.tax_income_gold == 30.0
         assert report.upkeep_gold_required == 50.0
         assert report.upkeep_food_required == 100.0
         assert report.gold_deficit == 20.0

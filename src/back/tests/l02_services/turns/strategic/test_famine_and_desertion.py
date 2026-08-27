@@ -178,7 +178,10 @@ class TestFamineAndDeficitConsequences:
 
         report = reports[human_faction.id]
         assert report.upkeep_gold_required == pytest.approx(65.0)
-        assert human_faction.resources[ResourceType.GOLD] == pytest.approx(35.0)
+        # 100 в казне плюс налоговый сбор такта, минус жалование с надбавкой
+        assert human_faction.resources[ResourceType.GOLD] == pytest.approx(
+            100.0 + report.tax_income_gold - 65.0
+        )
 
 
 class TestFamineAffectsAllArmiesNotJustFirst:

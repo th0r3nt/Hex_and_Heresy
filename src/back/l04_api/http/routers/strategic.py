@@ -1,9 +1,10 @@
 """
-Глобальный ход, марш армий, назначение рабочих и экспедиции.
+Глобальный ход, марш армий, назначение рабочих, экспедиции и налоги.
 """
 
 from fastapi import APIRouter
 
+from src.back.l01_domain.exceptions.factions import FactionNotFoundError
 from src.back.l01_domain.factions.models.workers import WorkerAssignment
 from src.back.l01_domain.world.models.reports import GlobalTurnReport
 from src.back.l04_api.dependencies import Turns, World
@@ -12,6 +13,8 @@ from src.back.l04_api.http.schemas.strategic import (
     ExpeditionRequest,
     MarchOrderRequest,
     MarchOrderResponse,
+    SetTaxRateRequest,
+    TaxRateResponse,
     WorkerAssignRequest,
 )
 
@@ -49,6 +52,37 @@ async def order_march(
         target_hex=payload.target_hex,
     )
     return MarchOrderResponse(army_id=army_id, planned_path=path)
+
+
+# ====================================================
+# Налоги
+# ====================================================
+
+
+@router.get("/factions/{faction_id}/tax-rate", response_model=TaxRateResponse)
+async def get_tax_rate(faction_id: str, world: World) -> TaxRateResponse:
+    """
+    Текущее положение налогового ползунка и его последствия для подданных.
+    """
+    faction = world.get_faction(faction_id)
+    if faction is None:
+        raise FactionNotFoundError(faction_id)
+    return TaxRateResponse.from_faction(faction)
+
+
+@router.put("/factions/{faction_id}/tax-rate", response_model=TaxRateResponse)
+async def set_tax_rate(
+    faction_id: str, payload: SetTaxRateRequest, turns: Turns, world: World
+) -> TaxRateResponse:
+    """
+    Двигает ползунок налога. Сбор по новой ставке пойдет со следующего такта.
+    """
+    faction = await turns.set_faction_tax_rate(
+        world_state=world,
+        faction_id=faction_id,
+        rate=payload.rate,
+    )
+    return TaxRateResponse.from_faction(faction)
 
 
 # ====================================================

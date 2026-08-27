@@ -247,8 +247,9 @@ class TestStrategicLifecycleE2E:
         # Разгрузка каравана завершена
         assert expedition.id in report_t5.completed_expedition_ids
         assert expedition.status.value == "completed"
+        orc_tax = report_t5.economy_reports[orc_faction.id].tax_income_gold
         assert orc_faction.resources[ResourceType.GOLD] == pytest.approx(
-            orc_gold_before + 450.0
+            orc_gold_before + 450.0 + orc_tax
         )
 
         # Трофеи истлели за 1 такт и были удалены из реестра мира

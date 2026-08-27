@@ -70,6 +70,12 @@ class EconomyEvents(str, Enum):
     FAMINE_OCCURRED = "economy.famine_occurred"
     SQUAD_DESERTED = "economy.squad_deserted"
 
+    # Налоги и настроения подданных
+    TAXES_COLLECTED = "economy.taxes_collected"
+    TAX_RATE_CHANGED = "economy.tax_rate_changed"
+    WORKERS_ON_STRIKE = "economy.workers_on_strike"
+    TAX_RIOT_ERUPTED = "economy.tax_riot_erupted"
+
 
 # ==================================================================
 # 4. ТАКТИЧЕСКИЙ БОЙ

@@ -9,11 +9,14 @@ from src.back.l01_domain.army.models.characters.commanders import Commander
 from src.back.l01_domain.army.models.characters.heroes import Hero
 from src.back.l01_domain.combat.models.reports import TacticalTurnReport
 from src.back.l01_domain.combat.models.state import TacticalBattleState
+from src.back.l01_domain.exceptions.factions import FactionNotFoundError
 from src.back.l01_domain.exceptions.workers import InvalidAssignmentTargetError
 from src.back.l01_domain.exceptions.world import NoArmiesLockedForBattleError
+from src.back.l01_domain.factions.models.faction import Faction
 from src.back.l01_domain.factions.models.workers import WorkerAssignment
 from src.back.l01_domain.maps.models.strategic import HexCoordinates, hex_line
 from src.back.l01_domain.protocols.events import EventBusProtocol
+from src.back.l01_domain.protocols.gamedata import GameDataRepositoryProtocol
 from src.back.l01_domain.world.models.reports import GlobalTurnReport
 from src.back.l01_domain.world.models.state import WorldState
 from src.back.l02_services.turns.strategic.orchestrator import (
@@ -26,6 +29,7 @@ from src.back.l02_services.turns.strategic.workers.stationary import (
     StationaryWorkerService,
 )
 from src.back.l02_services.turns.tactical.orchestrator import TacticalTurnOrchestrator
+from src.back.utils.event.registry import GameEvents
 
 
 class TurnsFacade:
@@ -38,11 +42,12 @@ class TurnsFacade:
         self,
         strategic_orchestrator: Optional[StrategicTurnOrchestrator] = None,
         tactical_orchestrator: Optional[TacticalTurnOrchestrator] = None,
+        gamedata: Optional[GameDataRepositoryProtocol] = None,
         event_bus: Optional[EventBusProtocol] = None,
     ) -> None:
         self._event_bus = event_bus
         self._strategic_orchestrator = strategic_orchestrator or StrategicTurnOrchestrator(
-            event_bus=event_bus
+            gamedata=gamedata, event_bus=event_bus
         )
         self._tactical_orchestrator = tactical_orchestrator or TacticalTurnOrchestrator(
             event_bus=event_bus
@@ -75,6 +80,34 @@ class TurnsFacade:
         army.target_hex = target_hex
         army.planned_path = hex_line(army.current_hex, target_hex)[1:]
         return army.planned_path
+
+    async def set_faction_tax_rate(
+        self,
+        world_state: WorldState,
+        faction_id: str,
+        rate: float,
+    ) -> Faction:
+        """
+        Двигает ползунок налога фракции. Новая ставка вступает в силу
+        со следующего глобального такта, когда экономика соберет сбор.
+        """
+        faction = world_state.get_faction(faction_id)
+        if faction is None:
+            raise FactionNotFoundError(faction_id)
+
+        previous_rate = faction.tax_rate
+        faction.set_tax_rate(rate)
+
+        if self._event_bus is not None:
+            await self._event_bus.publish(
+                GameEvents.Economy.TAX_RATE_CHANGED,
+                faction_id=faction.id,
+                previous_rate=previous_rate,
+                rate=faction.tax_rate,
+                band=faction.tax_band.value,
+            )
+
+        return faction
 
     async def assign_worker(
         self,

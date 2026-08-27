@@ -31,7 +31,9 @@ from src.back.l01_domain.exceptions.diplomacy import (
 from src.back.l01_domain.exceptions.factions import (
     BuildingMaxLevelReachedError,
     BuildingSlotsExhaustedError,
+    FactionNotFoundError,
     InsufficientResourcesError,
+    InvalidTaxRateError,
     NegativeResourceAmountError,
     ZoneNotControlledError,
 )
@@ -84,6 +86,7 @@ ERROR_STATUS_MAP: tuple[tuple[type[DomainError], int], ...] = (
     (SaveNotFoundError, status.HTTP_404_NOT_FOUND),
     (BattleDossierNotFoundError, status.HTTP_404_NOT_FOUND),
     (DiplomaticRelationNotFoundError, status.HTTP_404_NOT_FOUND),
+    (FactionNotFoundError, status.HTTP_404_NOT_FOUND),
     # 401 / 502 - провайдер языковой модели
     (LLMAuthorizationError, status.HTTP_401_UNAUTHORIZED),
     (LLMKeyMissingError, status.HTTP_401_UNAUTHORIZED),
@@ -116,6 +119,7 @@ ERROR_STATUS_MAP: tuple[tuple[type[DomainError], int], ...] = (
     # 400 - игрок просит невозможного
     (InsufficientResourcesError, status.HTTP_400_BAD_REQUEST),
     (NegativeResourceAmountError, status.HTTP_400_BAD_REQUEST),
+    (InvalidTaxRateError, status.HTTP_400_BAD_REQUEST),
     (SelfDiplomacyForbiddenError, status.HTTP_400_BAD_REQUEST),
     (FactionCapitalUnknownError, status.HTTP_400_BAD_REQUEST),
     (InvalidAssignmentTargetError, status.HTTP_400_BAD_REQUEST),

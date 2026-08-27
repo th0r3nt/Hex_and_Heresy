@@ -74,6 +74,30 @@ class BuildingSlotsExhaustedError(FactionError):
         )
 
 
+class FactionNotFoundError(FactionError):
+    """
+    Фракции с указанным идентификатором нет в текущей партии.
+    """
+
+    def __init__(self, faction_id: str) -> None:
+        self.faction_id = faction_id
+        super().__init__(f"Фракция '{faction_id}' не найдена в текущей партии.")
+
+
+class InvalidTaxRateError(FactionError):
+    """
+    Налоговая ставка вышла за допустимые границы ползунка.
+    """
+
+    def __init__(self, rate: float, min_rate: float, max_rate: float) -> None:
+        self.rate = rate
+        self.min_rate = min_rate
+        self.max_rate = max_rate
+        super().__init__(
+            f"Налоговая ставка {rate} вне допустимого диапазона [{min_rate}, {max_rate}]."
+        )
+
+
 class ZoneNotControlledError(FactionError):
     """
     Попытка совершить действие в зоне, не подконтрольной фракции.

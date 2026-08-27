@@ -5,6 +5,7 @@
 from typing import Optional
 
 from src.back.l01_domain.protocols.events import EventBusProtocol
+from src.back.l01_domain.protocols.gamedata import GameDataRepositoryProtocol
 from src.back.l01_domain.world.models.reports import GlobalTurnReport
 from src.back.l01_domain.world.models.state import WorldState
 from src.back.l02_services.mechanics.diplomacy.facade import DiplomacyFacade
@@ -35,11 +36,15 @@ class StrategicTurnOrchestrator:
         expedition_service: Optional[ExpeditionWorkerService] = None,
         veterancy_service: Optional[StrategicVeterancyService] = None,
         diplomacy_facade: Optional[DiplomacyFacade] = None,
+        gamedata: Optional[GameDataRepositoryProtocol] = None,
         event_bus: Optional[EventBusProtocol] = None,
     ) -> None:
         self._event_bus = event_bus
         self._events_service = events_service or StrategicEventsService(event_bus=event_bus)
-        self._economy_service = economy_service or StrategicEconomyService(event_bus=event_bus)
+        # Каталог нужен экономике, чтобы поднять на бунт настоящую толпу из gamedata
+        self._economy_service = economy_service or StrategicEconomyService(
+            event_bus=event_bus, gamedata=gamedata
+        )
         self._movement_service = movement_service or StrategicMovementService(
             event_bus=event_bus
         )

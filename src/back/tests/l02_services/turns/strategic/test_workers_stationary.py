@@ -210,12 +210,16 @@ class TestStationaryEconomyIntegration:
 
         econ_service = StrategicEconomyService(event_bus=fake_bus)
 
-        # Такт 1: разогрев (дохода еще нет)
+        # Такт 1: разогрев (доход от шахты еще нет, идет только налоговый сбор)
         reports_tick1 = await econ_service.process_factions_economy(world)
-        assert reports_tick1[human_faction.id].income_gold == 0.0
-        assert human_faction.resources[ResourceType.GOLD] == 0.0
+        report_tick1 = reports_tick1[human_faction.id]
+        assert report_tick1.income_gold - report_tick1.tax_income_gold == 0.0
+        assert human_faction.resources[ResourceType.GOLD] == report_tick1.tax_income_gold
 
         # Такт 2: разогрев завершен, пошла активная добыча (+25 золота)
         reports_tick2 = await econ_service.process_factions_economy(world)
-        assert reports_tick2[human_faction.id].income_gold == 25.0
-        assert human_faction.resources[ResourceType.GOLD] == 25.0
+        report_tick2 = reports_tick2[human_faction.id]
+        assert report_tick2.income_gold - report_tick2.tax_income_gold == 25.0
+        assert human_faction.resources[ResourceType.GOLD] == (
+            25.0 + report_tick1.tax_income_gold + report_tick2.tax_income_gold
+        )

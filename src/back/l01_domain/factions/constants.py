@@ -2,6 +2,7 @@
 Константы фракций: типы ресурсов, категории и уровни зданий, дипломатия.
 """
 
+from dataclasses import dataclass
 from enum import Enum
 from typing import Final
 
@@ -122,6 +123,123 @@ STATIONARY_WARMUP_TICKS: Final[int] = 1
 NEUTRAL_HEX_GOLD_BASE_YIELD_PER_UNIT: Final[float] = (
     2.25  # 225 золота за такт добычи на отряд
 )
+
+# ==================================================================
+# НАЛОГИ
+# ==================================================================
+
+# Границы ставки: 0.0 - налоговые каникулы, 1.0 - базовая норма, 2.0 - грабеж
+MIN_TAX_RATE: Final[float] = 0.0
+MAX_TAX_RATE: Final[float] = 2.0
+BASE_TAX_RATE: Final[float] = 1.0
+
+# Подушный сбор за один уровень административного центра при ставке 1.0
+BASE_TAX_HQ_PER_LEVEL: Final[float] = 30.0
+BASE_TAX_ZONE_PER_LEVEL: Final[float] = 15.0
+
+
+class TaxPolicyBand(str, Enum):
+    """Режим налогообложения, в который попадает выставленная ставка."""
+
+    HOLIDAY = "holiday"  # 0.0 - налоговые каникулы
+    REDUCED = "reduced"  # 0.1-0.9 - льготный сбор
+    BASELINE = "baseline"  # 1.0 - базовая норма
+    RAISED = "raised"  # 1.1-1.4 - повышенные сборы
+    PREDATORY = "predatory"  # 1.5-2.0 - грабительские налоги
+
+
+@dataclass(frozen=True)
+class TaxBandEffects:
+    """
+    Последствия одного режима налогообложения.
+
+    Внутри режима эффекты меняются линейно между границами ставки: чем
+    ближе ставка к верхней границе, тем злее подданные.
+    """
+
+    band: TaxPolicyBand
+    min_rate: float
+    max_rate: float
+    morale_at_min_rate: float
+    morale_at_max_rate: float
+    strike_chance: float = 0.0
+    riot_chance_at_min_rate: float = 0.0
+    riot_chance_at_max_rate: float = 0.0
+
+    def morale_delta(self, rate: float) -> float:
+        """Изменение морали гарнизонов при данной ставке (со знаком)."""
+        return self._interpolate(rate, self.morale_at_min_rate, self.morale_at_max_rate)
+
+    def riot_chance(self, rate: float) -> float:
+        """Вероятность бунта в союзных землях при данной ставке."""
+        return self._interpolate(
+            rate, self.riot_chance_at_min_rate, self.riot_chance_at_max_rate
+        )
+
+    def _interpolate(self, rate: float, at_min: float, at_max: float) -> float:
+        """Линейная интерполяция значения между границами режима."""
+        if self.max_rate <= self.min_rate:
+            return at_min
+        position = (rate - self.min_rate) / (self.max_rate - self.min_rate)
+        position = min(1.0, max(0.0, position))
+        return at_min + (at_max - at_min) * position
+
+
+# Таблица режимов по возрастанию ставки (см. _TODO.md, механика налогов)
+TAX_BANDS: Final[tuple[TaxBandEffects, ...]] = (
+    TaxBandEffects(
+        band=TaxPolicyBand.HOLIDAY,
+        min_rate=0.0,
+        max_rate=0.0,
+        morale_at_min_rate=5.0,
+        morale_at_max_rate=5.0,
+    ),
+    TaxBandEffects(
+        band=TaxPolicyBand.REDUCED,
+        min_rate=0.1,
+        max_rate=0.9,
+        morale_at_min_rate=4.0,
+        morale_at_max_rate=2.0,
+    ),
+    TaxBandEffects(
+        band=TaxPolicyBand.BASELINE,
+        min_rate=1.0,
+        max_rate=1.0,
+        morale_at_min_rate=0.0,
+        morale_at_max_rate=0.0,
+    ),
+    TaxBandEffects(
+        band=TaxPolicyBand.RAISED,
+        min_rate=1.1,
+        max_rate=1.4,
+        morale_at_min_rate=-3.0,
+        morale_at_max_rate=-8.0,
+        strike_chance=0.05,
+    ),
+    TaxBandEffects(
+        band=TaxPolicyBand.PREDATORY,
+        min_rate=1.5,
+        max_rate=2.0,
+        morale_at_min_rate=-10.0,
+        morale_at_max_rate=-20.0,
+        riot_chance_at_min_rate=0.10,
+        riot_chance_at_max_rate=0.20,
+    ),
+)
+
+
+def resolve_tax_band(rate: float) -> TaxBandEffects:
+    """
+    Подбирает режим налогообложения для произвольной ставки ползунка.
+
+    Ставку между режимами (например, 0.95) забирает следующий по строгости
+    режим: сомнения трактуются не в пользу казны.
+    """
+    for effects in TAX_BANDS:
+        if rate <= effects.max_rate:
+            return effects
+    return TAX_BANDS[-1]
+
 
 # ==================================================================
 # ДИПЛОМАТИЯ

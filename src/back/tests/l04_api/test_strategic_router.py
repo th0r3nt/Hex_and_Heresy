@@ -5,10 +5,16 @@
 доезжает до мира и меняет его, а не только валидируется схемой.
 """
 
+import pytest
 from fastapi import status
 from fastapi.testclient import TestClient
 
 from src.back.l01_domain.army.models.strategic import StrategicArmy
+from src.back.l01_domain.common import FactionRace
+from src.back.l01_domain.factions.constants import BASE_TAX_HQ_PER_LEVEL, TaxPolicyBand
+from src.back.l01_domain.factions.models.buildings import Headquarters
+from src.back.l01_domain.factions.models.faction import Faction
+from src.back.l01_domain.factions.models.lord import Lord
 from src.back.l01_domain.maps.models.strategic import HexCoordinates
 from src.back.l01_domain.world.models.state import WorldState
 from src.back.l02_services.turns.facade import TurnsFacade
@@ -19,6 +25,19 @@ def _army(world_state: WorldState, at: HexCoordinates) -> StrategicArmy:
     army = StrategicArmy(faction_id="humans", name="Первый полк", current_hex=at)
     world_state.add_army(army)
     return army
+
+
+def _faction(world_state: WorldState) -> Faction:
+    faction = Faction(
+        id="humans",
+        race=FactionRace.HUMANS,
+        name="Священная Империя",
+        is_player_controlled=True,
+        lord=Lord(faction_id="humans", name="Валленштейн", title="Лорд-командующий"),
+        headquarters=Headquarters(faction_id="humans", name="Цитадель"),
+    )
+    world_state.add_faction(faction)
+    return faction
 
 
 # ==================================================================
@@ -162,3 +181,71 @@ def test_expedition_requires_positive_duration(
     )
 
     assert response.status_code == 422
+
+
+# ==================================================================
+# НАЛОГОВЫЙ ПОЛЗУНОК
+# ==================================================================
+
+
+def test_tax_rate_order_moves_the_slider_in_the_world(
+    client: TestClient, container: FakeContainer, active_party: WorldState
+):
+    container.turns_facade = TurnsFacade()
+    faction = _faction(active_party)
+
+    response = client.put(
+        f"/api/strategic/factions/{faction.id}/tax-rate", json={"rate": 1.5}
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    body = response.json()
+    assert body["rate"] == 1.5
+    assert body["band"] == TaxPolicyBand.PREDATORY.value
+    assert body["forecast_income_gold"] == BASE_TAX_HQ_PER_LEVEL * 1.5
+    assert body["riot_chance"] == pytest.approx(0.10)
+
+    # Приказ отдан именно миру, а не копии
+    assert faction.tax_rate == 1.5
+
+
+def test_tax_rate_beyond_the_slider_is_rejected(
+    client: TestClient, container: FakeContainer, active_party: WorldState
+):
+    container.turns_facade = TurnsFacade()
+    faction = _faction(active_party)
+
+    response = client.put(
+        f"/api/strategic/factions/{faction.id}/tax-rate", json={"rate": 3.0}
+    )
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert response.json()["error"] == "InvalidTaxRateError"
+    assert faction.tax_rate == 1.0
+
+
+def test_tax_rate_of_unknown_faction_answers_not_found(
+    client: TestClient, container: FakeContainer, active_party: WorldState
+):
+    container.turns_facade = TurnsFacade()
+
+    response = client.put("/api/strategic/factions/нет-такой/tax-rate", json={"rate": 1.0})
+
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert response.json()["error"] == "FactionNotFoundError"
+
+
+def test_tax_rate_is_readable_for_the_slider_tooltip(
+    client: TestClient, container: FakeContainer, active_party: WorldState
+):
+    container.turns_facade = TurnsFacade()
+    faction = _faction(active_party)
+    faction.set_tax_rate(0.0)
+
+    response = client.get(f"/api/strategic/factions/{faction.id}/tax-rate")
+
+    assert response.status_code == status.HTTP_200_OK
+    body = response.json()
+    assert body["band"] == TaxPolicyBand.HOLIDAY.value
+    assert body["forecast_income_gold"] == 0.0
+    assert body["morale_delta"] == 5.0
