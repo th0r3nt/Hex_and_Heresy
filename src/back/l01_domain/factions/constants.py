@@ -61,6 +61,55 @@ TOWNHALL_MAX_BUILDING_SLOTS: Final[int] = 3
 
 
 # ==================================================================
+# ПОГРАНИЧНЫЕ ГОРОДА
+# ==================================================================
+
+# Уровни города: 1-й дает 2 строительных слота, каждый следующий - еще один,
+# поэтому на потолке (4-м) внутри города помещается 5 построек
+MIN_BORDER_TOWN_LEVEL: Final[int] = 1
+MAX_BORDER_TOWN_LEVEL: Final[int] = 4
+
+BORDER_TOWN_BASE_BUILDING_SLOTS: Final[int] = 2
+BORDER_TOWN_BUILDING_SLOTS_PER_LEVEL: Final[int] = 1
+
+# Сколько смежных гексов город может выкупить себе в союзные земли.
+# Столице ее лепестки открыты изначально, город же заселяет их за деньги.
+MAX_BORDER_TOWN_ALLIED_LANDS: Final[int] = 4
+
+# Основание города - самая дорогая единовременная трата на карте после
+# апгрейда цитадели: обоз с людьми, лесом и провизией на первую зимовку
+BORDER_TOWN_FOUNDATION_COST: Final[dict[ResourceType, float]] = {
+    ResourceType.GOLD: 400.0,
+    ResourceType.MATERIAL: 300.0,
+    ResourceType.FOOD: 150.0,
+}
+
+# Цена подъема города на очередной уровень. Ключ - целевой уровень,
+# то есть тот, на который город встанет после оплаты
+BORDER_TOWN_UPGRADE_COST_BY_LEVEL: Final[dict[int, dict[ResourceType, float]]] = {
+    2: {ResourceType.GOLD: 300.0, ResourceType.MATERIAL: 250.0},
+    3: {ResourceType.GOLD: 500.0, ResourceType.MATERIAL: 400.0},
+    4: {ResourceType.GOLD: 800.0, ResourceType.MATERIAL: 650.0},
+}
+
+# Выкуп одного смежного гекса под союзную землю города
+BORDER_TOWN_LAND_CLAIM_COST: Final[dict[ResourceType, float]] = {
+    ResourceType.GOLD: 200.0,
+    ResourceType.MATERIAL: 120.0,
+}
+
+
+def border_town_upgrade_cost(target_level: int) -> dict[ResourceType, float]:
+    """
+    Во что обойдется подъем города до уровня target_level.
+
+    Уровень вне таблицы стоит "ничего": проверять потолок - дело самого
+    агрегата BorderTown, а не прайс-листа.
+    """
+    return dict(BORDER_TOWN_UPGRADE_COST_BY_LEVEL.get(target_level, {}))
+
+
+# ==================================================================
 # СТРОИТЕЛЬСТВО/СНОС
 # ==================================================================
 
@@ -136,6 +185,7 @@ BASE_TAX_RATE: Final[float] = 1.0
 # Подушный сбор за один уровень административного центра при ставке 1.0
 BASE_TAX_HQ_PER_LEVEL: Final[float] = 30.0
 BASE_TAX_ZONE_PER_LEVEL: Final[float] = 15.0
+BASE_TAX_BORDER_TOWN_PER_LEVEL: Final[float] = 22.0
 
 
 class TaxPolicyBand(str, Enum):

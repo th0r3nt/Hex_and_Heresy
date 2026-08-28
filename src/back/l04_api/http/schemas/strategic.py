@@ -1,6 +1,6 @@
 """
 Схемы приказов глобальной карты: марш армий, рабочие, экспедиции,
-налоги и гарнизоны земель.
+налоги, пограничные города и гарнизоны земель.
 """
 
 from pydantic import BaseModel, Field
@@ -8,11 +8,15 @@ from pydantic import BaseModel, Field
 from src.back.l01_domain.army.models.card.squad import Squad
 from src.back.l01_domain.factions.constants import (
     GARRISON_FOOD_UPKEEP_DISCOUNT_RATIO,
+    MAX_BORDER_TOWN_ALLIED_LANDS,
+    MAX_BORDER_TOWN_LEVEL,
     MAX_STATIONED_GARRISON_SQUADS,
     MAX_TAX_RATE,
     MIN_TAX_RATE,
+    ResourceType,
     TaxPolicyBand,
 )
+from src.back.l01_domain.factions.models.border_town import BorderTown
 from src.back.l01_domain.factions.models.faction import Faction
 from src.back.l01_domain.factions.models.garrison import Garrison
 from src.back.l01_domain.maps.models.strategic import HexCoordinates
@@ -80,7 +84,8 @@ class TaxRateResponse(BaseModel):
     band: TaxPolicyBand = Field(..., description="Режим, в который попала ставка")
 
     taxable_base_gold: float = Field(
-        ..., description="Сбор при ставке 1.0 - цитадель плюс союзные ратуши"
+        ...,
+        description="Сбор при ставке 1.0 - цитадель, пограничные города и союзные ратуши",
     )
     forecast_income_gold: float = Field(
         ..., description="Ожидаемый сбор за такт при текущей ставке"
@@ -105,6 +110,86 @@ class TaxRateResponse(BaseModel):
             morale_delta=effects.morale_delta(faction.tax_rate),
             strike_chance=effects.strike_chance,
             riot_chance=effects.riot_chance(faction.tax_rate),
+        )
+
+
+# ====================================================
+# Пограничные города
+# ====================================================
+
+
+class FoundBorderTownRequest(BaseModel):
+    """
+    Приказ основать пограничный город на свободном гексе карты.
+    """
+
+    faction_id: str = Field(..., min_length=1, description="Кто основывает поселение")
+    target_hex: HexCoordinates = Field(..., description="Свободный гекс под город")
+    name: str = Field(..., min_length=1, description="Как основатель называет город")
+
+
+class UpgradeBorderTownRequest(BaseModel):
+    """
+    Приказ поднять город на уровень выше. Сам город задан town_id в пути.
+    """
+
+    faction_id: str = Field(..., min_length=1, description="Владелец города")
+
+
+class ClaimBorderLandRequest(BaseModel):
+    """
+    Приказ выкупить городу смежную землю. Город задан town_id в пути.
+    """
+
+    faction_id: str = Field(..., min_length=1, description="Владелец города")
+    target_hex: HexCoordinates = Field(
+        ..., description="Гекс, вплотную примыкающий к городу"
+    )
+
+
+class BorderTownResponse(BaseModel):
+    """
+    Состояние пограничного города: то, что рисует окно поселения.
+    """
+
+    id: str = Field(...)
+    faction_id: str = Field(...)
+    name: str = Field(...)
+
+    level: int = Field(..., description=f"Уровень города, потолок - {MAX_BORDER_TOWN_LEVEL}")
+    center_hex: HexCoordinates = Field(..., description="Гекс, на котором стоит город")
+    zone_id: str = Field(..., description="Ключ земли города в формате 'q,r'")
+
+    claimed_hexes: list[HexCoordinates] = Field(
+        default_factory=list, description="Выкупленные городом союзные земли"
+    )
+    free_land_slots: int = Field(
+        ...,
+        description=f"Сколько земель город еще заселит (лимит {MAX_BORDER_TOWN_ALLIED_LANDS})",
+    )
+
+    building_slots: int = Field(..., description="Строительные слоты внутри самого города")
+    invested_resources: dict[ResourceType, float] = Field(
+        default_factory=dict,
+        description="Во что городу обошлись основание, апгрейды и выкуп земель",
+    )
+
+    @classmethod
+    def from_border_town(cls, town: BorderTown) -> "BorderTownResponse":
+        """
+        Собирает ответ из агрегата, чтобы роутер ничего не считал сам.
+        """
+        return cls(
+            id=town.id,
+            faction_id=town.faction_id,
+            name=town.name,
+            level=town.level,
+            center_hex=town.center_hex,
+            zone_id=town.zone_id,
+            claimed_hexes=list(town.claimed_hexes),
+            free_land_slots=town.free_land_slots,
+            building_slots=town.building_slots,
+            invested_resources=dict(town.invested_resources),
         )
 
 

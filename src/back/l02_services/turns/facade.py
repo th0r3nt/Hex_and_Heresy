@@ -15,6 +15,7 @@ from src.back.l01_domain.exceptions.factions import (
 )
 from src.back.l01_domain.exceptions.workers import InvalidAssignmentTargetError
 from src.back.l01_domain.exceptions.world import NoArmiesLockedForBattleError
+from src.back.l01_domain.factions.models.border_town import BorderTown
 from src.back.l01_domain.factions.models.faction import Faction
 from src.back.l01_domain.factions.models.garrison import Garrison
 from src.back.l01_domain.factions.models.workers import WorkerAssignment
@@ -23,6 +24,9 @@ from src.back.l01_domain.protocols.events import EventBusProtocol
 from src.back.l01_domain.protocols.gamedata import GameDataRepositoryProtocol
 from src.back.l01_domain.world.models.reports import GlobalTurnReport
 from src.back.l01_domain.world.models.state import WorldState
+from src.back.l02_services.mechanics.settlements.border_towns import (
+    BorderTownService,
+)
 from src.back.l02_services.turns.strategic.garrison import GarrisonService
 from src.back.l02_services.turns.strategic.orchestrator import (
     StrategicTurnOrchestrator,
@@ -60,6 +64,7 @@ class TurnsFacade:
         self._stationary_workers = StationaryWorkerService(event_bus=event_bus)
         self._expedition_workers = ExpeditionWorkerService(event_bus=event_bus)
         self._garrisons = GarrisonService(gamedata=gamedata, event_bus=event_bus)
+        self._border_towns = BorderTownService(event_bus=event_bus)
 
     # ==================================================================
     # ПРИКАЗЫ ИГРОКА НА ГЛОБАЛЬНОЙ КАРТЕ
@@ -160,6 +165,69 @@ class TurnsFacade:
             target_hex=target_hex,
             home_hex=home_hex,
             mining_duration_ticks=mining_duration_ticks,
+        )
+
+    # ==================================================================
+    # ПОГРАНИЧНЫЕ ГОРОДА
+    # ==================================================================
+
+    async def found_border_town(
+        self,
+        world_state: WorldState,
+        faction_id: str,
+        target_hex: HexCoordinates,
+        name: str,
+    ) -> BorderTown:
+        """
+        Основывает пограничный город на свободном гексе карты.
+        """
+        return await self._border_towns.found_border_town(
+            world_state=world_state,
+            faction_id=faction_id,
+            target_hex=target_hex,
+            name=name,
+        )
+
+    async def upgrade_border_town(
+        self,
+        world_state: WorldState,
+        faction_id: str,
+        town_id: str,
+    ) -> BorderTown:
+        """
+        Поднимает пограничный город на уровень выше.
+        """
+        return await self._border_towns.upgrade_border_town(
+            world_state=world_state,
+            faction_id=faction_id,
+            town_id=town_id,
+        )
+
+    async def claim_border_land(
+        self,
+        world_state: WorldState,
+        faction_id: str,
+        town_id: str,
+        target_hex: HexCoordinates,
+    ) -> BorderTown:
+        """
+        Выкупает городу смежную землю и ставит на ней ратушу.
+        """
+        return await self._border_towns.claim_border_land(
+            world_state=world_state,
+            faction_id=faction_id,
+            town_id=town_id,
+            target_hex=target_hex,
+        )
+
+    def list_border_towns(
+        self, world_state: WorldState, faction_id: str
+    ) -> list[BorderTown]:
+        """
+        Все пограничные города фракции для окна управления державой.
+        """
+        return self._border_towns.list_border_towns(
+            world_state=world_state, faction_id=faction_id
         )
 
     # ==================================================================

@@ -77,6 +77,11 @@ class EconomyEvents(str, Enum):
     FAMINE_OCCURRED = "economy.famine_occurred"
     SQUAD_DESERTED = "economy.squad_deserted"
 
+    # Пограничные города
+    BORDER_TOWN_FOUNDED = "economy.border_town_founded"
+    BORDER_TOWN_UPGRADED = "economy.border_town_upgraded"
+    BORDER_TOWN_LAND_CLAIMED = "economy.border_town_land_claimed"
+
     # Налоги и настроения подданных
     TAXES_COLLECTED = "economy.taxes_collected"
     TAX_RATE_CHANGED = "economy.tax_rate_changed"

@@ -15,14 +15,22 @@ from src.back.l01_domain.army.models.strategic import StrategicArmy
 from src.back.l01_domain.common import FactionRace
 from src.back.l01_domain.factions.constants import (
     BASE_TAX_HQ_PER_LEVEL,
+    MAX_BORDER_TOWN_ALLIED_LANDS,
+    MAX_BORDER_TOWN_LEVEL,
     MAX_STATIONED_GARRISON_SQUADS,
+    ResourceType,
     TaxPolicyBand,
 )
+from src.back.l01_domain.factions.models.border_town import BorderTown
 from src.back.l01_domain.factions.models.buildings import Headquarters
 from src.back.l01_domain.factions.models.faction import Faction
 from src.back.l01_domain.factions.models.garrison import Garrison
 from src.back.l01_domain.factions.models.lord import Lord
-from src.back.l01_domain.maps.models.strategic import HexCoordinates, hex_zone_id
+from src.back.l01_domain.maps.models.strategic import (
+    HexCoordinates,
+    hex_neighbors,
+    hex_zone_id,
+)
 from src.back.l01_domain.world.models.state import WorldState
 from src.back.l02_services.turns.facade import TurnsFacade
 from src.back.tests.l04_api.conftest import FakeContainer
@@ -425,3 +433,219 @@ def test_distant_army_cannot_use_the_garrison(
 
     assert response.status_code == status.HTTP_409_CONFLICT
     assert response.json()["error"] == "GarrisonRotationForbiddenError"
+
+
+# ==================================================================
+# ПОГРАНИЧНЫЕ ГОРОДА
+# ==================================================================
+
+
+def _rich_faction(world_state: WorldState) -> Faction:
+    """Фракция, которой хватит казны и на город, и на его земли."""
+    faction = _faction(world_state)
+    faction.resources[ResourceType.GOLD] = 5000.0
+    faction.resources[ResourceType.MATERIAL] = 5000.0
+    faction.resources[ResourceType.FOOD] = 5000.0
+    return faction
+
+
+def test_border_town_is_founded_on_a_free_hex(
+    client: TestClient, container: FakeContainer, active_party: WorldState
+):
+    container.turns_facade = TurnsFacade()
+    faction = _rich_faction(active_party)
+    target = HexCoordinates(q=0, r=0, s=0)
+
+    response = client.post(
+        "/api/strategic/border-towns",
+        json={
+            "faction_id": faction.id,
+            "target_hex": target.model_dump(),
+            "name": "Врата висельников",
+        },
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    body = response.json()
+    assert body["name"] == "Врата висельников"
+    assert body["level"] == 1
+    assert body["building_slots"] == 2
+    assert body["free_land_slots"] == MAX_BORDER_TOWN_ALLIED_LANDS
+
+    # Приказ доехал именно до мира, а не до копии
+    assert len(faction.border_towns) == 1
+    assert faction.border_towns[0].center_hex == target
+
+
+def test_town_on_an_occupied_hex_answers_conflict(
+    client: TestClient, container: FakeContainer, active_party: WorldState
+):
+    container.turns_facade = TurnsFacade()
+    faction = _rich_faction(active_party)
+    faction.capital_hex = HexCoordinates(q=0, r=0, s=0)
+
+    response = client.post(
+        "/api/strategic/border-towns",
+        json={
+            "faction_id": faction.id,
+            "target_hex": faction.capital_hex.model_dump(),
+            "name": "Второй престол",
+        },
+    )
+
+    assert response.status_code == status.HTTP_409_CONFLICT
+    assert response.json()["error"] == "InvalidSettlementPlacementError"
+    assert faction.border_towns == []
+
+
+def test_founding_without_gold_answers_bad_request(
+    client: TestClient, container: FakeContainer, active_party: WorldState
+):
+    container.turns_facade = TurnsFacade()
+    faction = _faction(active_party)
+
+    response = client.post(
+        "/api/strategic/border-towns",
+        json={
+            "faction_id": faction.id,
+            "target_hex": HexCoordinates(q=0, r=0, s=0).model_dump(),
+            "name": "Город на честном слове",
+        },
+    )
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert response.json()["error"] == "InsufficientResourcesError"
+    assert faction.border_towns == []
+
+
+def test_border_town_is_upgraded(
+    client: TestClient, container: FakeContainer, active_party: WorldState
+):
+    container.turns_facade = TurnsFacade()
+    faction = _rich_faction(active_party)
+    town = BorderTown(
+        faction_id=faction.id,
+        name="Врата висельников",
+        center_hex=HexCoordinates(q=0, r=0, s=0),
+    )
+    faction.add_border_town(town)
+
+    response = client.post(
+        f"/api/strategic/border-towns/{town.id}/upgrade",
+        json={"faction_id": faction.id},
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json()["level"] == 2
+    assert town.level == 2
+
+
+def test_upgrade_beyond_the_ceiling_answers_conflict(
+    client: TestClient, container: FakeContainer, active_party: WorldState
+):
+    container.turns_facade = TurnsFacade()
+    faction = _rich_faction(active_party)
+    town = BorderTown(
+        faction_id=faction.id,
+        name="Врата висельников",
+        center_hex=HexCoordinates(q=0, r=0, s=0),
+        level=MAX_BORDER_TOWN_LEVEL,
+    )
+    faction.add_border_town(town)
+
+    response = client.post(
+        f"/api/strategic/border-towns/{town.id}/upgrade",
+        json={"faction_id": faction.id},
+    )
+
+    assert response.status_code == status.HTTP_409_CONFLICT
+    assert response.json()["error"] == "BorderTownMaxLevelReachedError"
+
+
+def test_unknown_town_answers_not_found(
+    client: TestClient, container: FakeContainer, active_party: WorldState
+):
+    container.turns_facade = TurnsFacade()
+    faction = _rich_faction(active_party)
+
+    response = client.post(
+        "/api/strategic/border-towns/нет-такого/upgrade",
+        json={"faction_id": faction.id},
+    )
+
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert response.json()["error"] == "BorderTownNotFoundError"
+
+
+def test_adjacent_land_is_claimed_with_a_hall(
+    client: TestClient, container: FakeContainer, active_party: WorldState
+):
+    container.turns_facade = TurnsFacade()
+    faction = _rich_faction(active_party)
+    center = HexCoordinates(q=0, r=0, s=0)
+    town = BorderTown(faction_id=faction.id, name="Врата висельников", center_hex=center)
+    faction.add_border_town(town)
+    land = hex_neighbors(center)[0]
+
+    response = client.post(
+        f"/api/strategic/border-towns/{town.id}/claim-land",
+        json={"faction_id": faction.id, "target_hex": land.model_dump()},
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json()["free_land_slots"] == MAX_BORDER_TOWN_ALLIED_LANDS - 1
+    assert faction.get_regional_hall(hex_zone_id(land)) is not None
+
+
+def test_distant_land_answers_bad_request(
+    client: TestClient, container: FakeContainer, active_party: WorldState
+):
+    container.turns_facade = TurnsFacade()
+    faction = _rich_faction(active_party)
+    town = BorderTown(
+        faction_id=faction.id,
+        name="Врата висельников",
+        center_hex=HexCoordinates(q=0, r=0, s=0),
+    )
+    faction.add_border_town(town)
+
+    response = client.post(
+        f"/api/strategic/border-towns/{town.id}/claim-land",
+        json={
+            "faction_id": faction.id,
+            "target_hex": HexCoordinates(q=3, r=-3, s=0).model_dump(),
+        },
+    )
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert response.json()["error"] == "HexNotAdjacentToTownError"
+    assert town.claimed_hexes == []
+
+
+def test_faction_border_towns_are_listed(
+    client: TestClient, container: FakeContainer, active_party: WorldState
+):
+    container.turns_facade = TurnsFacade()
+    faction = _rich_faction(active_party)
+    faction.add_border_town(
+        BorderTown(
+            faction_id=faction.id,
+            name="Врата висельников",
+            center_hex=HexCoordinates(q=0, r=0, s=0),
+        )
+    )
+    faction.add_border_town(
+        BorderTown(
+            faction_id=faction.id,
+            name="Пепельный острог",
+            center_hex=HexCoordinates(q=2, r=-2, s=0),
+        )
+    )
+
+    response = client.get(f"/api/strategic/factions/{faction.id}/border-towns")
+
+    assert response.status_code == status.HTTP_200_OK
+    assert [town["name"] for town in response.json()] == [
+        "Врата висельников",
+        "Пепельный острог",
+    ]

@@ -136,35 +136,53 @@ class GarrisonService:
     ) -> list[tuple[str, HexCoordinates, int]]:
         """
         Земли фракции, у которых есть свой административный центр, вместе с
-        его уровнем: гекс цитадели плюс подконтрольные союзные земли с ратушами.
+        его уровнем: гекс цитадели, ее лепестки с ратушами, а также каждый
+        пограничный город и выкупленные им земли.
 
-        Именно уровень центра задает вместимость городского ополчения.
+        Именно уровень центра задает вместимость городского ополчения, поэтому
+        город четвертого уровня держит гарнизон крупнее, чем любая ратуша.
         """
         zones: list[tuple[str, HexCoordinates, int]] = []
 
-        if faction.capital_hex is None:
-            return zones
-
-        zones.append(
-            (
-                hex_zone_id(faction.capital_hex),
-                faction.capital_hex,
-                faction.headquarters.level,
+        if faction.capital_hex is not None:
+            zones.append(
+                (
+                    hex_zone_id(faction.capital_hex),
+                    faction.capital_hex,
+                    faction.headquarters.level,
+                )
             )
-        )
+            for coord in hex_ring(faction.capital_hex, ALLIED_LANDS_RING_RADIUS):
+                zones.extend(self._regional_hall_zone(faction, coord))
 
-        for coord in hex_ring(faction.capital_hex, ALLIED_LANDS_RING_RADIUS):
-            zone_id = hex_zone_id(coord)
-            if not self._owns_zone(faction, zone_id):
-                continue
-
-            hall = faction.get_regional_hall(zone_id)
-            if hall is None:
-                continue
-
-            zones.append((zone_id, coord, hall.level))
+        # Пограничные города - такие же административные центры, только
+        # стоят они где угодно на карте, а их земли покупались поштучно
+        for town in faction.border_towns:
+            zones.append((town.zone_id, town.center_hex, town.level))
+            for coord in town.claimed_hexes:
+                zones.extend(self._regional_hall_zone(faction, coord))
 
         return zones
+
+    def _regional_hall_zone(
+        self, faction: Faction, coord: HexCoordinates
+    ) -> list[tuple[str, HexCoordinates, int]]:
+        """
+        Земля с ратушей в виде готовой строки для _administrative_zones -
+        либо пустой список, если земля потеряна или ратуши на ней нет.
+
+        Список, а не Optional: вызывающей стороне так удобнее собирать
+        зоны обоих видов в один плоский перечень.
+        """
+        zone_id = hex_zone_id(coord)
+        if not self._owns_zone(faction, zone_id):
+            return []
+
+        hall = faction.get_regional_hall(zone_id)
+        if hall is None:
+            return []
+
+        return [(zone_id, coord, hall.level)]
 
     @staticmethod
     def _owns_zone(faction: Faction, zone_id: str) -> bool:

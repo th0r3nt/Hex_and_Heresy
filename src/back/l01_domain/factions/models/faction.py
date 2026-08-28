@@ -13,6 +13,7 @@ from src.back.l01_domain.exceptions.factions import (
     NegativeResourceAmountError,
 )
 from src.back.l01_domain.factions.constants import (
+    BASE_TAX_BORDER_TOWN_PER_LEVEL,
     BASE_TAX_HQ_PER_LEVEL,
     BASE_TAX_RATE,
     BASE_TAX_ZONE_PER_LEVEL,
@@ -23,6 +24,7 @@ from src.back.l01_domain.factions.constants import (
     TaxPolicyBand,
     resolve_tax_band,
 )
+from src.back.l01_domain.factions.models.border_town import BorderTown
 from src.back.l01_domain.factions.models.buildings import (
     ConstructedBuilding,
     Headquarters,
@@ -59,6 +61,14 @@ class Faction(BaseModel):
     regional_halls: list[RegionalHall] = Field(
         default_factory=list,
         description="Ратуши союзных земель - административные центры и база налогообложения",
+    )
+
+    border_towns: list[BorderTown] = Field(
+        default_factory=list,
+        description=(
+            "Пограничные города - самостоятельные поселения фракции за пределами "
+            "лепестков столицы, каждый со своими выкупленными землями"
+        ),
     )
 
     tax_rate: float = Field(
@@ -159,12 +169,18 @@ class Faction(BaseModel):
     @property
     def taxable_base_gold(self) -> float:
         """
-        Налогооблагаемая база за такт при ставке 1.0: подушный сбор с цитадели
-        плюс сбор с периферии за каждую союзную ратушу.
+        Налогооблагаемая база за такт при ставке 1.0: подушный сбор с цитадели,
+        с каждого пограничного города и с периферии за каждую союзную ратушу.
+
+        Ратуши выкупленных городом земель уже лежат в regional_halls, поэтому
+        отдельно за них город не платит - иначе сбор считался бы дважды.
         """
         hq_base = self.headquarters.level * BASE_TAX_HQ_PER_LEVEL
+        towns_base = sum(
+            town.level * BASE_TAX_BORDER_TOWN_PER_LEVEL for town in self.border_towns
+        )
         zones_base = sum(hall.level * BASE_TAX_ZONE_PER_LEVEL for hall in self.regional_halls)
-        return hq_base + zones_base
+        return hq_base + towns_base + zones_base
 
     @property
     def tax_income_gold(self) -> float:
@@ -204,10 +220,57 @@ class Faction(BaseModel):
         """
         Теряет контроль над зоной вместе со стоящей там ратушей: с чужой
         земли налог не собрать.
+
+        Заодно земля вычеркивается из владений пограничных городов, а если
+        враг взял сам гекс города - город исчезает с карты целиком вместе со
+        всеми своими землями.
         """
         if zone_id in self.controlled_zone_ids:
             self.controlled_zone_ids.remove(zone_id)
         self.regional_halls = [h for h in self.regional_halls if h.zone_id != zone_id]
+
+        if self.remove_border_town_at(zone_id) is None:
+            for town in self.border_towns:
+                town.release_zone(zone_id)
+
+    # ====================================================
+    # Пограничные города
+    # ====================================================
+
+    def add_border_town(self, town: BorderTown) -> None:
+        """
+        Ставит на карту новое поселение фракции.
+        """
+        self.border_towns.append(town)
+
+    def get_border_town(self, town_id: str) -> Optional[BorderTown]:
+        """Возвращает пограничный город фракции по его идентификатору."""
+        return next((t for t in self.border_towns if t.id == town_id), None)
+
+    def get_border_town_at(self, zone_id: str) -> Optional[BorderTown]:
+        """Возвращает город, стоящий на этой земле (не заселивший ее, а стоящий)."""
+        return next((t for t in self.border_towns if t.zone_id == zone_id), None)
+
+    def remove_border_town_at(self, zone_id: str) -> Optional[BorderTown]:
+        """
+        Стирает город с карты вместе со всеми его землями и ратушами.
+
+        Возвращает снесенный город либо None, если на этой земле города
+        не стояло.
+        """
+        town = self.get_border_town_at(zone_id)
+        if town is None:
+            return None
+
+        self.border_towns.remove(town)
+        for claimed_zone_id in town.claimed_zone_ids:
+            if claimed_zone_id in self.controlled_zone_ids:
+                self.controlled_zone_ids.remove(claimed_zone_id)
+            self.regional_halls = [
+                h for h in self.regional_halls if h.zone_id != claimed_zone_id
+            ]
+
+        return town
 
     def add_building(self, building: ConstructedBuilding) -> None:
         """

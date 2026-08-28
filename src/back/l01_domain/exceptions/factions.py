@@ -195,3 +195,74 @@ class MilitiaTierNotAllowedError(FactionError):
         super().__init__(
             f"Отряд '{squad_name}' тира {tier} не может быть городским ополчением: разрешены тиры {allowed}."
         )
+
+
+# ====================================================
+# Пограничные города
+# ====================================================
+
+
+class BorderTownNotFoundError(FactionError):
+    """
+    Пограничного города с таким идентификатором у фракции нет:
+    он либо не основан, либо уже стерт с лица земли.
+    """
+
+    def __init__(self, town_id: str, faction_id: str) -> None:
+        self.town_id = town_id
+        self.faction_id = faction_id
+        super().__init__(
+            f"Пограничный город '{town_id}' не найден у фракции '{faction_id}'."
+        )
+
+
+class BorderTownMaxLevelReachedError(FactionError):
+    """
+    Город уже поднят до потолка: выше четвертого уровня поселение не растет.
+    """
+
+    def __init__(self, town_name: str, max_level: int) -> None:
+        self.town_name = town_name
+        self.max_level = max_level
+        super().__init__(
+            f"Пограничный город '{town_name}' уже достиг максимального уровня {max_level}."
+        )
+
+
+class BorderTownMaxLandsReachedError(FactionError):
+    """
+    Город выкупил все положенные ему союзные земли: больше он не прокормит.
+    """
+
+    def __init__(self, town_name: str, max_lands: int) -> None:
+        self.town_name = town_name
+        self.max_lands = max_lands
+        super().__init__(
+            f"Пограничный город '{town_name}' уже заселил максимум земель: {max_lands}."
+        )
+
+
+class HexNotAdjacentToTownError(FactionError):
+    """
+    Заселять можно только гексы, вплотную примыкающие к городу: земля за
+    соседним холмом городу не подчиняется.
+    """
+
+    def __init__(self, town_name: str, zone_id: str) -> None:
+        self.town_name = town_name
+        self.zone_id = zone_id
+        super().__init__(
+            f"Земля '{zone_id}' не граничит с пограничным городом '{town_name}'."
+        )
+
+
+class InvalidSettlementPlacementError(FactionError):
+    """
+    Поселение нельзя поставить на этот гекс: он занят чужой землей,
+    постройкой, ориентиром Ничьей земли или вражеским войском.
+    """
+
+    def __init__(self, zone_id: str, reason: str) -> None:
+        self.zone_id = zone_id
+        self.reason = reason
+        super().__init__(f"На гекс '{zone_id}' поселение не поставить: {reason}.")

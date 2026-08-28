@@ -35,6 +35,9 @@ from src.back.l01_domain.exceptions.diplomacy import (
     WarAllianceWithEnemyForbiddenError,
 )
 from src.back.l01_domain.exceptions.factions import (
+    BorderTownMaxLandsReachedError,
+    BorderTownMaxLevelReachedError,
+    BorderTownNotFoundError,
     BuildingMaxLevelReachedError,
     BuildingSlotsExhaustedError,
     FactionNotFoundError,
@@ -42,7 +45,9 @@ from src.back.l01_domain.exceptions.factions import (
     GarrisonLockedInBattleError,
     GarrisonNotFoundError,
     GarrisonRotationForbiddenError,
+    HexNotAdjacentToTownError,
     InsufficientResourcesError,
+    InvalidSettlementPlacementError,
     InvalidTaxRateError,
     MilitiaTierNotAllowedError,
     NegativeResourceAmountError,
@@ -101,6 +106,7 @@ ERROR_STATUS_MAP: tuple[tuple[type[DomainError], int], ...] = (
     (FactionNotFoundError, status.HTTP_404_NOT_FOUND),
     (AdvisorProposalNotFoundError, status.HTTP_404_NOT_FOUND),
     (GarrisonNotFoundError, status.HTTP_404_NOT_FOUND),
+    (BorderTownNotFoundError, status.HTTP_404_NOT_FOUND),
     # 401 / 502 - провайдер языковой модели
     (LLMAuthorizationError, status.HTTP_401_UNAUTHORIZED),
     (LLMKeyMissingError, status.HTTP_401_UNAUTHORIZED),
@@ -133,6 +139,9 @@ ERROR_STATUS_MAP: tuple[tuple[type[DomainError], int], ...] = (
     (GarrisonLockedInBattleError, status.HTTP_409_CONFLICT),
     (GarrisonCapacityExceededError, status.HTTP_409_CONFLICT),
     (GarrisonRotationForbiddenError, status.HTTP_409_CONFLICT),
+    (BorderTownMaxLevelReachedError, status.HTTP_409_CONFLICT),
+    (BorderTownMaxLandsReachedError, status.HTTP_409_CONFLICT),
+    (InvalidSettlementPlacementError, status.HTTP_409_CONFLICT),
     (SaveDataCorruptedError, status.HTTP_409_CONFLICT),
     (AdvisorDisabledError, status.HTTP_409_CONFLICT),
     # 400 - игрок просит невозможного
@@ -141,6 +150,7 @@ ERROR_STATUS_MAP: tuple[tuple[type[DomainError], int], ...] = (
     (InvalidTaxRateError, status.HTTP_400_BAD_REQUEST),
     (SquadNotInGarrisonError, status.HTTP_400_BAD_REQUEST),
     (MilitiaTierNotAllowedError, status.HTTP_400_BAD_REQUEST),
+    (HexNotAdjacentToTownError, status.HTTP_400_BAD_REQUEST),
     (SelfDiplomacyForbiddenError, status.HTTP_400_BAD_REQUEST),
     (FactionCapitalUnknownError, status.HTTP_400_BAD_REQUEST),
     (InvalidAssignmentTargetError, status.HTTP_400_BAD_REQUEST),

@@ -1,6 +1,6 @@
 """
-Глобальный ход, марш армий, назначение рабочих, экспедиции, налоги
-и гарнизоны земель.
+Глобальный ход, марш армий, назначение рабочих, экспедиции, налоги,
+пограничные города и гарнизоны земель.
 """
 
 from fastapi import APIRouter
@@ -11,7 +11,10 @@ from src.back.l01_domain.world.models.reports import GlobalTurnReport
 from src.back.l04_api.dependencies import Turns, World
 from src.back.l04_api.http.schemas.common import OperationResult
 from src.back.l04_api.http.schemas.strategic import (
+    BorderTownResponse,
+    ClaimBorderLandRequest,
     ExpeditionRequest,
+    FoundBorderTownRequest,
     GarrisonResponse,
     MarchOrderRequest,
     MarchOrderResponse,
@@ -19,6 +22,7 @@ from src.back.l04_api.http.schemas.strategic import (
     StationSquadRequest,
     TaxRateResponse,
     UnstationSquadRequest,
+    UpgradeBorderTownRequest,
     WorkerAssignRequest,
 )
 
@@ -127,6 +131,74 @@ async def dispatch_expedition(
         home_hex=payload.home_hex,
         mining_duration_ticks=payload.mining_duration_ticks,
     )
+
+
+# ====================================================
+# Пограничные города
+# ====================================================
+
+
+@router.post("/border-towns", response_model=BorderTownResponse)
+async def found_border_town(
+    payload: FoundBorderTownRequest, turns: Turns, world: World
+) -> BorderTownResponse:
+    """
+    Основывает пограничный город на свободном гексе карты. Гарнизон
+    поселения поднимется само на ближайшем такте.
+    """
+    town = await turns.found_border_town(
+        world_state=world,
+        faction_id=payload.faction_id,
+        target_hex=payload.target_hex,
+        name=payload.name,
+    )
+    return BorderTownResponse.from_border_town(town)
+
+
+@router.post("/border-towns/{town_id}/upgrade", response_model=BorderTownResponse)
+async def upgrade_border_town(
+    town_id: str, payload: UpgradeBorderTownRequest, turns: Turns, world: World
+) -> BorderTownResponse:
+    """
+    Поднимает город на уровень выше: +1 строительный слот внутри стен.
+    Выше четвертого уровня поселение не растет.
+    """
+    town = await turns.upgrade_border_town(
+        world_state=world,
+        faction_id=payload.faction_id,
+        town_id=town_id,
+    )
+    return BorderTownResponse.from_border_town(town)
+
+
+@router.post("/border-towns/{town_id}/claim-land", response_model=BorderTownResponse)
+async def claim_border_land(
+    town_id: str, payload: ClaimBorderLandRequest, turns: Turns, world: World
+) -> BorderTownResponse:
+    """
+    Выкупает городу смежную свободную землю и ставит на ней ратушу.
+    Один город заселяет не больше четырех гексов.
+    """
+    town = await turns.claim_border_land(
+        world_state=world,
+        faction_id=payload.faction_id,
+        town_id=town_id,
+        target_hex=payload.target_hex,
+    )
+    return BorderTownResponse.from_border_town(town)
+
+
+@router.get(
+    "/factions/{faction_id}/border-towns", response_model=list[BorderTownResponse]
+)
+async def list_border_towns(
+    faction_id: str, turns: Turns, world: World
+) -> list[BorderTownResponse]:
+    """
+    Все пограничные города фракции для окна управления державой.
+    """
+    towns = turns.list_border_towns(world_state=world, faction_id=faction_id)
+    return [BorderTownResponse.from_border_town(town) for town in towns]
 
 
 # ====================================================
