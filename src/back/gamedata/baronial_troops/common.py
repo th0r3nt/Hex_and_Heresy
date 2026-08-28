@@ -91,9 +91,35 @@ class BaronialBuildingId(str, Enum):
     BARONS_CASTLE = "bld_bar_barons_castle"
     OPPRESSED_VILLAGE = "bld_bar_oppressed_village"
     ROADSIDE_OUTPOST = "bld_bar_roadside_outpost"
+    RUSTY_PITS = "bld_bar_rusty_pits"
     DEBTORS_PRISON = "bld_bar_debtors_prison"
     WATCHTOWERS = "bld_bar_watchtowers"
     GARRISON_COURTYARD = "bld_bar_garrison_courtyard"
     WAGON_SHED = "bld_bar_wagon_shed"
     EXECUTION_SQUARE = "bld_bar_execution_square"
     MENAGERIE = "bld_bar_menagerie"
+
+
+class BaronialLordId(str, Enum):
+    """Идентификаторы легендарных правителей баронств."""
+
+    ARCHDUKE_WALTER = "lord_bar_archduke_walter"
+    LADY_ISOLDE = "lord_bar_lady_isolde"
+    CORNELIUS_HOOK = "lord_bar_cornelius_hook"
+    RODERICK_VON_DRAKEN = "lord_bar_roderick_von_draken"
+
+
+class BaronialCommanderId(str, Enum):
+    """Идентификаторы легендарных полководцев баронств."""
+
+    OLGERD = "cmd_bar_olgerd"
+    JURGEN = "cmd_bar_jurgen"
+    SIR_DIETRICH = "cmd_bar_sir_dietrich"
+
+
+class BaronialHeroId(str, Enum):
+    """Идентификаторы легендарных героев баронств."""
+
+    SENESCHAL_GOTTFRIED = "hero_bar_seneschal_gottfried"
+    JUDGE_GAWAIN = "hero_bar_judge_gawain"
+    BART_THE_ONE_EYED = "hero_bar_bart_the_one_eyed"

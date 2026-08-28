@@ -96,3 +96,28 @@ class HumanBuildingId(str, Enum):
     CHAPEL_OF_LIGHT = "bld_hum_chapel_of_light"
     INQUISITION_HALL = "bld_hum_inquisition_hall"
     WATCHTOWER = "bld_hum_watchtower"
+
+
+class HumanLordId(str, Enum):
+    """Идентификаторы легендарных правителей Империи."""
+
+    BENEDICT_STRAUSS = "lord_hum_benedict_strauss"
+    WOLFRAM_KRANZ = "lord_hum_wolfram_kranz"
+    EMERICH_FALK = "lord_hum_emerich_falk"
+    KASPAR_DRAKE = "lord_hum_kaspar_drake"
+
+
+class HumanCommanderId(str, Enum):
+    """Идентификаторы легендарных полководцев Империи."""
+
+    GERHARD_BLOOM = "cmd_hum_gerhard_bloom"
+    RENATA_FURIOUS = "cmd_hum_renata_furious"
+    JURGEN_SCHWARTZ = "cmd_hum_jurgen_schwartz"
+
+
+class HumanHeroId(str, Enum):
+    """Идентификаторы легендарных героев Империи."""
+
+    AUGUST_VON_LICHT = "hero_hum_august_von_licht"
+    ELARA_VANCE = "hero_hum_elara_vance"
+    BAYLEN_THE_MAIMED = "hero_hum_baylen_the_maimed"

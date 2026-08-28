@@ -13,6 +13,7 @@ from src.back.l01_domain.common import CharacterGenerationType, FactionRace
 from src.back.l01_domain.exceptions.llm import LLMError
 from src.back.l01_domain.factions.models.lord import (
     Lord,
+    LordStrategicBias,
 )
 from src.back.l01_domain.llm.prompts import PromptCatalog, get_faction_prompt_key
 from src.back.l01_domain.protocols.llm import LLMClientProtocol, PromptBuilderProtocol
@@ -100,6 +101,13 @@ class CustomLordFactory:
             traits=attached_traits,
             custom_biography=biography_text,
             personality_prompt_override=draft.distilled_personality,
+            lore_description=draft.archetype_description,
+            bias=LordStrategicBias(
+                tax_rate_bias=draft.tax_rate_bias,
+                military_building_priority=draft.military_building_priority,
+                diplomatic_aggression=draft.diplomatic_aggression,
+                bribery_susceptibility=draft.bribery_susceptibility,
+            ),
         )
 
         return lord, f"{lord.display_name} принимает правление фракцией."

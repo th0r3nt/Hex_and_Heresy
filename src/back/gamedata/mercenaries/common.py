@@ -48,3 +48,16 @@ class MercenaryRosterId(str, Enum):
     CONTRACT_BEAR_TAMERS = "rost_mer_contract_bear_tamers"
     CONTRACT_HEROES = "rost_mer_contract_heroes"
     CONTRACT_CORSAIRS = "rost_mer_contract_corsairs"
+
+
+class MercenaryHeroId(str, Enum):
+    """
+    Идентификаторы легендарных вольных капитанов.
+
+    Лордов и полководцев у наемников нет: это нейтральная сила без
+    цитадели и правителя, за нее не играют.
+    """
+
+    CAPTAIN_VANCE = "hero_mer_captain_vance"
+    LADY_BEATRICE = "hero_mer_lady_beatrice"
+    HECTOR = "hero_mer_hector"

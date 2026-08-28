@@ -97,3 +97,27 @@ class ElfsBuildingId(str, Enum):
     CHAMBER_OF_ECHOES = "bld_elf_chamber_of_echoes"
     MONOLITH_OF_STASIS = "bld_elf_monolith_of_stasis"
     OBSERVATORY = "bld_elf_observatory"
+
+
+class ElfsLordId(str, Enum):
+    """Идентификаторы легендарных владык эльфов."""
+
+    LIANDRIS = "lord_elf_liandris"
+    NAERIL = "lord_elf_naeril"
+    VALORIS = "lord_elf_valoris"
+
+
+class ElfsCommanderId(str, Enum):
+    """Идентификаторы легендарных полководцев эльфов."""
+
+    IRIEL = "cmd_elf_iriel"
+    SILVIAN = "cmd_elf_silvian"
+    KAELIN = "cmd_elf_kaelin"
+
+
+class ElfsHeroId(str, Enum):
+    """Идентификаторы легендарных героев эльфов."""
+
+    ILLITHIAN = "hero_elf_illithian"
+    ERINNIEL = "hero_elf_erinniel"
+    FENARIL = "hero_elf_fenaril"

@@ -4,7 +4,7 @@
 
 from typing import Any, Optional
 from uuid import uuid4
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from src.back.l01_domain.army.models.characters.traits import (
     Trait,
@@ -43,6 +43,48 @@ class LordTrait(Trait):
         return self.modifiers[0] if self.modifiers else None
 
 
+# ====================================================
+# Стратегический характер правителя
+# ====================================================
+
+
+class LordStrategicBias(BaseModel):
+    """
+    Стратегические уклоны правителя: числовая проекция его характера на
+    решения об экономике и внешней политике.
+
+    Эти же числа приезжают из ответа мастера игры при разборе биографии
+    от игрока, поэтому у легендарных и процедурных лордов они одинаковые.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    tax_rate_bias: float = Field(
+        default=0.0,
+        ge=-1.0,
+        le=1.0,
+        description="Склонность двигать налоговый ползунок вверх (1.0) или вниз (-1.0)",
+    )
+    military_building_priority: float = Field(
+        default=0.0,
+        ge=-1.0,
+        le=1.0,
+        description="Приоритет военной застройки против экономической",
+    )
+    diplomatic_aggression: float = Field(
+        default=0.5,
+        ge=0.0,
+        le=1.0,
+        description="Агрессивность во внешней политике: 0.0 - миротворец, 1.0 - завоеватель",
+    )
+    bribery_susceptibility: float = Field(
+        default=0.0,
+        ge=0.0,
+        le=1.0,
+        description="Сговорчивость при подкупе золотом на переговорах",
+    )
+
+
 class Lord(BaseModel):
     """Правитель фракции."""
 
@@ -69,6 +111,11 @@ class Lord(BaseModel):
         default=None, description="Исходный текст биографии от игрока"
     )
     lore_description: str = Field(default="")
+
+    bias: LordStrategicBias = Field(
+        default_factory=LordStrategicBias,
+        description="Стратегический характер правителя в числах",
+    )
 
     @model_validator(mode="before")
     @classmethod

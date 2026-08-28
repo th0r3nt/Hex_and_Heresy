@@ -24,8 +24,6 @@ from src.back.l02_services.turns.facade import TurnsFacade
 from src.back.l03_infrastructure.llm.facade import LLMFacade
 
 if TYPE_CHECKING:
-    # Импорт только для подсказок типов: main.py включает в себя роутеры,
-    # а те - этот модуль, и обычный импорт замкнул бы круг
     from src.back.main import AppContainer
 
 

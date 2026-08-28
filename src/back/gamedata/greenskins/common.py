@@ -95,3 +95,27 @@ class GreenskinsBuildingId(str, Enum):
     OGRE_PIT = "bld_grn_ogre_pit"
     CHIEFTAIN_IDOL = "bld_grn_chieftain_idol"
     FEAR_TOTEM = "bld_grn_fear_totem"
+
+
+class GreenskinsLordId(str, Enum):
+    """Идентификаторы легендарных вождей зеленокожих."""
+
+    GURG_SPOREBEARER = "lord_grn_gurg_sporebearer"
+    BARON_KHMYR = "lord_grn_baron_khmyr"
+    NAGROK_STEEL_EATER = "lord_grn_nagrok_steel_eater"
+
+
+class GreenskinsCommanderId(str, Enum):
+    """Идентификаторы легендарных полководцев зеленокожих."""
+
+    GOROG_THE_SILENT = "cmd_grn_gorog_the_silent"
+    JIGS = "cmd_grn_jigs"
+    OVERSEER_KROK = "cmd_grn_overseer_krok"
+
+
+class GreenskinsHeroId(str, Enum):
+    """Идентификаторы легендарных героев зеленокожих."""
+
+    GROM_IRONBELLY = "hero_grn_grom_ironbelly"
+    SNAGA_STICKY_HANDS = "hero_grn_snaga_sticky_hands"
+    UG_AND_GLUG = "hero_grn_ug_and_glug"

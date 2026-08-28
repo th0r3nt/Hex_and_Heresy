@@ -60,18 +60,30 @@ class BattlefieldLootSite(BaseModel):
     is_scavenged: bool = Field(
         default=False, description="Было ли поле полностью зачищено мародерами"
     )
+    is_imperishable: bool = Field(
+        default=False,
+        description=(
+            "Нетленное поле брани: лорный ориентир Ничьей земли вроде Долины "
+            "ржавых мечей, который стоит веками и не подчиняется таймеру гниения"
+        ),
+    )
 
     @property
     def is_depleted(self) -> bool:
         """
         Проверяет, истощено ли поле боя (нет лута или истекло время).
+
+        Нетленные поля таймером не убиваются, но выгрести их до дна можно:
+        забрали все железо и кости - собирать больше нечего.
         """
         has_items = sum(self.salvageable_equipment.values()) > 0
         has_corpses = len(self.corpses) > 0
         has_resonite = self.residual_resonite > 0.0
 
+        is_rotted_away = self.ticks_remaining == 0 and not self.is_imperishable
+
         return (
-            self.ticks_remaining == 0
+            is_rotted_away
             or self.is_scavenged
             or (not has_items and not has_corpses and not has_resonite)
         )
@@ -79,7 +91,10 @@ class BattlefieldLootSite(BaseModel):
     def decay_tick(self) -> None:
         """
         Уменьшает таймер существования поля брани.
+        Нетленные ориентиры карты таймер не отсчитывают вовсе.
         """
+        if self.is_imperishable:
+            return
         if self.ticks_remaining > 0:
             self.ticks_remaining -= 1
 

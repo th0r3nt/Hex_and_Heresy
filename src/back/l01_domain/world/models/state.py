@@ -25,6 +25,7 @@ from src.back.l01_domain.world.models.chronicle import (
     RumorEntry,
 )
 from src.back.l01_domain.world.models.events import GlobalEvent
+from src.back.l01_domain.world.models.points_of_interest import PointOfInterest
 from src.back.l01_domain.world.models.timekeeping import GameTime
 
 
@@ -54,6 +55,11 @@ class WorldState(BaseModel):
     active_events: list[GlobalEvent] = Field(default_factory=list)
     battlefield_sites: dict[str, BattlefieldLootSite] = Field(default_factory=dict)
     neutral_hexes: list[HexCoordinates] = Field(default_factory=list)
+
+    points_of_interest: dict[str, PointOfInterest] = Field(
+        default_factory=dict,
+        description="Лорные ориентиры и аномалии Ничьей земли: poi_id -> PointOfInterest",
+    )
 
     active_battle_armies: dict[str, list[str]] = Field(
         default_factory=dict,
@@ -167,6 +173,23 @@ class WorldState(BaseModel):
         for site in self.battlefield_sites.values():
             if site.hex_coordinates == coord and not site.is_depleted:
                 return site
+        return None
+
+    # ==================================================================
+    # ТОЧКИ ИНТЕРЕСА НИЧЬЕЙ ЗЕМЛИ
+    # ==================================================================
+
+    def add_point_of_interest(self, poi: PointOfInterest) -> None:
+        """Ставит место на карту Ничьей земли."""
+        self.points_of_interest[poi.id] = poi
+
+    def get_point_of_interest_at(
+        self, coord: HexCoordinates
+    ) -> Optional[PointOfInterest]:
+        """Возвращает точку интереса, стоящую на указанном гексе."""
+        for poi in self.points_of_interest.values():
+            if poi.hex_coordinates == coord:
+                return poi
         return None
 
     def cleanup_depleted_battlefields(self) -> None:

@@ -7,13 +7,20 @@ from pydantic import BaseModel
 import pytest
 
 from src.back.l01_domain.army.models.card.equipment import Equipment
+from src.back.l01_domain.army.models.card.roster import RosterEntry
 from src.back.l01_domain.army.models.card.unit import UnitArchetype
 from src.back.l01_domain.factions.models.buildings import Building
+from src.back.l01_domain.factions.models.legendary import (
+    LegendaryCommanderTemplate,
+    LegendaryHeroTemplate,
+    LegendaryLordTemplate,
+)
 from src.back.l01_domain.protocols.chronicler import ChroniclerRepositoryProtocol
 from src.back.l01_domain.protocols.events import EventBusProtocol
 from src.back.l01_domain.protocols.gamedata import GameDataRepositoryProtocol
 from src.back.l01_domain.protocols.llm import LLMClientProtocol
 from src.back.l01_domain.protocols.saves import SaveGameRepositoryProtocol
+from src.back.l01_domain.world.models.points_of_interest import PointOfInterestBlueprint
 from src.back.l01_domain.world.models.state import WorldState
 
 
@@ -54,6 +61,45 @@ class FakeGameDataRepository:
         return []
 
     def list_faction_buildings(self, faction_id: str) -> list[Building]:
+        return []
+
+    def get_roster_entry(self, roster_id: str) -> Optional[RosterEntry]:
+        return None
+
+    def list_faction_roster(self, faction_id: str) -> list[RosterEntry]:
+        return []
+
+    def get_legendary_lord(self, lord_id: str) -> Optional[LegendaryLordTemplate]:
+        return None
+
+    def get_legendary_commander(
+        self, commander_id: str
+    ) -> Optional[LegendaryCommanderTemplate]:
+        return None
+
+    def get_legendary_hero(self, hero_id: str) -> Optional[LegendaryHeroTemplate]:
+        return None
+
+    def list_faction_legendary_lords(self, faction_id: str) -> list[LegendaryLordTemplate]:
+        return []
+
+    def list_faction_legendary_commanders(
+        self, faction_id: str
+    ) -> list[LegendaryCommanderTemplate]:
+        return []
+
+    def list_faction_legendary_heroes(
+        self, faction_id: str
+    ) -> list[LegendaryHeroTemplate]:
+        return []
+
+    def get_point_of_interest(self, poi_id: str) -> Optional[PointOfInterestBlueprint]:
+        return None
+
+    def list_landmark_points_of_interest(self) -> list[PointOfInterestBlueprint]:
+        return []
+
+    def list_procedural_points_of_interest(self) -> list[PointOfInterestBlueprint]:
         return []
 
 

@@ -105,3 +105,26 @@ class CotmBuildingId(str, Enum):
     SUMMONING_CIRCLE = "bld_cotm_summoning_circle"
     TOMB_OF_THE_FORGOTTEN = "bld_cotm_tomb_of_the_forgotten"
     GATES_OF_THE_ABYSS = "bld_cotm_gates_of_the_abyss"
+
+
+class CongregationLordId(str, Enum):
+    """Идентификаторы легендарных иерархов Паствы метеорита."""
+
+    MORDIUS = "lord_cotm_mordius"
+    VLASTA = "lord_cotm_vlasta"
+    XAPHAN = "lord_cotm_xaphan"
+
+
+class CongregationCommanderId(str, Enum):
+    """Идентификаторы легендарных полководцев Паствы метеорита."""
+
+    NEKRAS = "cmd_cotm_nekras"
+    VARG = "cmd_cotm_varg"
+    NAMELESS_KNIGHT = "cmd_cotm_nameless_knight"
+
+
+class CongregationHeroId(str, Enum):
+    """Идентификаторы легендарных героев Паствы метеорита."""
+
+    ILAI = "hero_cotm_ilai"
+    MALAKAI = "hero_cotm_malakai"

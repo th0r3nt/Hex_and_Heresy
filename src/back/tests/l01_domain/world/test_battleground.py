@@ -5,6 +5,7 @@
 from src.back.l01_domain.army.constants import UnitSizeCategory
 from src.back.l01_domain.common import FactionRace
 from src.back.l01_domain.maps.models.strategic import HexCoordinates
+from src.back.l01_domain.world.constants import DEFAULT_BATTLEFIELD_DECAY_TICKS
 from src.back.l01_domain.world.models.battleground import (
     BattlefieldCorpsePile,
     BattlefieldLootSite,
@@ -54,3 +55,36 @@ class TestBattlefieldLootSite:
 
         assert site.ticks_remaining == 0
         assert site.is_depleted
+
+    def test_imperishable_site_ignores_decay_timer(self):
+        """Лорные ориентиры Ничьей земли стоят веками: таймер их не берет."""
+        site = self._make_site()
+        site.is_imperishable = True
+
+        for _ in range(10):
+            site.decay_tick()
+
+        assert site.ticks_remaining == 3
+        assert not site.is_depleted
+
+    def test_imperishable_site_still_runs_out_of_loot(self):
+        """Нетленное - не значит бездонное: выгребли до дна - собирать нечего."""
+        site = self._make_site()
+        site.is_imperishable = True
+
+        site.claim_equipment("human_arquebus_02", 15)
+        site.claim_equipment("human_cuirass_02", 10)
+        site.siphon_resonite()
+        site.corpses = []
+
+        assert site.is_depleted
+
+    def test_default_decay_window_is_twelve_ticks(self):
+        """По умолчанию поле брани держит трофеи 12 тактов."""
+        site = BattlefieldLootSite(
+            hex_coordinates=HexCoordinates.from_axial(0, 0),
+            origin_battle_id="battle_default",
+            residual_resonite=1.0,
+        )
+
+        assert site.ticks_remaining == DEFAULT_BATTLEFIELD_DECAY_TICKS == 12
