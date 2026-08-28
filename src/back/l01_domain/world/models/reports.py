@@ -41,6 +41,33 @@ class VeterancyServiceStepReport(BaseModel):
     veterancy_candidate_ids: list[str] = Field(default_factory=list)
 
 
+class GarrisonStepReport(BaseModel):
+    """
+    Отчет о шаге обслуживания гарнизонов земель за один глобальный такт.
+    """
+
+    raised_garrison_zone_ids: list[str] = Field(
+        default_factory=list,
+        description="Земли, на которых гарнизон появился впервые (новая ратуша или цитадель)",
+    )
+    disbanded_garrison_zone_ids: list[str] = Field(
+        default_factory=list,
+        description="Земли, ушедшие из-под контроля: их гарнизон снят с карты",
+    )
+    raised_militia_squad_ids: list[str] = Field(
+        default_factory=list,
+        description="Ополченцы, набранные под новые слоты после апгрейда здания",
+    )
+    disbanded_militia_squad_ids: list[str] = Field(
+        default_factory=list,
+        description="Ополченцы, распущенные по домам после падения уровня здания",
+    )
+    replenished_militia_squad_ids: list[str] = Field(
+        default_factory=list,
+        description="Ополченцы, добравшие потери за этот такт",
+    )
+
+
 class DiplomacyTickReport(BaseModel):
     """
     Отчет о дипломатическом шаге такта: логистика гонцов и послов, судьба пактов.
@@ -61,6 +88,7 @@ class GlobalTurnReport(BaseModel):
     """
 
     events_report: EventsStepReport = Field(...)
+    garrison_report: GarrisonStepReport = Field(default_factory=GarrisonStepReport)
     economy_reports: dict[str, FactionEconomyReport] = Field(default_factory=dict)
     movement_report: MovementStepReport = Field(...)
     diplomacy_report: DiplomacyTickReport = Field(default_factory=DiplomacyTickReport)

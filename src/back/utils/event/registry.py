@@ -39,6 +39,13 @@ class StrategicEvents(str, Enum):
     HERO_RECOVERED = "strategic.hero_recovered"
     EVENT_EXPIRED = "strategic.event_expired"
 
+    # Гарнизоны земель: ротация войск и городское ополчение
+    SQUAD_STATIONED = "strategic.squad_stationed"
+    SQUAD_UNSTATIONED = "strategic.squad_unstationed"
+    GARRISON_RAISED = "strategic.garrison_raised"
+    MILITIA_CAPACITY_SYNCED = "strategic.militia_capacity_synced"
+    MILITIA_REPLENISHED = "strategic.militia_replenished"
+
 
 # ==================================================================
 # ЭКОНОМИКА, СТРОИТЕЛЬСТВО И РАБОЧИЕ (ECONOMY)

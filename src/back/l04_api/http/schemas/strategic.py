@@ -1,15 +1,20 @@
 """
-Схемы приказов глобальной карты: марш армий, рабочие и экспедиции.
+Схемы приказов глобальной карты: марш армий, рабочие, экспедиции,
+налоги и гарнизоны земель.
 """
 
 from pydantic import BaseModel, Field
 
+from src.back.l01_domain.army.models.card.squad import Squad
 from src.back.l01_domain.factions.constants import (
+    GARRISON_FOOD_UPKEEP_DISCOUNT_RATIO,
+    MAX_STATIONED_GARRISON_SQUADS,
     MAX_TAX_RATE,
     MIN_TAX_RATE,
     TaxPolicyBand,
 )
 from src.back.l01_domain.factions.models.faction import Faction
+from src.back.l01_domain.factions.models.garrison import Garrison
 from src.back.l01_domain.maps.models.strategic import HexCoordinates
 
 
@@ -100,4 +105,109 @@ class TaxRateResponse(BaseModel):
             morale_delta=effects.morale_delta(faction.tax_rate),
             strike_chance=effects.strike_chance,
             riot_chance=effects.riot_chance(faction.tax_rate),
+        )
+
+
+# ====================================================
+# Гарнизоны земель
+# ====================================================
+
+
+class StationSquadRequest(BaseModel):
+    """
+    Приказ оставить отряд армии за стенами земли.
+    Земля задается zone_id в пути запроса.
+    """
+
+    army_id: str = Field(..., min_length=1, description="Армия, стоящая на гексе гарнизона")
+    squad_id: str = Field(..., min_length=1, description="Отряд, который остается в гарнизоне")
+
+
+class UnstationSquadRequest(BaseModel):
+    """
+    Приказ забрать расквартированный отряд обратно в мобильную армию.
+    """
+
+    army_id: str = Field(..., min_length=1, description="Армия, которая примет отряд")
+    squad_id: str = Field(..., min_length=1, description="Расквартированный отряд")
+
+
+class GarrisonSquadView(BaseModel):
+    """
+    Строка списка защитников для окна управления землей.
+    """
+
+    id: str = Field(...)
+    name: str = Field(..., description="Имя отряда или его ветеранское прозвище")
+    tier: int = Field(...)
+    unit_count: int = Field(..., description="Сколько бойцов в строю прямо сейчас")
+    full_unit_count: int = Field(..., description="Полный штат отряда")
+    morale: float = Field(...)
+
+    @classmethod
+    def from_squad(cls, squad: Squad) -> "GarrisonSquadView":
+        return cls(
+            id=squad.id,
+            name=squad.display_name,
+            tier=squad.archetype.tier,
+            unit_count=squad.state.unit_count,
+            full_unit_count=squad.archetype.default_unit_count,
+            morale=squad.state.morale,
+        )
+
+
+class GarrisonResponse(BaseModel):
+    """
+    Состояние гарнизона земли: то, что рисует окно обороны зоны.
+    """
+
+    zone_id: str = Field(...)
+    faction_id: str = Field(...)
+    hex_coordinates: HexCoordinates = Field(...)
+
+    militia_squads: list[GarrisonSquadView] = Field(
+        default_factory=list, description="Городское ополчение, поднятое самой землей"
+    )
+    stationed_squads: list[GarrisonSquadView] = Field(
+        default_factory=list, description="Регулярные войска, оставленные игроком"
+    )
+
+    free_stationed_slots: int = Field(
+        ..., description=f"Сколько карточек земля еще примет (лимит {MAX_STATIONED_GARRISON_SQUADS})"
+    )
+    total_units_count: int = Field(..., description="Сколько живых бойцов держит землю")
+
+    upkeep_gold: float = Field(..., description="Жалование гарнизона за такт")
+    upkeep_food: float = Field(
+        ...,
+        description=(
+            "Расход провизии за такт уже со скидкой "
+            f"{int(GARRISON_FOOD_UPKEEP_DISCOUNT_RATIO * 100)}% за жизнь на городских запасах"
+        ),
+    )
+
+    is_locked_in_battle: bool = Field(
+        ..., description="За землю идет бой: состав гарнизона заморожен"
+    )
+
+    @classmethod
+    def from_garrison(cls, garrison: Garrison) -> "GarrisonResponse":
+        """
+        Собирает ответ из агрегата, чтобы роутер ничего не считал сам.
+        """
+        return cls(
+            zone_id=garrison.zone_id,
+            faction_id=garrison.faction_id,
+            hex_coordinates=garrison.hex_coordinates,
+            militia_squads=[
+                GarrisonSquadView.from_squad(s) for s in garrison.militia_squads
+            ],
+            stationed_squads=[
+                GarrisonSquadView.from_squad(s) for s in garrison.stationed_squads
+            ],
+            free_stationed_slots=garrison.free_stationed_slots,
+            total_units_count=garrison.total_units_count,
+            upkeep_gold=garrison.total_upkeep_gold,
+            upkeep_food=garrison.total_upkeep_food,
+            is_locked_in_battle=garrison.is_locked_in_battle,
         )

@@ -1,5 +1,6 @@
 """
-Глобальный ход, марш армий, назначение рабочих, экспедиции и налоги.
+Глобальный ход, марш армий, назначение рабочих, экспедиции, налоги
+и гарнизоны земель.
 """
 
 from fastapi import APIRouter
@@ -11,10 +12,13 @@ from src.back.l04_api.dependencies import Turns, World
 from src.back.l04_api.http.schemas.common import OperationResult
 from src.back.l04_api.http.schemas.strategic import (
     ExpeditionRequest,
+    GarrisonResponse,
     MarchOrderRequest,
     MarchOrderResponse,
     SetTaxRateRequest,
+    StationSquadRequest,
     TaxRateResponse,
+    UnstationSquadRequest,
     WorkerAssignRequest,
 )
 
@@ -123,3 +127,51 @@ async def dispatch_expedition(
         home_hex=payload.home_hex,
         mining_duration_ticks=payload.mining_duration_ticks,
     )
+
+
+# ====================================================
+# Гарнизоны земель
+# ====================================================
+
+
+@router.get("/garrisons/{zone_id}", response_model=GarrisonResponse)
+async def get_garrison(zone_id: str, turns: Turns, world: World) -> GarrisonResponse:
+    """
+    Текущий состав гарнизона земли: ополчение, расквартированные войска
+    и во что они обходятся казне за такт.
+    """
+    return GarrisonResponse.from_garrison(turns.get_garrison(world, zone_id))
+
+
+@router.post("/garrisons/{zone_id}/station", response_model=GarrisonResponse)
+async def station_squad(
+    zone_id: str, payload: StationSquadRequest, turns: Turns, world: World
+) -> GarrisonResponse:
+    """
+    Оставляет отряд армии за стенами земли. Армия должна стоять на гексе
+    гарнизона, а свободные карточки - оставаться в лимите.
+    """
+    garrison = await turns.station_squad(
+        world_state=world,
+        army_id=payload.army_id,
+        squad_id=payload.squad_id,
+        zone_id=zone_id,
+    )
+    return GarrisonResponse.from_garrison(garrison)
+
+
+@router.post("/garrisons/{zone_id}/unstation", response_model=GarrisonResponse)
+async def unstation_squad(
+    zone_id: str, payload: UnstationSquadRequest, turns: Turns, world: World
+) -> GarrisonResponse:
+    """
+    Забирает расквартированный отряд обратно в мобильную армию.
+    Городское ополчение вывести нельзя: оно привязано к своей земле.
+    """
+    await turns.unstation_squad(
+        world_state=world,
+        army_id=payload.army_id,
+        squad_id=payload.squad_id,
+        zone_id=zone_id,
+    )
+    return GarrisonResponse.from_garrison(turns.get_garrison(world, zone_id))

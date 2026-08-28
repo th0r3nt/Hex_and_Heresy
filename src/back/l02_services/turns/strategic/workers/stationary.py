@@ -9,6 +9,7 @@ from src.back.l01_domain.exceptions.workers import (
     WorkerNotAvailableError,
 )
 from src.back.l01_domain.factions.models.workers import WorkerAssignment
+from src.back.l01_domain.maps.models.strategic import hex_zone_id
 from src.back.l01_domain.protocols.events import EventBusProtocol
 from src.back.l01_domain.world.models.state import WorldState
 from src.back.utils.event.registry import GameEvents
@@ -90,9 +91,9 @@ class StationaryWorkerService:
             raise WorkerNotAvailableError(squad_id, "отряд уже выполняет другое назначение")
 
         # 4. Проверка пространственной привязки (разогрев)
-        army_hex_str = f"{squad_army.current_hex.q},{squad_army.current_hex.r}"
+        army_zone_id = hex_zone_id(squad_army.current_hex)
         needs_warmup = (
-            constructed_building.zone_id != army_hex_str
+            constructed_building.zone_id != army_zone_id
             and constructed_building.zone_id != "base"
         )
 

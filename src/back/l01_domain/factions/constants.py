@@ -295,3 +295,46 @@ AMBASSADOR_SPEED_HEXES: Final[int] = 2
 
 # Предел реплик в автоматических переговорах двух LLM, чтобы диалог не зациклился
 MAX_AUTO_NEGOTIATION_ROUNDS: Final[int] = 6
+
+
+# ==================================================================
+# ГАРНИЗОНЫ ЗЕМЕЛЬ (см. _TODO.md, механика гарнизона)
+# ==================================================================
+
+# Сколько карточек регулярных войск игрок может расквартировать на одной земле
+MAX_STATIONED_GARRISON_SQUADS: Final[int] = 10
+
+# Насколько меньше провизии ест отряд за стенами: 0.55 - это минус 55%
+GARRISON_FOOD_UPKEEP_DISCOUNT_RATIO: Final[float] = 0.55
+
+# Из отрядов каких тиров набирается городское ополчение
+MILITIA_ALLOWED_TIERS: Final[tuple[int, ...]] = (1, 2)
+
+# Вместимость ополчения по уровню цитадели/ратуши. Уровень 0 - стройка
+# еще не поднялась, защищать землю некому.
+MILITIA_CAPACITY_BY_LEVEL: Final[dict[int, int]] = {
+    0: 0,
+    1: 2,
+    2: 3,
+    3: 3,
+    4: 4,
+    5: 5,
+    6: 6,
+}
+
+# Доля полного состава, которую ополчение добирает из горожан за один такт
+MILITIA_REPLENISHMENT_RATE_PER_TICK: Final[float] = 0.15
+
+
+def militia_capacity_for_level(level: int) -> int:
+    """
+    Сколько отрядов ополчения держит здание такого уровня.
+
+    Уровень выше таблицы (последствие будущих модификаторов) не должен
+    ронять расчет такта - берется вместимость максимального известного уровня.
+    """
+    if level in MILITIA_CAPACITY_BY_LEVEL:
+        return MILITIA_CAPACITY_BY_LEVEL[level]
+    if level < 0:
+        return 0
+    return MILITIA_CAPACITY_BY_LEVEL[max(MILITIA_CAPACITY_BY_LEVEL)]

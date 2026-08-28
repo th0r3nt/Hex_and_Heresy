@@ -16,8 +16,9 @@ from src.back.l01_domain.factions.models.diplomacy.messengers import (
 )
 from src.back.l01_domain.factions.models.diplomacy.relation import DiplomaticRelation
 from src.back.l01_domain.factions.models.faction import Faction
+from src.back.l01_domain.factions.models.garrison import Garrison
 from src.back.l01_domain.factions.models.workers import WorkerAssignment
-from src.back.l01_domain.maps.models.strategic import HexCoordinates
+from src.back.l01_domain.maps.models.strategic import HexCoordinates, hex_zone_id
 from src.back.l01_domain.world.models.battleground import BattlefieldLootSite
 from src.back.l01_domain.world.models.chronicle import (
     ChronicleEntry,
@@ -61,9 +62,22 @@ class WorldState(BaseModel):
         description="Лорные ориентиры и аномалии Ничьей земли: poi_id -> PointOfInterest",
     )
 
+    garrisons: dict[str, Garrison] = Field(
+        default_factory=dict,
+        description=(
+            "Гарнизоны земель: zone_id -> Garrison. Ключ - гекс земли, поэтому "
+            "на одну землю приходится ровно один несносимый гарнизон"
+        ),
+    )
+
     active_battle_armies: dict[str, list[str]] = Field(
         default_factory=dict,
         description="battle_id -> army_id[], армии, залоченные текущим тактическим боем",
+    )
+
+    active_battle_garrisons: dict[str, list[str]] = Field(
+        default_factory=dict,
+        description="battle_id -> zone_id[], гарнизоны, чей состав заморожен идущим боем",
     )
 
     worker_assignments: dict[str, WorkerAssignment] = Field(
@@ -220,6 +234,54 @@ class WorldState(BaseModel):
             if army is not None:
                 army.release_from_tactical_battle()
         return army_ids
+
+    # ==================================================================
+    # ГАРНИЗОНЫ ЗЕМЕЛЬ
+    # ==================================================================
+
+    def add_garrison(self, garrison: Garrison) -> None:
+        """Ставит гарнизон на землю. На гекс приходится ровно один гарнизон."""
+        self.garrisons[garrison.zone_id] = garrison
+
+    def get_garrison(self, zone_id: str) -> Optional[Garrison]:
+        """Возвращает гарнизон земли по ключу ее гекса."""
+        return self.garrisons.get(zone_id)
+
+    def get_garrison_at(self, coord: HexCoordinates) -> Optional[Garrison]:
+        """Возвращает гарнизон, стоящий на указанном гексе."""
+        return self.garrisons.get(hex_zone_id(coord))
+
+    def get_faction_garrisons(self, faction_id: str) -> list[Garrison]:
+        """Все гарнизоны земель, подконтрольных фракции."""
+        return [g for g in self.garrisons.values() if g.faction_id == faction_id]
+
+    def remove_garrison(self, zone_id: str) -> Optional[Garrison]:
+        """
+        Снимает гарнизон с земли - например, когда фракция ее потеряла.
+        """
+        return self.garrisons.pop(zone_id, None)
+
+    def lock_garrisons_for_battle(self, battle_id: str, zone_ids: list[str]) -> None:
+        """
+        Замораживает состав гарнизонов на время штурма: пока идет бой,
+        подкрепления в него не входят и защитники из него не выходят.
+        """
+        self.active_battle_garrisons[battle_id] = list(zone_ids)
+        for zone_id in zone_ids:
+            garrison = self.get_garrison(zone_id)
+            if garrison is not None:
+                garrison.is_locked_in_battle = True
+
+    def release_garrisons_from_battle(self, battle_id: str) -> list[str]:
+        """
+        Размораживает гарнизоны по завершении боя. Возвращает id их земель.
+        """
+        zone_ids = self.active_battle_garrisons.pop(battle_id, [])
+        for zone_id in zone_ids:
+            garrison = self.get_garrison(zone_id)
+            if garrison is not None:
+                garrison.is_locked_in_battle = False
+        return zone_ids
 
     # ==================================================================
     # МЕТОДЫ УПРАВЛЕНИЯ НАЗНАЧЕНИЯМИ РАБОЧИХ

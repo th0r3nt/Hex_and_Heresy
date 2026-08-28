@@ -21,6 +21,18 @@ class FactionEconomyReport(BaseModel):
     upkeep_gold_required: float = Field(default=0.0)
     upkeep_food_required: float = Field(default=0.0)
 
+    garrison_upkeep_gold: float = Field(
+        default=0.0,
+        description="Часть содержания, ушедшая на гарнизоны земель (входит в upkeep_gold_required)",
+    )
+    garrison_upkeep_food: float = Field(
+        default=0.0,
+        description=(
+            "Часть провизии, ушедшая на гарнизоны земель, уже со скидкой за жизнь "
+            "на городских запасах (входит в upkeep_food_required)"
+        ),
+    )
+
     gold_deficit: float = Field(default=0.0)
     food_deficit: float = Field(default=0.0)
 

@@ -9,13 +9,20 @@ import pytest
 from fastapi import status
 from fastapi.testclient import TestClient
 
+from src.back.l01_domain.army.models.card.squad import Squad
+from src.back.l01_domain.army.models.card.unit import BaseUnitStats, UnitArchetype
 from src.back.l01_domain.army.models.strategic import StrategicArmy
 from src.back.l01_domain.common import FactionRace
-from src.back.l01_domain.factions.constants import BASE_TAX_HQ_PER_LEVEL, TaxPolicyBand
+from src.back.l01_domain.factions.constants import (
+    BASE_TAX_HQ_PER_LEVEL,
+    MAX_STATIONED_GARRISON_SQUADS,
+    TaxPolicyBand,
+)
 from src.back.l01_domain.factions.models.buildings import Headquarters
 from src.back.l01_domain.factions.models.faction import Faction
+from src.back.l01_domain.factions.models.garrison import Garrison
 from src.back.l01_domain.factions.models.lord import Lord
-from src.back.l01_domain.maps.models.strategic import HexCoordinates
+from src.back.l01_domain.maps.models.strategic import HexCoordinates, hex_zone_id
 from src.back.l01_domain.world.models.state import WorldState
 from src.back.l02_services.turns.facade import TurnsFacade
 from src.back.tests.l04_api.conftest import FakeContainer
@@ -249,3 +256,172 @@ def test_tax_rate_is_readable_for_the_slider_tooltip(
     assert body["band"] == TaxPolicyBand.HOLIDAY.value
     assert body["forecast_income_gold"] == 0.0
     assert body["morale_delta"] == 5.0
+
+
+# ==================================================================
+# ГАРНИЗОНЫ ЗЕМЕЛЬ
+# ==================================================================
+
+
+def _garrison(world_state: WorldState, faction: Faction, at: HexCoordinates) -> Garrison:
+    """Ставит на гекс готовый гарнизон, как это делает такт."""
+    garrison = Garrison(
+        zone_id=hex_zone_id(at), faction_id=faction.id, hex_coordinates=at
+    )
+    world_state.add_garrison(garrison)
+    return garrison
+
+
+def _garrison_squad() -> Squad:
+    """Регулярный отряд, который игрок может оставить за стенами."""
+    return Squad.create_new(
+        archetype=UnitArchetype(
+            id="unit_test_guard",
+            race=FactionRace.HUMANS,
+            faction_id="humans",
+            name="Городская стража",
+            tier=1,
+            default_unit_count=100,
+            base_stats=BaseUnitStats(max_hp=20.0),
+        )
+    )
+
+
+def test_garrison_state_is_readable(
+    client: TestClient, container: FakeContainer, active_party: WorldState
+):
+    container.turns_facade = TurnsFacade()
+    faction = _faction(active_party)
+    capital = HexCoordinates(q=0, r=0, s=0)
+    garrison = _garrison(active_party, faction, capital)
+    garrison.sync_militia_capacity(level=1, recruit=_garrison_squad)
+
+    response = client.get(f"/api/strategic/garrisons/{garrison.zone_id}")
+
+    assert response.status_code == status.HTTP_200_OK
+    body = response.json()
+    assert body["zone_id"] == garrison.zone_id
+    assert len(body["militia_squads"]) == 2
+    assert body["stationed_squads"] == []
+    assert body["free_stationed_slots"] == MAX_STATIONED_GARRISON_SQUADS
+
+
+def test_garrison_of_unknown_land_answers_not_found(
+    client: TestClient, container: FakeContainer, active_party: WorldState
+):
+    container.turns_facade = TurnsFacade()
+
+    response = client.get("/api/strategic/garrisons/99,99")
+
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert response.json()["error"] == "GarrisonNotFoundError"
+
+
+def test_station_endpoint_moves_the_squad_behind_the_walls(
+    client: TestClient, container: FakeContainer, active_party: WorldState
+):
+    container.turns_facade = TurnsFacade()
+    faction = _faction(active_party)
+    capital = HexCoordinates(q=0, r=0, s=0)
+    garrison = _garrison(active_party, faction, capital)
+    army = _army(active_party, capital)
+    squad = _garrison_squad()
+    army.add_squad(squad)
+
+    response = client.post(
+        f"/api/strategic/garrisons/{garrison.zone_id}/station",
+        json={"army_id": army.id, "squad_id": squad.id},
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    assert len(response.json()["stationed_squads"]) == 1
+
+    # Приказ отдан именно миру, а не копии
+    assert garrison.stationed_squads == [squad]
+    assert army.squads == []
+
+
+def test_unstation_endpoint_returns_the_squad_to_the_army(
+    client: TestClient, container: FakeContainer, active_party: WorldState
+):
+    container.turns_facade = TurnsFacade()
+    faction = _faction(active_party)
+    capital = HexCoordinates(q=0, r=0, s=0)
+    garrison = _garrison(active_party, faction, capital)
+    army = _army(active_party, capital)
+    squad = _garrison_squad()
+    garrison.station_squad(squad)
+
+    response = client.post(
+        f"/api/strategic/garrisons/{garrison.zone_id}/unstation",
+        json={"army_id": army.id, "squad_id": squad.id},
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json()["stationed_squads"] == []
+    assert army.squads == [squad]
+
+
+def test_station_beyond_the_limit_answers_conflict(
+    client: TestClient, container: FakeContainer, active_party: WorldState
+):
+    container.turns_facade = TurnsFacade()
+    faction = _faction(active_party)
+    capital = HexCoordinates(q=0, r=0, s=0)
+    garrison = _garrison(active_party, faction, capital)
+    for _ in range(MAX_STATIONED_GARRISON_SQUADS):
+        garrison.station_squad(_garrison_squad())
+
+    army = _army(active_party, capital)
+    extra = _garrison_squad()
+    army.add_squad(extra)
+
+    response = client.post(
+        f"/api/strategic/garrisons/{garrison.zone_id}/station",
+        json={"army_id": army.id, "squad_id": extra.id},
+    )
+
+    assert response.status_code == status.HTTP_409_CONFLICT
+    assert response.json()["error"] == "GarrisonCapacityExceededError"
+    assert army.squads == [extra], "отказ не должен терять отряд"
+
+
+def test_station_during_the_assault_is_refused(
+    client: TestClient, container: FakeContainer, active_party: WorldState
+):
+    container.turns_facade = TurnsFacade()
+    faction = _faction(active_party)
+    capital = HexCoordinates(q=0, r=0, s=0)
+    garrison = _garrison(active_party, faction, capital)
+    garrison.is_locked_in_battle = True
+
+    army = _army(active_party, capital)
+    squad = _garrison_squad()
+    army.add_squad(squad)
+
+    response = client.post(
+        f"/api/strategic/garrisons/{garrison.zone_id}/station",
+        json={"army_id": army.id, "squad_id": squad.id},
+    )
+
+    assert response.status_code == status.HTTP_409_CONFLICT
+    assert response.json()["error"] == "GarrisonLockedInBattleError"
+
+
+def test_distant_army_cannot_use_the_garrison(
+    client: TestClient, container: FakeContainer, active_party: WorldState
+):
+    container.turns_facade = TurnsFacade()
+    faction = _faction(active_party)
+    garrison = _garrison(active_party, faction, HexCoordinates(q=0, r=0, s=0))
+    army = _army(active_party, HexCoordinates(q=5, r=-5, s=0))
+    squad = _garrison_squad()
+    army.add_squad(squad)
+
+    response = client.post(
+        f"/api/strategic/garrisons/{garrison.zone_id}/station",
+        json={"army_id": army.id, "squad_id": squad.id},
+    )
+
+    assert response.status_code == status.HTTP_409_CONFLICT
+    assert response.json()["error"] == "GarrisonRotationForbiddenError"

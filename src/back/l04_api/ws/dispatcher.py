@@ -41,6 +41,9 @@ BROADCAST_EVENTS: tuple[Enum, ...] = (
     GameEvents.Strategic.DISPATCH_INTERCEPTED,
     GameEvents.Strategic.AMBASSADOR_ARRIVED,
     GameEvents.Strategic.HERO_RECOVERED,
+    GameEvents.Strategic.SQUAD_STATIONED,
+    GameEvents.Strategic.SQUAD_UNSTATIONED,
+    GameEvents.Strategic.MILITIA_CAPACITY_SYNCED,
     # Экономика
     GameEvents.Economy.BUILDING_COMPLETED,
     GameEvents.Economy.EXPEDITION_RETURNED,

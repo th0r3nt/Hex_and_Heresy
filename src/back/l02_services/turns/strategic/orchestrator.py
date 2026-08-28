@@ -10,6 +10,7 @@ from src.back.l01_domain.world.models.reports import GlobalTurnReport
 from src.back.l01_domain.world.models.state import WorldState
 from src.back.l02_services.mechanics.diplomacy.facade import DiplomacyFacade
 from src.back.l02_services.turns.strategic.economy import StrategicEconomyService
+from src.back.l02_services.turns.strategic.garrison import GarrisonService
 from src.back.l02_services.turns.strategic.veterancy import StrategicVeterancyService
 from src.back.l02_services.turns.strategic.events import StrategicEventsService
 from src.back.l02_services.turns.strategic.movement import (
@@ -25,7 +26,7 @@ class StrategicTurnOrchestrator:
     """
     Главный оркестратор глобального хода.
     Строго последовательно выполняет конвейер:
-    [1. События и время] -> [2. Экспедиции] -> [3. Экономика и содержание] -> [4. Передвижения] -> [4.5. Дипломатия] -> [5. Итоговый отчет].
+    [1. События и время] -> [1.7. Гарнизоны] -> [2. Экспедиции] -> [3. Экономика и содержание] -> [4. Передвижения] -> [4.5. Дипломатия] -> [5. Итоговый отчет].
     """
 
     def __init__(
@@ -33,6 +34,7 @@ class StrategicTurnOrchestrator:
         events_service: Optional[StrategicEventsService] = None,
         economy_service: Optional[StrategicEconomyService] = None,
         movement_service: Optional[StrategicMovementService] = None,
+        garrison_service: Optional[GarrisonService] = None,
         expedition_service: Optional[ExpeditionWorkerService] = None,
         veterancy_service: Optional[StrategicVeterancyService] = None,
         diplomacy_facade: Optional[DiplomacyFacade] = None,
@@ -47,6 +49,10 @@ class StrategicTurnOrchestrator:
         )
         self._movement_service = movement_service or StrategicMovementService(
             event_bus=event_bus
+        )
+        # Гарнизонам каталог нужен, чтобы поднять расовое ополчение из ростера
+        self._garrison_service = garrison_service or GarrisonService(
+            gamedata=gamedata, event_bus=event_bus
         )
         self._expedition_service = expedition_service or ExpeditionWorkerService(
             event_bus=event_bus
@@ -81,6 +87,11 @@ class StrategicTurnOrchestrator:
             )
         )
 
+        # Шаг 1.7. Гарнизоны земель: подъем ополчения под уровень зданий и
+        # восполнение его потерь. Идет до экономики: содержание гарнизонов
+        # списывается уже с обновленным составом.
+        garrison_report = await self._garrison_service.process_garrisons(world_state)
+
         # Шаг 2. Обработка экспедиций (добыча, разворот караванов, сдача груза в казну)
         completed_expeditions = await self._expedition_service.process_expeditions(world_state)
 
@@ -101,6 +112,7 @@ class StrategicTurnOrchestrator:
         # Шаг 5. Сборка итогового отчета
         final_report = GlobalTurnReport(
             events_report=events_report,
+            garrison_report=garrison_report,
             economy_reports=economy_reports,
             movement_report=movement_report,
             diplomacy_report=diplomacy_report,

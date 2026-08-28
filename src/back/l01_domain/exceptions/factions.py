@@ -109,3 +109,89 @@ class ZoneNotControlledError(FactionError):
         super().__init__(
             f"Зона '{zone_id}' не находится под контролем фракции '{faction_id}'."
         )
+
+
+# ====================================================
+# Гарнизоны земель
+# ====================================================
+
+
+class GarrisonNotFoundError(FactionError):
+    """
+    На указанной земле нет гарнизона: землю не контролируют либо
+    административный центр там еще не построен.
+    """
+
+    def __init__(self, zone_id: str) -> None:
+        self.zone_id = zone_id
+        super().__init__(f"Гарнизон земли '{zone_id}' не найден.")
+
+
+class GarrisonCapacityExceededError(FactionError):
+    """
+    Превышен лимит расквартированных войск: земля вмещает ровно
+    MAX_STATIONED_GARRISON_SQUADS карточек.
+    """
+
+    def __init__(self, zone_id: str, max_squads: int) -> None:
+        self.zone_id = zone_id
+        self.max_squads = max_squads
+        super().__init__(
+            f"Гарнизон земли '{zone_id}' переполнен: максимум {max_squads} расквартированных отрядов."
+        )
+
+
+class SquadNotInGarrisonError(FactionError):
+    """
+    Попытка вывести из гарнизона отряд, которого там нет.
+    """
+
+    def __init__(self, zone_id: str, squad_id: str) -> None:
+        self.zone_id = zone_id
+        self.squad_id = squad_id
+        super().__init__(
+            f"Отряд '{squad_id}' не расквартирован в гарнизоне земли '{zone_id}'."
+        )
+
+
+class GarrisonLockedInBattleError(FactionError):
+    """
+    Состав гарнизона нельзя менять, пока за землю идет тактический бой:
+    подкрепления не входят в уже начавшийся штурм, а защитники из него не выходят.
+    """
+
+    def __init__(self, zone_id: str) -> None:
+        self.zone_id = zone_id
+        super().__init__(
+            f"Гарнизон земли '{zone_id}' связан идущим боем: состав менять нельзя."
+        )
+
+
+class GarrisonRotationForbiddenError(FactionError):
+    """
+    Ротацию гарнизона нельзя выполнить в текущей обстановке: армия стоит
+    не на том гексе, связана боем или не содержит нужного отряда.
+    """
+
+    def __init__(self, zone_id: str, reason: str) -> None:
+        self.zone_id = zone_id
+        self.reason = reason
+        super().__init__(
+            f"Ротация гарнизона земли '{zone_id}' невозможна: {reason}."
+        )
+
+
+class MilitiaTierNotAllowedError(FactionError):
+    """
+    В городское ополчение попал отряд не того тира: ополчение набирается
+    только из отрядов 1-2 тира.
+    """
+
+    def __init__(self, squad_name: str, tier: int, allowed_tiers: tuple[int, ...]) -> None:
+        self.squad_name = squad_name
+        self.tier = tier
+        self.allowed_tiers = allowed_tiers
+        allowed = ", ".join(str(t) for t in allowed_tiers)
+        super().__init__(
+            f"Отряд '{squad_name}' тира {tier} не может быть городским ополчением: разрешены тиры {allowed}."
+        )

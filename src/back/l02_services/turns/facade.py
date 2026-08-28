@@ -9,16 +9,21 @@ from src.back.l01_domain.army.models.characters.commanders import Commander
 from src.back.l01_domain.army.models.characters.heroes import Hero
 from src.back.l01_domain.combat.models.reports import TacticalTurnReport
 from src.back.l01_domain.combat.models.state import TacticalBattleState
-from src.back.l01_domain.exceptions.factions import FactionNotFoundError
+from src.back.l01_domain.exceptions.factions import (
+    FactionNotFoundError,
+    GarrisonNotFoundError,
+)
 from src.back.l01_domain.exceptions.workers import InvalidAssignmentTargetError
 from src.back.l01_domain.exceptions.world import NoArmiesLockedForBattleError
 from src.back.l01_domain.factions.models.faction import Faction
+from src.back.l01_domain.factions.models.garrison import Garrison
 from src.back.l01_domain.factions.models.workers import WorkerAssignment
 from src.back.l01_domain.maps.models.strategic import HexCoordinates, hex_line
 from src.back.l01_domain.protocols.events import EventBusProtocol
 from src.back.l01_domain.protocols.gamedata import GameDataRepositoryProtocol
 from src.back.l01_domain.world.models.reports import GlobalTurnReport
 from src.back.l01_domain.world.models.state import WorldState
+from src.back.l02_services.turns.strategic.garrison import GarrisonService
 from src.back.l02_services.turns.strategic.orchestrator import (
     StrategicTurnOrchestrator,
 )
@@ -54,6 +59,7 @@ class TurnsFacade:
         )
         self._stationary_workers = StationaryWorkerService(event_bus=event_bus)
         self._expedition_workers = ExpeditionWorkerService(event_bus=event_bus)
+        self._garrisons = GarrisonService(gamedata=gamedata, event_bus=event_bus)
 
     # ==================================================================
     # ПРИКАЗЫ ИГРОКА НА ГЛОБАЛЬНОЙ КАРТЕ
@@ -157,6 +163,55 @@ class TurnsFacade:
         )
 
     # ==================================================================
+    # ГАРНИЗОНЫ ЗЕМЕЛЬ
+    # ==================================================================
+
+    async def station_squad(
+        self,
+        world_state: WorldState,
+        army_id: str,
+        squad_id: str,
+        zone_id: str,
+    ) -> Garrison:
+        """
+        Оставляет отряд армии за стенами земли. Армия должна стоять на гексе
+        гарнизона, а самих карточек за стенами - не больше лимита.
+        """
+        return await self._garrisons.station_squad(
+            world_state=world_state,
+            army_id=army_id,
+            squad_id=squad_id,
+            zone_id=zone_id,
+        )
+
+    async def unstation_squad(
+        self,
+        world_state: WorldState,
+        army_id: str,
+        squad_id: str,
+        zone_id: str,
+    ) -> Squad:
+        """
+        Забирает расквартированный отряд обратно в мобильную армию.
+        """
+        return await self._garrisons.unstation_squad(
+            world_state=world_state,
+            army_id=army_id,
+            squad_id=squad_id,
+            zone_id=zone_id,
+        )
+
+    @staticmethod
+    def get_garrison(world_state: WorldState, zone_id: str) -> Garrison:
+        """
+        Текущий состав гарнизона земли для окна управления зоной.
+        """
+        garrison = world_state.get_garrison(zone_id)
+        if garrison is None:
+            raise GarrisonNotFoundError(zone_id)
+        return garrison
+
+    # ==================================================================
     # РАСЧЕТ ХОДОВ
     # ==================================================================
 
@@ -185,7 +240,12 @@ class TurnsFacade:
         VeterancyStatus.accumulate_kills) - если бы сюда передавалась копия,
         accumulated_kill_weight неявно обнулялся бы после каждого боя.
 
-        По завершении боя снимает лок с армий и регистрирует поле брани.
+        Если бой идет на гексе с гарнизоном (цитадель, город или союзная
+        земля), к защитникам добавляется весь его состав: ополчение и
+        расквартированные войска дерутся вместе с мобильной армией.
+
+        По завершении боя снимает лок с армий и гарнизона и регистрирует
+        поле брани.
         """
         army_ids = world_state.active_battle_armies.get(battle_state.id)
         if not army_ids:
@@ -211,6 +271,11 @@ class TurnsFacade:
         if strategic_hex is None:
             raise NoArmiesLockedForBattleError(battle_state.id)
 
+        # Гарнизон земли встает в строй рядом с армиями: те же объекты Squad,
+        # что лежат в самом гарнизоне, - иначе потери штурма не сохранились бы
+        for squad in self._garrisons.collect_defenders(world_state, strategic_hex):
+            squads[squad.id] = squad
+
         report = await self._tactical_orchestrator.execute_turn(
             battle_state=battle_state,
             squads=squads,
@@ -221,6 +286,7 @@ class TurnsFacade:
 
         if report.is_battle_finished:
             world_state.release_armies_from_battle(battle_state.id)
+            world_state.release_garrisons_from_battle(battle_state.id)
             if report.loot_site is not None:
                 world_state.add_battlefield_site(report.loot_site)
 

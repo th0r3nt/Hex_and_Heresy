@@ -21,6 +21,7 @@ from src.back.l01_domain.factions.constants import (
 )
 from src.back.l01_domain.factions.models.economy import FactionEconomyReport
 from src.back.l01_domain.factions.models.faction import Faction
+from src.back.l01_domain.factions.models.garrison import Garrison
 from src.back.l01_domain.maps.constants import ALLIED_LANDS_RING_RADIUS
 from src.back.l01_domain.maps.models.strategic import HexCoordinates, hex_ring
 from src.back.l01_domain.protocols.events import EventBusProtocol
@@ -44,12 +45,14 @@ class _ResourceIncome:
 
 @dataclass(frozen=True)
 class _UpkeepSettlement:
-    """Итог списания содержания армий фракции за такт."""
+    """Итог списания содержания армий и гарнизонов фракции за такт."""
 
     gold_required: float
     food_required: float
     gold_deficit: float
     food_deficit: float
+    garrison_gold_required: float = 0.0
+    garrison_food_required: float = 0.0
 
 
 class StrategicEconomyService:
@@ -140,11 +143,13 @@ class StrategicEconomyService:
 
         # 3. Расходы на содержание, голод и дезертирство
         faction_armies = world_state.get_faction_armies(faction.id)
-        upkeep = self._settle_upkeep(faction, faction_armies)
+        faction_garrisons = world_state.get_faction_garrisons(faction.id)
+        upkeep = self._settle_upkeep(faction, faction_armies, faction_garrisons)
 
         deserted_squad_names = await self._handle_deficit_consequences(
             faction=faction,
             faction_armies=faction_armies,
+            faction_garrisons=faction_garrisons,
             upkeep=upkeep,
             world_state=world_state,
         )
@@ -158,6 +163,8 @@ class StrategicEconomyService:
             income_food=total_income.food,
             upkeep_gold_required=upkeep.gold_required,
             upkeep_food_required=upkeep.food_required,
+            garrison_upkeep_gold=upkeep.garrison_gold_required,
+            garrison_upkeep_food=upkeep.garrison_food_required,
             gold_deficit=upkeep.gold_deficit,
             food_deficit=upkeep.food_deficit,
             deserted_squad_names=deserted_squad_names,
@@ -244,13 +251,25 @@ class StrategicEconomyService:
 
     @staticmethod
     def _settle_upkeep(
-        faction: Faction, faction_armies: list[StrategicArmy]
+        faction: Faction,
+        faction_armies: list[StrategicArmy],
+        faction_garrisons: list[Garrison],
     ) -> _UpkeepSettlement:
         """
-        Списывает доступное золото и провизию за содержание всех армий фракции.
+        Списывает доступное золото и провизию за содержание армий и гарнизонов.
+
+        Жалование за стенами то же, что и в поле, а вот провизии гарнизон ест
+        меньше: скидку считает сам агрегат Garrison (см. total_upkeep_food).
         """
-        upkeep_gold_required = sum(army.total_upkeep_gold for army in faction_armies)
-        upkeep_food_required = sum(army.total_upkeep_food for army in faction_armies)
+        garrison_gold_required = sum(g.total_upkeep_gold for g in faction_garrisons)
+        garrison_food_required = sum(g.total_upkeep_food for g in faction_garrisons)
+
+        upkeep_gold_required = (
+            sum(army.total_upkeep_gold for army in faction_armies) + garrison_gold_required
+        )
+        upkeep_food_required = (
+            sum(army.total_upkeep_food for army in faction_armies) + garrison_food_required
+        )
 
         available_gold = faction.resources[ResourceType.GOLD]
         available_food = faction.resources[ResourceType.FOOD]
@@ -269,18 +288,25 @@ class StrategicEconomyService:
             food_required=upkeep_food_required,
             gold_deficit=gold_deficit,
             food_deficit=food_deficit,
+            garrison_gold_required=garrison_gold_required,
+            garrison_food_required=garrison_food_required,
         )
 
     async def _handle_deficit_consequences(
         self,
         faction: Faction,
         faction_armies: list[StrategicArmy],
+        faction_garrisons: list[Garrison],
         upkeep: _UpkeepSettlement,
         world_state: WorldState,
     ) -> list[str]:
         """
         При дефиците бьет по морали всех отрядов и инициирует дезертирство при сильном голоде.
         Если дезертирует рабочий, его назначение автоматически аннулируется.
+
+        Пустая казна портит настроение и за стенами, но дезертируют только
+        полевые армии: ополчение стоит на своей земле и бежать ему некуда,
+        а расквартированные войска сидят на городских запасах.
         """
         if upkeep.gold_deficit <= 0 and upkeep.food_deficit <= 0:
             return []
@@ -290,6 +316,9 @@ class StrategicEconomyService:
         )
         for army in faction_armies:
             for squad in army.squads:
+                squad.apply_morale_shock(morale_penalty)
+        for garrison in faction_garrisons:
+            for squad in garrison.all_squads:
                 squad.apply_morale_shock(morale_penalty)
 
         if self._event_bus is not None:
@@ -382,18 +411,29 @@ class StrategicEconomyService:
         faction: Faction, world_state: WorldState, morale_delta: float
     ) -> None:
         """
-        Разносит настроение по гарнизонам фракции: льготы поднимают мораль,
-        поборы ее роняют.
+        Разносит настроение по войскам фракции: льготы поднимают мораль,
+        поборы ее роняют. Гарнизоны реагируют острее всех - они стоят прямо
+        среди обираемых подданных, - но математически эффект тот же.
         """
         if morale_delta == 0:
             return
 
-        for army in world_state.get_faction_armies(faction.id):
-            for squad in army.squads:
-                if morale_delta > 0:
-                    squad.recover_morale(morale_delta)
-                else:
-                    squad.apply_morale_shock(abs(morale_delta))
+        squads = [
+            squad
+            for army in world_state.get_faction_armies(faction.id)
+            for squad in army.squads
+        ]
+        squads.extend(
+            squad
+            for garrison in world_state.get_faction_garrisons(faction.id)
+            for squad in garrison.all_squads
+        )
+
+        for squad in squads:
+            if morale_delta > 0:
+                squad.recover_morale(morale_delta)
+            else:
+                squad.apply_morale_shock(abs(morale_delta))
 
     async def _trigger_worker_strikes(
         self,

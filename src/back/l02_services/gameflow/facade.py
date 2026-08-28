@@ -147,6 +147,9 @@ class GameFlowFacade:
         Инициирует тактический бой между двумя фракциями.
         При успешном переходе блокирует армии обеих сторон, стоящие на гексе боя,
         от параллельной работы/движения на стратегическом такте.
+
+        Гарнизон гекса тоже замораживается: пока идет штурм, игрок не может
+        ни завести за стены подкрепление, ни вывести оттуда защитников.
         """
 
         if self._world_state is None:
@@ -170,6 +173,12 @@ class GameFlowFacade:
             army_ids=[army.id for army in engaged_armies],
         )
 
+        garrison = self._world_state.get_garrison_at(hex_coords)
+        if garrison is not None:
+            self._world_state.lock_garrisons_for_battle(
+                battle_id=battle_state.id, zone_ids=[garrison.zone_id]
+            )
+
         return new_state
 
     async def finish_tactical_combat(
@@ -180,7 +189,7 @@ class GameFlowFacade:
     ) -> GameState:
         """
         Завершает тактический бой, возвращает игру на глобальную карту
-        и снимает лок с армий, задействованных в этом бою.
+        и снимает лок с армий и гарнизона, задействованных в этом бою.
         """
 
         if self._world_state is None:
@@ -194,6 +203,7 @@ class GameFlowFacade:
         new_state = await self._fsm.trigger(GameFlowTrigger.RESOLVE_COMBAT, payload=payload)
 
         self._world_state.release_armies_from_battle(battle_id)
+        self._world_state.release_garrisons_from_battle(battle_id)
 
         return new_state
 

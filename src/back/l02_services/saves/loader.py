@@ -122,6 +122,17 @@ class WorldStateLoader:
                     f"Армия '{army.id}' была залочена несуществующим боем: лок снят."
                 )
 
+        for battle_id in list(world_state.active_battle_garrisons.keys()):
+            world_state.release_garrisons_from_battle(battle_id)
+
+        for garrison in world_state.garrisons.values():
+            if garrison.is_locked_in_battle:
+                garrison.is_locked_in_battle = False
+                main_logger.warning(
+                    f"Гарнизон земли '{garrison.zone_id}' был заморожен "
+                    "несуществующим боем: лок снят."
+                )
+
         world_state.cleanup_expired_events()
         world_state.cleanup_depleted_battlefields()
         world_state.cleanup_completed_assignments()

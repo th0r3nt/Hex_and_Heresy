@@ -214,6 +214,17 @@ def generate_standard_map_coordinates() -> list[HexCoordinates]:
     return coordinates
 
 
+def hex_zone_id(coord: HexCoordinates) -> str:
+    """
+    Ключ территориальной зоны по ее гексу.
+
+    Один и тот же гекс - одна и та же зона, поэтому к ней и привязываются
+    ратуши, здания и гарнизоны. Третья координата в ключ не входит: она
+    однозначно выводится из первых двух (q + r + s == 0).
+    """
+    return f"{coord.q},{coord.r}"
+
+
 def determine_zone_type(
     coord: HexCoordinates,
     base_coords: Union[HexCoordinates, list[HexCoordinates]],
