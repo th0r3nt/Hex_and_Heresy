@@ -11,12 +11,19 @@ from src.back.l01_domain.army.models.card.squad import Squad
 from src.back.l01_domain.army.models.card.unit import BaseUnitStats, UnitArchetype
 from src.back.l01_domain.army.models.strategic import StrategicArmy
 from src.back.l01_domain.common import FactionRace
-from src.back.l01_domain.factions.constants import BuildingCategory, ResourceType
+from src.back.l01_domain.factions.constants import (
+    BorderTownResolutionType,
+    BuildingCategory,
+    ResourceType,
+)
+from src.back.l01_domain.factions.models.border_town import BorderTown
 from src.back.l01_domain.factions.models.buildings import Building, ConstructedBuilding
+from src.back.l01_domain.factions.models.garrison import Garrison
 from src.back.l01_domain.maps.constants import TerritoryZoneType
 from src.back.l01_domain.maps.models.strategic import HexCoordinates
 from src.back.l01_domain.world.models.battleground import BattlefieldLootSite
 from src.back.l01_domain.world.models.state import WorldState
+from src.back.l02_services.mechanics.settlements.facade import SettlementsFacade
 from src.back.l02_services.turns.strategic.orchestrator import (
     StrategicTurnOrchestrator,
 )
@@ -255,3 +262,87 @@ class TestStrategicLifecycleE2E:
         # Трофеи истлели за 1 такт и были удалены из реестра мира
         assert loot_site.id in report_t5.events_report.decayed_battlefield_ids
         assert world.get_battlefield_at(neutral_hex) is None
+
+
+class TestBorderTownRazingE2E:
+    """
+    Разрушение пограничного города через полный конвейер такта: армия
+    победителя стоит на месте три такта и освобождается только на третьем.
+    """
+
+    @pytest.mark.asyncio
+    async def test_razing_holds_the_army_for_three_ticks(
+        self, human_faction, orc_faction, fake_bus
+    ):
+        orchestrator = StrategicTurnOrchestrator(event_bus=fake_bus)
+        border_towns = SettlementsFacade(event_bus=fake_bus)
+
+        world = WorldState()
+        world.add_faction(human_faction)
+        world.add_faction(orc_faction)
+
+        # Пограничный город людей, чей гарнизон уже выбит подчистую
+        town_hex = HexCoordinates.from_axial(3, -5)
+        town = BorderTown(
+            faction_id=human_faction.id, name="Врата висельников", center_hex=town_hex
+        )
+        town.register_investment({ResourceType.GOLD: 800.0})
+        human_faction.add_border_town(town)
+        human_faction.gain_zone(town.zone_id)
+        world.add_garrison(
+            Garrison(
+                zone_id=town.zone_id,
+                faction_id=human_faction.id,
+                hex_coordinates=town_hex,
+            )
+        )
+
+        # Орки взяли город штурмом и стоят на его гексе
+        horde = StrategicArmy(
+            faction_id=orc_faction.id, name="Орда", current_hex=town_hex
+        )
+        world.add_army(horde)
+
+        orc_gold_before = orc_faction.resources[ResourceType.GOLD]
+
+        await border_towns.initiate_town_resolution(
+            world_state=world,
+            town_id=town.id,
+            army_id=horde.id,
+            resolution_type=BorderTownResolutionType.RAZE,
+        )
+
+        # =========================================================================
+        # ТАКТЫ 1-2: город еще стоит, армия прикована к его гексу
+        # =========================================================================
+
+        for _ in range(2):
+            report = await orchestrator.execute_turn(world)
+
+            assert report.border_town_report.razed_town_ids == []
+            assert horde.is_busy_with_operation
+            assert human_faction.get_border_town(town.id) is town
+            assert world.get_garrison(town.zone_id).militia_squads == [], (
+                "город в процессе разорения ополчения не поднимает"
+            )
+
+        # =========================================================================
+        # ТАКТ 3: город сгорает, армия свободна, добыча в казне орков
+        # =========================================================================
+
+        final_report = await orchestrator.execute_turn(world)
+
+        assert final_report.border_town_report.razed_town_ids == [town.id]
+        assert final_report.border_town_report.released_army_ids == [horde.id]
+        assert not horde.is_busy_with_operation
+
+        assert human_faction.border_towns == []
+        assert world.get_garrison(town.zone_id) is None
+        assert town_hex in world.neutral_hexes
+
+        orc_tax = sum(
+            report.tax_income_gold
+            for report in final_report.economy_reports.values()
+            if report.faction_id == orc_faction.id
+        )
+        assert orc_faction.resources[ResourceType.GOLD] >= orc_gold_before + 400.0 - orc_tax

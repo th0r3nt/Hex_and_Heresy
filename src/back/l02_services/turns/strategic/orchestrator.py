@@ -9,6 +9,7 @@ from src.back.l01_domain.protocols.gamedata import GameDataRepositoryProtocol
 from src.back.l01_domain.world.models.reports import GlobalTurnReport
 from src.back.l01_domain.world.models.state import WorldState
 from src.back.l02_services.mechanics.diplomacy.facade import DiplomacyFacade
+from src.back.l02_services.mechanics.settlements.facade import SettlementsFacade
 from src.back.l02_services.turns.strategic.economy import StrategicEconomyService
 from src.back.l02_services.turns.strategic.garrison import GarrisonService
 from src.back.l02_services.turns.strategic.veterancy import StrategicVeterancyService
@@ -26,7 +27,7 @@ class StrategicTurnOrchestrator:
     """
     Главный оркестратор глобального хода.
     Строго последовательно выполняет конвейер:
-    [1. События и время] -> [1.7. Гарнизоны] -> [2. Экспедиции] -> [3. Экономика и содержание] -> [4. Передвижения] -> [4.5. Дипломатия] -> [5. Итоговый отчет].
+    [1. События и время] -> [1.6. Судьба взятых городов] -> [1.7. Гарнизоны] -> [2. Экспедиции] -> [3. Экономика и содержание] -> [4. Передвижения] -> [4.5. Дипломатия] -> [5. Итоговый отчет].
     """
 
     def __init__(
@@ -35,6 +36,7 @@ class StrategicTurnOrchestrator:
         economy_service: Optional[StrategicEconomyService] = None,
         movement_service: Optional[StrategicMovementService] = None,
         garrison_service: Optional[GarrisonService] = None,
+        settlements_facade: Optional[SettlementsFacade] = None,
         expedition_service: Optional[ExpeditionWorkerService] = None,
         veterancy_service: Optional[StrategicVeterancyService] = None,
         diplomacy_facade: Optional[DiplomacyFacade] = None,
@@ -53,6 +55,11 @@ class StrategicTurnOrchestrator:
         # Гарнизонам каталог нужен, чтобы поднять расовое ополчение из ростера
         self._garrison_service = garrison_service or GarrisonService(
             gamedata=gamedata, event_bus=event_bus
+        )
+        # Города, взятые штурмом: фасад один и тот же и для приказов игрока,
+        # и для шага такта - состояние операций живет в самом мире
+        self._settlements_facade = settlements_facade or SettlementsFacade(
+            event_bus=event_bus
         )
         self._expedition_service = expedition_service or ExpeditionWorkerService(
             event_bus=event_bus
@@ -87,6 +94,13 @@ class StrategicTurnOrchestrator:
             )
         )
 
+        # Шаг 1.6. Судьба взятых пограничных городов: сожжение, разграбление
+        # и захват. Идет до гарнизонов и экономики, чтобы добыча победителя и
+        # перешедшие к нему земли учитывались уже в этом такте.
+        border_town_report = await self._settlements_facade.process_town_resolutions(
+            world_state
+        )
+
         # Шаг 1.7. Гарнизоны земель: подъем ополчения под уровень зданий и
         # восполнение его потерь. Идет до экономики: содержание гарнизонов
         # списывается уже с обновленным составом.
@@ -113,6 +127,7 @@ class StrategicTurnOrchestrator:
         final_report = GlobalTurnReport(
             events_report=events_report,
             garrison_report=garrison_report,
+            border_town_report=border_town_report,
             economy_reports=economy_reports,
             movement_report=movement_report,
             diplomacy_report=diplomacy_report,

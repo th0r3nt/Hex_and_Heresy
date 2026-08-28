@@ -10,6 +10,10 @@ from src.back.l01_domain.army.models.characters.commanders import Commander
 from src.back.l01_domain.army.models.characters.heroes import Hero
 from src.back.l01_domain.army.models.card.equipment import Equipment
 from src.back.l01_domain.army.models.strategic import StrategicArmy
+from src.back.l01_domain.factions.models.border_town import (
+    BorderTown,
+    BorderTownOperation,
+)
 from src.back.l01_domain.factions.models.diplomacy.messengers import (
     Ambassador,
     Dispatch,
@@ -78,6 +82,15 @@ class WorldState(BaseModel):
     active_battle_garrisons: dict[str, list[str]] = Field(
         default_factory=dict,
         description="battle_id -> zone_id[], гарнизоны, чей состав заморожен идущим боем",
+    )
+
+    border_town_operations: dict[str, BorderTownOperation] = Field(
+        default_factory=dict,
+        description=(
+            "Активные операции разрушения, разграбления и захвата пограничных "
+            "городов: town_id -> BorderTownOperation. Ключ - сам город, поэтому "
+            "два войска не могут разорять одно поселение одновременно"
+        ),
     )
 
     worker_assignments: dict[str, WorkerAssignment] = Field(
@@ -282,6 +295,35 @@ class WorldState(BaseModel):
             if garrison is not None:
                 garrison.is_locked_in_battle = False
         return zone_ids
+
+    # ==================================================================
+    # ПОГРАНИЧНЫЕ ГОРОДА И ОПЕРАЦИИ НАД НИМИ
+    # ==================================================================
+
+    def find_border_town(self, town_id: str) -> Optional[tuple[Faction, BorderTown]]:
+        """
+        Ищет город по всей карте вместе с его нынешним владельцем.
+
+        Судьбу побежденного поселения решает чужая армия, и заранее она
+        знает только идентификатор города - но не то, чей он.
+        """
+        for faction in self.factions.values():
+            town = faction.get_border_town(town_id)
+            if town is not None:
+                return faction, town
+        return None
+
+    def add_border_town_operation(self, operation: BorderTownOperation) -> None:
+        """Ставит город в очередь на разорение. На город - одна операция."""
+        self.border_town_operations[operation.town_id] = operation
+
+    def get_town_operation(self, town_id: str) -> Optional[BorderTownOperation]:
+        """Операция, которая идет над городом прямо сейчас."""
+        return self.border_town_operations.get(town_id)
+
+    def remove_town_operation(self, town_id: str) -> Optional[BorderTownOperation]:
+        """Снимает операцию с города - она отработала или отменена."""
+        return self.border_town_operations.pop(town_id, None)
 
     # ==================================================================
     # МЕТОДЫ УПРАВЛЕНИЯ НАЗНАЧЕНИЯМИ РАБОЧИХ

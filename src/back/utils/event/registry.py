@@ -82,6 +82,12 @@ class EconomyEvents(str, Enum):
     BORDER_TOWN_UPGRADED = "economy.border_town_upgraded"
     BORDER_TOWN_LAND_CLAIMED = "economy.border_town_land_claimed"
 
+    # Судьба побежденного пограничного города
+    BORDER_TOWN_RESOLUTION_STARTED = "economy.border_town_resolution_started"
+    BORDER_TOWN_RAZED = "economy.border_town_razed"
+    BORDER_TOWN_PILLAGED = "economy.border_town_pillaged"
+    BORDER_TOWN_OCCUPIED = "economy.border_town_occupied"
+
     # Налоги и настроения подданных
     TAXES_COLLECTED = "economy.taxes_collected"
     TAX_RATE_CHANGED = "economy.tax_rate_changed"

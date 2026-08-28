@@ -32,7 +32,7 @@ from src.back.l01_domain.maps.models.strategic import (
     hex_zone_id,
 )
 from src.back.l01_domain.world.models.state import WorldState
-from src.back.l02_services.mechanics.settlements.border_towns import BorderTownService
+from src.back.l02_services.mechanics.settlements.facade import SettlementsFacade
 from src.back.l02_services.turns.strategic.economy import StrategicEconomyService
 from src.back.l02_services.turns.strategic.garrison import GarrisonService
 from src.back.utils.event.registry import GameEvents
@@ -61,8 +61,8 @@ def world(human_faction: Faction) -> WorldState:
 
 
 @pytest.fixture
-def service(fake_bus) -> BorderTownService:
-    return BorderTownService(event_bus=fake_bus)
+def service(fake_bus) -> SettlementsFacade:
+    return SettlementsFacade(event_bus=fake_bus)
 
 
 # ==================================================================
@@ -71,7 +71,7 @@ def service(fake_bus) -> BorderTownService:
 
 
 async def test_founding_charges_the_treasury_and_takes_the_hex(
-    service: BorderTownService, world: WorldState, human_faction: Faction, fake_bus
+    service: SettlementsFacade, world: WorldState, human_faction: Faction, fake_bus
 ):
     """
     Основание списывает полную стоимость, забирает гекс из Ничьей земли
@@ -103,7 +103,7 @@ async def test_founding_charges_the_treasury_and_takes_the_hex(
 
 
 async def test_empty_treasury_leaves_the_map_untouched(
-    service: BorderTownService, world: WorldState, human_faction: Faction
+    service: SettlementsFacade, world: WorldState, human_faction: Faction
 ):
     """
     Не хватило ресурсов - города нет и гекс остается нейтральным:
@@ -124,7 +124,7 @@ async def test_empty_treasury_leaves_the_map_untouched(
 
 
 async def test_second_town_on_the_same_hex_is_refused(
-    service: BorderTownService, world: WorldState, human_faction: Faction
+    service: SettlementsFacade, world: WorldState, human_faction: Faction
 ):
     """Гекс, занятый своим же городом, под второе поселение не годится."""
     await service.found_border_town(
@@ -146,7 +146,7 @@ async def test_second_town_on_the_same_hex_is_refused(
 
 
 async def test_town_is_not_founded_under_a_foreign_army(
-    service: BorderTownService, world: WorldState, human_faction: Faction
+    service: SettlementsFacade, world: WorldState, human_faction: Faction
 ):
     """Под носом у чужого войска обоз с поселенцами не разгрузить."""
     world.add_army(
@@ -168,7 +168,7 @@ async def test_town_is_not_founded_under_a_foreign_army(
 
 
 async def test_unknown_faction_cannot_found_a_town(
-    service: BorderTownService, world: WorldState
+    service: SettlementsFacade, world: WorldState
 ):
     """Приказ от несуществующей фракции - доменная ошибка, а не молчание."""
     with pytest.raises(FactionNotFoundError):
@@ -186,7 +186,7 @@ async def test_unknown_faction_cannot_found_a_town(
 
 
 async def test_upgrade_charges_the_level_price(
-    service: BorderTownService, world: WorldState, human_faction: Faction
+    service: SettlementsFacade, world: WorldState, human_faction: Faction
 ):
     """Апгрейд списывает цену целевого уровня и открывает новый слот."""
     town = await service.found_border_town(
@@ -210,7 +210,7 @@ async def test_upgrade_charges_the_level_price(
 
 
 async def test_upgrade_of_unknown_town_is_refused(
-    service: BorderTownService, world: WorldState, human_faction: Faction
+    service: SettlementsFacade, world: WorldState, human_faction: Faction
 ):
     """Несуществующий город улучшить нельзя."""
     with pytest.raises(BorderTownNotFoundError):
@@ -220,7 +220,7 @@ async def test_upgrade_of_unknown_town_is_refused(
 
 
 async def test_failed_upgrade_keeps_the_gold(
-    service: BorderTownService, world: WorldState, human_faction: Faction
+    service: SettlementsFacade, world: WorldState, human_faction: Faction
 ):
     """
     Без денег на апгрейд город остается прежним, а казна - нетронутой.
@@ -248,7 +248,7 @@ async def test_failed_upgrade_keeps_the_gold(
 
 
 async def test_claimed_land_gets_a_hall_and_joins_the_faction(
-    service: BorderTownService, world: WorldState, human_faction: Faction
+    service: SettlementsFacade, world: WorldState, human_faction: Faction
 ):
     """
     Выкупленная земля переходит под контроль фракции вместе с ратушей -
@@ -280,7 +280,7 @@ async def test_claimed_land_gets_a_hall_and_joins_the_faction(
 
 
 async def test_only_adjacent_land_is_for_sale(
-    service: BorderTownService, world: WorldState, human_faction: Faction
+    service: SettlementsFacade, world: WorldState, human_faction: Faction
 ):
     """Землю через гекс от города не выкупить, а казна остается целой."""
     town = await service.found_border_town(
@@ -304,7 +304,7 @@ async def test_only_adjacent_land_is_for_sale(
 
 
 async def test_town_stops_at_four_lands(
-    service: BorderTownService, world: WorldState, human_faction: Faction
+    service: SettlementsFacade, world: WorldState, human_faction: Faction
 ):
     """Пятую землю город не выкупит, сколько бы золота ни лежало в казне."""
     town = await service.found_border_town(
@@ -341,7 +341,7 @@ async def test_town_stops_at_four_lands(
 
 
 async def test_town_income_reaches_the_treasury_on_the_next_tick(
-    service: BorderTownService, world: WorldState, human_faction: Faction
+    service: SettlementsFacade, world: WorldState, human_faction: Faction
 ):
     """
     Подушный сбор с города приходит в казну обычным экономическим шагом,
@@ -364,7 +364,7 @@ async def test_town_income_reaches_the_treasury_on_the_next_tick(
 
 
 async def test_town_and_its_lands_raise_their_own_garrisons(
-    service: BorderTownService, world: WorldState, human_faction: Faction
+    service: SettlementsFacade, world: WorldState, human_faction: Faction
 ):
     """
     Город - такой же административный центр, как цитадель: на ближайшем
@@ -395,7 +395,7 @@ async def test_town_and_its_lands_raise_their_own_garrisons(
 
 
 async def test_upgraded_town_holds_a_bigger_militia(
-    service: BorderTownService, world: WorldState, human_faction: Faction
+    service: SettlementsFacade, world: WorldState, human_faction: Faction
 ):
     """Апгрейд города открывает слот ополчения - земля поднимает еще отряд."""
     town = await service.found_border_town(
@@ -417,7 +417,7 @@ async def test_upgraded_town_holds_a_bigger_militia(
 
 
 async def test_lost_town_hex_takes_its_garrisons_off_the_map(
-    service: BorderTownService, world: WorldState, human_faction: Faction
+    service: SettlementsFacade, world: WorldState, human_faction: Faction
 ):
     """
     Взятый врагом город исчезает вместе со своими землями, а такт снимает

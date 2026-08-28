@@ -11,6 +11,7 @@ from src.back.l01_domain.world.models.reports import GlobalTurnReport
 from src.back.l04_api.dependencies import Turns, World
 from src.back.l04_api.http.schemas.common import OperationResult
 from src.back.l04_api.http.schemas.strategic import (
+    BorderTownOperationResponse,
     BorderTownResponse,
     ClaimBorderLandRequest,
     ExpeditionRequest,
@@ -18,6 +19,7 @@ from src.back.l04_api.http.schemas.strategic import (
     GarrisonResponse,
     MarchOrderRequest,
     MarchOrderResponse,
+    ResolveBorderTownRequest,
     SetTaxRateRequest,
     StationSquadRequest,
     TaxRateResponse,
@@ -199,6 +201,52 @@ async def list_border_towns(
     """
     towns = turns.list_border_towns(world_state=world, faction_id=faction_id)
     return [BorderTownResponse.from_border_town(town) for town in towns]
+
+
+# ====================================================
+# Судьба побежденного пограничного города
+# ====================================================
+
+
+@router.post(
+    "/border-towns/{town_id}/resolve", response_model=BorderTownOperationResponse
+)
+async def resolve_border_town(
+    town_id: str, payload: ResolveBorderTownRequest, turns: Turns, world: World
+) -> BorderTownOperationResponse:
+    """
+    Решает судьбу взятого штурмом города: сжечь, разграбить, занять или
+    пройти мимо.
+
+    Разрушение, разграбление и захват занимают 2-3 такта, и все это время
+    армия победителя стоит лагерем на гексе города. Пропуск не занимает
+    ничего: в ответе на него операции не будет.
+    """
+    operation = await turns.resolve_border_town(
+        world_state=world,
+        town_id=town_id,
+        army_id=payload.army_id,
+        resolution_type=payload.resolution_type,
+    )
+    if operation is None:
+        return BorderTownOperationResponse.idle(town_id)
+    return BorderTownOperationResponse.from_operation(operation)
+
+
+@router.get(
+    "/border-towns/{town_id}/operation", response_model=BorderTownOperationResponse
+)
+async def get_border_town_operation(
+    town_id: str, turns: Turns, world: World
+) -> BorderTownOperationResponse:
+    """
+    Прогресс операции над городом для окна осады: сколько тактов осталось
+    и что достанется победителю.
+    """
+    operation = turns.get_border_town_operation(world_state=world, town_id=town_id)
+    if operation is None:
+        return BorderTownOperationResponse.idle(town_id)
+    return BorderTownOperationResponse.from_operation(operation)
 
 
 # ====================================================

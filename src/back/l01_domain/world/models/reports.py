@@ -68,6 +68,33 @@ class GarrisonStepReport(BaseModel):
     )
 
 
+class BorderTownResolutionStepReport(BaseModel):
+    """
+    Отчет о шаге операций над побежденными пограничными городами за такт.
+
+    Городов в списках может не быть вовсе: операция длится 2-3 такта и все
+    это время идет молча, а в отчет попадает только в такт своего конца.
+    """
+
+    completed_operation_ids: list[str] = Field(
+        default_factory=list,
+        description="Операции, отработавшие свой срок на этом такте",
+    )
+    razed_town_ids: list[str] = Field(
+        default_factory=list, description="Города, стертые с карты вместе с землями"
+    )
+    pillaged_town_ids: list[str] = Field(
+        default_factory=list, description="Разграбленные города, оставшиеся у хозяина"
+    )
+    occupied_town_ids: list[str] = Field(
+        default_factory=list, description="Города, перешедшие к захватчику"
+    )
+    released_army_ids: list[str] = Field(
+        default_factory=list,
+        description="Армии победителя, освободившиеся с гекса города",
+    )
+
+
 class DiplomacyTickReport(BaseModel):
     """
     Отчет о дипломатическом шаге такта: логистика гонцов и послов, судьба пактов.
@@ -89,6 +116,9 @@ class GlobalTurnReport(BaseModel):
 
     events_report: EventsStepReport = Field(...)
     garrison_report: GarrisonStepReport = Field(default_factory=GarrisonStepReport)
+    border_town_report: BorderTownResolutionStepReport = Field(
+        default_factory=BorderTownResolutionStepReport
+    )
     economy_reports: dict[str, FactionEconomyReport] = Field(default_factory=dict)
     movement_report: MovementStepReport = Field(...)
     diplomacy_report: DiplomacyTickReport = Field(default_factory=DiplomacyTickReport)

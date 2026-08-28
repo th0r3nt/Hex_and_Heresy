@@ -15,7 +15,11 @@ from src.back.l01_domain.exceptions.factions import (
 )
 from src.back.l01_domain.exceptions.workers import InvalidAssignmentTargetError
 from src.back.l01_domain.exceptions.world import NoArmiesLockedForBattleError
-from src.back.l01_domain.factions.models.border_town import BorderTown
+from src.back.l01_domain.factions.constants import BorderTownResolutionType
+from src.back.l01_domain.factions.models.border_town import (
+    BorderTown,
+    BorderTownOperation,
+)
 from src.back.l01_domain.factions.models.faction import Faction
 from src.back.l01_domain.factions.models.garrison import Garrison
 from src.back.l01_domain.factions.models.workers import WorkerAssignment
@@ -24,9 +28,7 @@ from src.back.l01_domain.protocols.events import EventBusProtocol
 from src.back.l01_domain.protocols.gamedata import GameDataRepositoryProtocol
 from src.back.l01_domain.world.models.reports import GlobalTurnReport
 from src.back.l01_domain.world.models.state import WorldState
-from src.back.l02_services.mechanics.settlements.border_towns import (
-    BorderTownService,
-)
+from src.back.l02_services.mechanics.settlements.facade import SettlementsFacade
 from src.back.l02_services.turns.strategic.garrison import GarrisonService
 from src.back.l02_services.turns.strategic.orchestrator import (
     StrategicTurnOrchestrator,
@@ -64,7 +66,7 @@ class TurnsFacade:
         self._stationary_workers = StationaryWorkerService(event_bus=event_bus)
         self._expedition_workers = ExpeditionWorkerService(event_bus=event_bus)
         self._garrisons = GarrisonService(gamedata=gamedata, event_bus=event_bus)
-        self._border_towns = BorderTownService(event_bus=event_bus)
+        self._settlements = SettlementsFacade(event_bus=event_bus)
 
     # ==================================================================
     # ПРИКАЗЫ ИГРОКА НА ГЛОБАЛЬНОЙ КАРТЕ
@@ -87,6 +89,10 @@ class TurnsFacade:
             raise InvalidAssignmentTargetError(army_id, "армия не найдена")
         if army.is_in_tactical_battle:
             raise InvalidAssignmentTargetError(army_id, "армия связана тактическим боем")
+        if army.is_busy_with_operation:
+            raise InvalidAssignmentTargetError(
+                army_id, "армия занята операцией над взятым городом"
+            )
 
         army.target_hex = target_hex
         army.planned_path = hex_line(army.current_hex, target_hex)[1:]
@@ -181,7 +187,7 @@ class TurnsFacade:
         """
         Основывает пограничный город на свободном гексе карты.
         """
-        return await self._border_towns.found_border_town(
+        return await self._settlements.found_border_town(
             world_state=world_state,
             faction_id=faction_id,
             target_hex=target_hex,
@@ -197,7 +203,7 @@ class TurnsFacade:
         """
         Поднимает пограничный город на уровень выше.
         """
-        return await self._border_towns.upgrade_border_town(
+        return await self._settlements.upgrade_border_town(
             world_state=world_state,
             faction_id=faction_id,
             town_id=town_id,
@@ -213,7 +219,7 @@ class TurnsFacade:
         """
         Выкупает городу смежную землю и ставит на ней ратушу.
         """
-        return await self._border_towns.claim_border_land(
+        return await self._settlements.claim_border_land(
             world_state=world_state,
             faction_id=faction_id,
             town_id=town_id,
@@ -226,8 +232,39 @@ class TurnsFacade:
         """
         Все пограничные города фракции для окна управления державой.
         """
-        return self._border_towns.list_border_towns(
+        return self._settlements.list_border_towns(
             world_state=world_state, faction_id=faction_id
+        )
+
+    async def resolve_border_town(
+        self,
+        world_state: WorldState,
+        town_id: str,
+        army_id: str,
+        resolution_type: BorderTownResolutionType,
+    ) -> Optional[BorderTownOperation]:
+        """
+        Решает судьбу взятого штурмом города: сжечь, разграбить, занять или
+        пройти мимо.
+
+        Возвращает заведенную операцию либо None, если победитель прошел
+        мимо: за пропуском ждать нечего, армия свободна тем же тактом.
+        """
+        return await self._settlements.initiate_town_resolution(
+            world_state=world_state,
+            town_id=town_id,
+            army_id=army_id,
+            resolution_type=resolution_type,
+        )
+
+    def get_border_town_operation(
+        self, world_state: WorldState, town_id: str
+    ) -> Optional[BorderTownOperation]:
+        """
+        Прогресс операции над городом для окна осады. None - город не разоряют.
+        """
+        return self._settlements.get_town_operation(
+            world_state=world_state, town_id=town_id
         )
 
     # ==================================================================
@@ -301,11 +338,10 @@ class TurnsFacade:
         Выполняет один тактический раунд (30 секунд) для боя battle_state.
 
         Собирает отряды/полководцев/героев из армий, закреплённых за этим
-        боем в world_state.active_battle_armies (см. WorldState.
-        lock_armies_for_battle) - те же самые объекты Squad/Commander/Hero,
+        боем в world_state.active_battle_armies - 
+        те же самые объекты Squad/Commander/Hero,
         что лежат в StrategicArmy, а не их копии. Это критично для
-        персистентности счётчика ветеранства (см.
-        VeterancyStatus.accumulate_kills) - если бы сюда передавалась копия,
+        персистентности счётчика ветеранства - если бы сюда передавалась копия,
         accumulated_kill_weight неявно обнулялся бы после каждого боя.
 
         Если бой идет на гексе с гарнизоном (цитадель, город или союзная

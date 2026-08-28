@@ -3,10 +3,13 @@
 налоги, пограничные города и гарнизоны земель.
 """
 
+from typing import Optional
+
 from pydantic import BaseModel, Field
 
 from src.back.l01_domain.army.models.card.squad import Squad
 from src.back.l01_domain.factions.constants import (
+    BorderTownResolutionType,
     GARRISON_FOOD_UPKEEP_DISCOUNT_RATIO,
     MAX_BORDER_TOWN_ALLIED_LANDS,
     MAX_BORDER_TOWN_LEVEL,
@@ -16,7 +19,10 @@ from src.back.l01_domain.factions.constants import (
     ResourceType,
     TaxPolicyBand,
 )
-from src.back.l01_domain.factions.models.border_town import BorderTown
+from src.back.l01_domain.factions.models.border_town import (
+    BorderTown,
+    BorderTownOperation,
+)
 from src.back.l01_domain.factions.models.faction import Faction
 from src.back.l01_domain.factions.models.garrison import Garrison
 from src.back.l01_domain.maps.models.strategic import HexCoordinates
@@ -190,6 +196,73 @@ class BorderTownResponse(BaseModel):
             free_land_slots=town.free_land_slots,
             building_slots=town.building_slots,
             invested_resources=dict(town.invested_resources),
+        )
+
+
+# ====================================================
+# Судьба побежденного пограничного города
+# ====================================================
+
+
+class ResolveBorderTownRequest(BaseModel):
+    """
+    Решение победителя о судьбе взятого города. Сам город задан town_id в пути.
+    """
+
+    army_id: str = Field(
+        ..., min_length=1, description="Армия победителя, стоящая на гексе города"
+    )
+    resolution_type: BorderTownResolutionType = Field(
+        ..., description="Сжечь, разграбить, занять или пройти мимо"
+    )
+
+
+class BorderTownOperationResponse(BaseModel):
+    """
+    Состояние операции над городом: то, что рисует окно взятого поселения.
+
+    Пустой operation_id означает, что города никто не разоряет: победитель
+    прошел мимо либо ничего еще не решил.
+    """
+
+    operation_id: Optional[str] = Field(
+        default=None, description="Идентификатор идущей операции, если она есть"
+    )
+    town_id: str = Field(...)
+    resolution_type: BorderTownResolutionType = Field(...)
+    ticks_remaining: int = Field(
+        ..., ge=0, description="Сколько тактов осталось до наступления последствий"
+    )
+    estimated_loot: dict[ResourceType, float] = Field(
+        default_factory=dict,
+        description="Что уйдет в казну победителя, когда операция завершится",
+    )
+
+    @classmethod
+    def from_operation(
+        cls, operation: BorderTownOperation
+    ) -> "BorderTownOperationResponse":
+        """Ответ по идущей операции - вместе с ее обратным отсчетом."""
+        return cls(
+            operation_id=operation.id,
+            town_id=operation.town_id,
+            resolution_type=operation.resolution_type,
+            ticks_remaining=operation.ticks_remaining,
+            estimated_loot=operation.loot,
+        )
+
+    @classmethod
+    def idle(cls, town_id: str) -> "BorderTownOperationResponse":
+        """
+        Ответ по городу, над которым ничего не происходит.
+
+        Это ровно тот же исход, что и осознанный пропуск, поэтому и тип
+        резолюции у него тот же - IGNORE.
+        """
+        return cls(
+            town_id=town_id,
+            resolution_type=BorderTownResolutionType.IGNORE,
+            ticks_remaining=0,
         )
 
 

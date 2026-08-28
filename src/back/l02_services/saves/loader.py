@@ -133,6 +133,42 @@ class WorldStateLoader:
                     "несуществующим боем: лок снят."
                 )
 
+        # Операции над взятыми городами - законное состояние партии и живут
+        # дальше, а вот привязка к операции, которой в реестре уже нет,
+        # приковала бы армию к гексу навсегда
+        live_operation_ids = {
+            operation.id for operation in world_state.border_town_operations.values()
+        }
+        for army in world_state.armies.values():
+            if (
+                army.is_busy_with_operation
+                and army.active_operation_id not in live_operation_ids
+            ):
+                army.release_from_operation()
+                main_logger.warning(
+                    f"Армия '{army.id}' была привязана к несуществующей операции "
+                    "над городом: лок снят."
+                )
+
+        # Замороженными остаются только земли тех городов, над которыми
+        # операция и правда идет
+        besieged_zone_ids = set()
+        for town_id in world_state.border_town_operations:
+            found = world_state.find_border_town(town_id)
+            if found is not None:
+                besieged_zone_ids.add(found[1].zone_id)
+
+        for garrison in world_state.garrisons.values():
+            if (
+                garrison.is_locked_in_resolution
+                and garrison.zone_id not in besieged_zone_ids
+            ):
+                garrison.is_locked_in_resolution = False
+                main_logger.warning(
+                    f"Гарнизон земли '{garrison.zone_id}' был заморожен "
+                    "несуществующей операцией над городом: лок снят."
+                )
+
         world_state.cleanup_expired_events()
         world_state.cleanup_depleted_battlefields()
         world_state.cleanup_completed_assignments()

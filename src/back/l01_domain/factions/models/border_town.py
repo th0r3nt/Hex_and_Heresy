@@ -13,6 +13,11 @@ BorderTown - пограничный город: отдельное поселе�
 Модель держит только свои инварианты (уровень, смежность и лимит земель).
 Вопросы "свободен ли гекс" и "хватит ли казны" решает сервисный слой:
 доменная модель карты мира не видит.
+
+Здесь же лежит BorderTownOperation - то, что победитель делает с городом,
+чей гарнизон выбит подчистую: разрушение, разграбление или захват. Операция
+занимает несколько глобальных тактов, поэтому она не мгновенное действие, а
+живущий в мире объект со своим обратным отсчетом.
 """
 
 from uuid import uuid4
@@ -27,10 +32,13 @@ from src.back.l01_domain.exceptions.factions import (
 from src.back.l01_domain.factions.constants import (
     BORDER_TOWN_BASE_BUILDING_SLOTS,
     BORDER_TOWN_BUILDING_SLOTS_PER_LEVEL,
+    BORDER_TOWN_RESOLUTION_TICKS,
+    BorderTownResolutionType,
     MAX_BORDER_TOWN_ALLIED_LANDS,
     MAX_BORDER_TOWN_LEVEL,
     MIN_BORDER_TOWN_LEVEL,
     ResourceType,
+    border_town_resolution_loot,
 )
 from src.back.l01_domain.maps.models.strategic import (
     HexCoordinates,
@@ -179,3 +187,123 @@ class BorderTown(BaseModel):
             self.invested_resources[resource] = (
                 self.invested_resources.get(resource, 0.0) + amount
             )
+
+    # ==================================================================
+    # ПОСЛЕДСТВИЯ ПОРАЖЕНИЯ
+    # ==================================================================
+
+    def downgrade(self, levels: int) -> int:
+        """
+        Отбрасывает город на levels уровней вниз - последствие разграбления
+        или захвата.
+
+        Ниже первого уровня город не падает: даже разоренное поселение
+        остается поселением, пока стоит хоть один дом. Возвращает, на сколько
+        уровней город просел на самом деле.
+        """
+        if levels <= 0:
+            return 0
+
+        previous_level = self.level
+        self.level = max(MIN_BORDER_TOWN_LEVEL, self.level - levels)
+        return previous_level - self.level
+
+    def transfer_ownership(self, new_faction_id: str) -> None:
+        """
+        Передает город новому хозяину.
+
+        Земли и ратуши города перевешивает на нового владельца сервис: сам
+        агрегат о списках фракций не знает и знать не должен.
+        """
+        self.faction_id = new_faction_id
+
+
+# ==================================================================
+# ОПЕРАЦИЯ НАД ПОБЕЖДЕННЫМ ГОРОДОМ
+# ==================================================================
+
+
+class BorderTownOperation(BaseModel):
+    """
+    Начатая победителем операция над городом: сожжение, разграбление
+    или захват.
+
+    Пока операция идет, армия захватчика стоит на гексе города и ничем
+    другим не занята, а сам город не может ни отбиться, ни нанять войск.
+    Эффект наступает разом в такте, когда отсчет доходит до нуля.
+    """
+
+    id: str = Field(default_factory=lambda: str(uuid4()))
+
+    town_id: str = Field(..., min_length=1, description="Город, над которым идет работа")
+    army_id: str = Field(..., min_length=1, description="Армия победителя, занятая операцией")
+
+    conqueror_faction_id: str = Field(..., min_length=1, description="Кто взял город")
+    original_faction_id: str = Field(..., min_length=1, description="Кому город принадлежал")
+
+    resolution_type: BorderTownResolutionType = Field(...)
+
+    ticks_total: int = Field(..., ge=0, description="Сколько тактов операция длится всего")
+    ticks_remaining: int = Field(..., ge=0, description="Сколько тактов осталось до эффекта")
+
+    snapshot_invested_resources: dict[ResourceType, float] = Field(
+        default_factory=dict,
+        description=(
+            "Снимок вложений города на момент начала операции. Считается один раз: "
+            "добыча не должна меняться от того, что творится в городе эти два-три такта"
+        ),
+    )
+
+    # ==================================================================
+    # РАСЧЕТНЫЕ СВОЙСТВА
+    # ==================================================================
+
+    @property
+    def loot(self) -> dict[ResourceType, float]:
+        """Что достанется казне захватчика, когда операция завершится."""
+        return border_town_resolution_loot(
+            self.resolution_type, self.snapshot_invested_resources
+        )
+
+    @property
+    def is_finished(self) -> bool:
+        """Отсчет дошел до нуля - пора применять эффект."""
+        return self.ticks_remaining <= 0
+
+    # ==================================================================
+    # ХОД ОПЕРАЦИИ
+    # ==================================================================
+
+    @classmethod
+    def start(
+        cls,
+        town: "BorderTown",
+        army_id: str,
+        conqueror_faction_id: str,
+        resolution_type: BorderTownResolutionType,
+    ) -> "BorderTownOperation":
+        """
+        Заводит операцию над городом: длительность берется из таблицы, а
+        вложения города тут же уходят в снимок.
+        """
+        ticks = BORDER_TOWN_RESOLUTION_TICKS.get(resolution_type, 0)
+        return cls(
+            town_id=town.id,
+            army_id=army_id,
+            conqueror_faction_id=conqueror_faction_id,
+            original_faction_id=town.faction_id,
+            resolution_type=resolution_type,
+            ticks_total=ticks,
+            ticks_remaining=ticks,
+            snapshot_invested_resources=dict(town.invested_resources),
+        )
+
+    def advance(self) -> bool:
+        """
+        Прожигает один глобальный такт операции.
+
+        Возвращает True, если после этого такта операцию пора применять.
+        """
+        if self.ticks_remaining > 0:
+            self.ticks_remaining -= 1
+        return self.is_finished

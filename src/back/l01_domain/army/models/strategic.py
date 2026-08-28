@@ -44,12 +44,29 @@ class StrategicArmy(BaseModel):
         ),
     )
 
+    active_operation_id: Optional[str] = Field(
+        default=None,
+        description=(
+            "Армия занята операцией над побежденным пограничным городом "
+            "(сожжение, разграбление, захват) и стоит на его гексе, пока та "
+            "не завершится - см. factions/models/border_town.py"
+        ),
+    )
+
     @property
     def total_units_count(self) -> int:
         """
         Суммарное число живых бойцов и героев в армии.
         """
         return sum(squad.state.unit_count for squad in self.squads) + len(self.heroes)
+
+    @property
+    def is_busy_with_operation(self) -> bool:
+        """
+        Занята ли армия операцией над городом: такая армия не марширует и
+        не получает новых приказов, пока не догорит последний такт.
+        """
+        return self.active_operation_id is not None
 
     @property
     def is_wiped_out(self) -> bool:
@@ -140,3 +157,16 @@ class StrategicArmy(BaseModel):
         Снимает пометку боя - вызывается при завершении тактического боя.
         """
         self.is_in_tactical_battle = False
+
+    def lock_in_operation(self, operation_id: str) -> None:
+        """
+        Привязывает армию к операции над городом: она встает лагерем на его
+        гексе и до конца работ ничем другим не занимается.
+        """
+        self.active_operation_id = operation_id
+
+    def release_from_operation(self) -> None:
+        """
+        Отпускает армию, когда операция над городом завершена.
+        """
+        self.active_operation_id = None

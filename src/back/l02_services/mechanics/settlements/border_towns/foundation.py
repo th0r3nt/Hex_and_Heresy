@@ -1,6 +1,6 @@
 """
-Сервис пограничных городов: основание поселения на свободном гексе,
-подъем его уровня и выкуп смежных земель.
+Рост пограничного города: основание поселения на свободном гексе, подъем
+его уровня и выкуп смежных земель.
 
 Разделение ответственности здесь такое же, как у гарнизонов: все, что
 касается самого города (потолок уровня, смежность и лимит земель), проверяет
@@ -14,11 +14,6 @@
 
 from typing import Optional
 
-from src.back.l01_domain.exceptions.factions import (
-    BorderTownNotFoundError,
-    FactionNotFoundError,
-    InvalidSettlementPlacementError,
-)
 from src.back.l01_domain.factions.constants import (
     BORDER_TOWN_FOUNDATION_COST,
     BORDER_TOWN_LAND_CLAIM_COST,
@@ -26,16 +21,21 @@ from src.back.l01_domain.factions.constants import (
 )
 from src.back.l01_domain.factions.models.border_town import BorderTown
 from src.back.l01_domain.factions.models.buildings import RegionalHall
-from src.back.l01_domain.factions.models.faction import Faction
 from src.back.l01_domain.maps.models.strategic import HexCoordinates, hex_zone_id
 from src.back.l01_domain.protocols.events import EventBusProtocol
 from src.back.l01_domain.world.models.state import WorldState
+from src.back.l02_services.mechanics.settlements.border_towns.common import (
+    assert_hex_is_free,
+    occupy_hex,
+    require_faction,
+    require_town,
+)
 from src.back.utils.event.registry import GameEvents
 
 
-class BorderTownService:
+class BorderTownFoundationService:
     """
-    Исполняет приказы игрока по пограничным городам.
+    Исполняет приказы игрока по развитию пограничных городов.
     """
 
     def __init__(self, event_bus: Optional[EventBusProtocol] = None) -> None:
@@ -58,8 +58,8 @@ class BorderTownService:
         Город встает сразу на первом уровне с двумя строительными слотами и
         без единой союзной земли: их предстоит выкупать отдельно.
         """
-        faction = self._require_faction(world_state, faction_id)
-        self._assert_hex_is_free(world_state, faction_id, target_hex)
+        faction = require_faction(world_state, faction_id)
+        assert_hex_is_free(world_state, faction_id, target_hex)
 
         faction.spend_all(BORDER_TOWN_FOUNDATION_COST)
 
@@ -72,7 +72,7 @@ class BorderTownService:
 
         faction.add_border_town(town)
         faction.gain_zone(town.zone_id)
-        self._occupy_hex(world_state, target_hex)
+        occupy_hex(world_state, target_hex)
 
         if self._event_bus is not None:
             await self._event_bus.publish(
@@ -100,8 +100,8 @@ class BorderTownService:
         Поднимает город на уровень выше: +1 строительный слот внутри стен
         и больше ополчения в его гарнизоне со следующего такта.
         """
-        faction = self._require_faction(world_state, faction_id)
-        town = self._require_town(faction, town_id)
+        faction = require_faction(world_state, faction_id)
+        town = require_town(faction, town_id)
 
         town.assert_can_upgrade()
         cost = border_town_upgrade_cost(town.level + 1)
@@ -139,10 +139,10 @@ class BorderTownService:
         На купленной земле сразу встает ратуша: с этого такта земля дает
         строительный слот, платит подушный сбор и поднимает свое ополчение.
         """
-        faction = self._require_faction(world_state, faction_id)
-        town = self._require_town(faction, town_id)
+        faction = require_faction(world_state, faction_id)
+        town = require_town(faction, town_id)
 
-        self._assert_hex_is_free(world_state, faction_id, target_hex)
+        assert_hex_is_free(world_state, faction_id, target_hex)
         town.assert_can_claim_land(target_hex)
 
         faction.spend_all(BORDER_TOWN_LAND_CLAIM_COST)
@@ -159,7 +159,7 @@ class BorderTownService:
                 name=f"Ратуша поселения {town.name}",
             )
         )
-        self._occupy_hex(world_state, target_hex)
+        occupy_hex(world_state, target_hex)
 
         if self._event_bus is not None:
             await self._event_bus.publish(
@@ -178,77 +178,9 @@ class BorderTownService:
     # ЧТЕНИЕ
     # ==================================================================
 
+    @staticmethod
     def list_border_towns(
-        self, world_state: WorldState, faction_id: str
+        world_state: WorldState, faction_id: str
     ) -> list[BorderTown]:
         """Все пограничные города фракции для окна управления державой."""
-        return list(self._require_faction(world_state, faction_id).border_towns)
-
-    # ==================================================================
-    # ВСПОМОГАТЕЛЬНОЕ
-    # ==================================================================
-
-    @staticmethod
-    def _require_faction(world_state: WorldState, faction_id: str) -> Faction:
-        faction = world_state.get_faction(faction_id)
-        if faction is None:
-            raise FactionNotFoundError(faction_id)
-        return faction
-
-    @staticmethod
-    def _require_town(faction: Faction, town_id: str) -> BorderTown:
-        town = faction.get_border_town(town_id)
-        if town is None:
-            raise BorderTownNotFoundError(town_id=town_id, faction_id=faction.id)
-        return town
-
-    @staticmethod
-    def _assert_hex_is_free(
-        world_state: WorldState, faction_id: str, coord: HexCoordinates
-    ) -> None:
-        """
-        Убеждается, что гекс действительно ничей.
-
-        Занятым считается все, что уже кому-то принадлежит или на чем стоит
-        чужая сила: столица и союзные земли любой фракции (включая свои
-        собственные - второй город на той же земле не поставить), ориентир
-        Ничьей земли и вражеское войско на самом гексе.
-        """
-        zone_id = hex_zone_id(coord)
-
-        for faction in world_state.factions.values():
-            if faction.capital_hex == coord:
-                raise InvalidSettlementPlacementError(
-                    zone_id, f"здесь стоит цитадель фракции '{faction.id}'"
-                )
-            if zone_id in faction.controlled_zone_ids:
-                raise InvalidSettlementPlacementError(
-                    zone_id, f"земля уже принадлежит фракции '{faction.id}'"
-                )
-
-        if world_state.get_point_of_interest_at(coord) is not None:
-            raise InvalidSettlementPlacementError(
-                zone_id, "гекс занят ориентиром Ничьей земли"
-            )
-
-        foreign_army = next(
-            (
-                army
-                for army in world_state.get_armies_at_hex(coord)
-                if army.faction_id != faction_id
-            ),
-            None,
-        )
-        if foreign_army is not None:
-            raise InvalidSettlementPlacementError(
-                zone_id, f"на гексе стоит чужое войско '{foreign_army.name}'"
-            )
-
-    @staticmethod
-    def _occupy_hex(world_state: WorldState, coord: HexCoordinates) -> None:
-        """
-        Вычеркивает гекс из Ничьей земли: он больше не нейтральный, и
-        экспедиции рабочих туда уже не отправить.
-        """
-        if coord in world_state.neutral_hexes:
-            world_state.neutral_hexes.remove(coord)
+        return list(require_faction(world_state, faction_id).border_towns)

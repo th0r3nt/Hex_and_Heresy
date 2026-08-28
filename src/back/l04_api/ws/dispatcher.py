@@ -53,6 +53,10 @@ BROADCAST_EVENTS: tuple[Enum, ...] = (
     GameEvents.Economy.BORDER_TOWN_FOUNDED,
     GameEvents.Economy.BORDER_TOWN_UPGRADED,
     GameEvents.Economy.BORDER_TOWN_LAND_CLAIMED,
+    GameEvents.Economy.BORDER_TOWN_RESOLUTION_STARTED,
+    GameEvents.Economy.BORDER_TOWN_RAZED,
+    GameEvents.Economy.BORDER_TOWN_PILLAGED,
+    GameEvents.Economy.BORDER_TOWN_OCCUPIED,
     # Тактический бой
     GameEvents.Tactical.BATTLE_STARTED,
     GameEvents.Tactical.TURN_COMPLETED,

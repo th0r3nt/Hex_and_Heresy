@@ -127,6 +127,11 @@ class GarrisonService:
                         hex=coord.model_dump(),
                     )
 
+            # Город, который прямо сейчас жгут или грабят, ополчения не
+            # поднимает: набирать горожан посреди разорения некому
+            if garrison.is_locked_in_resolution:
+                continue
+
             await self._sync_militia(
                 garrison=garrison, faction=faction, level=level, report=report
             )
@@ -227,13 +232,13 @@ class GarrisonService:
     async def _replenish_all_militia(self, world_state: WorldState) -> list[str]:
         """
         Дает всем гарнизонам мира добрать потери ополчения за такт.
-        Гарнизон, застрявший в бою, не лечится: горожан некогда обучать
-        посреди штурма.
+        Гарнизон, застрявший в бою или отданный на разорение победителю,
+        не лечится: горожан некогда обучать посреди штурма.
         """
         replenished_ids: list[str] = []
 
         for garrison in world_state.garrisons.values():
-            if garrison.is_locked_in_battle:
+            if garrison.is_locked_in_battle or garrison.is_locked_in_resolution:
                 continue
 
             healed = garrison.replenish_militia_losses()

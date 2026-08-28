@@ -204,16 +204,18 @@ class MilitiaTierNotAllowedError(FactionError):
 
 class BorderTownNotFoundError(FactionError):
     """
-    Пограничного города с таким идентификатором у фракции нет:
+    Пограничного города с таким идентификатором нет:
     он либо не основан, либо уже стерт с лица земли.
+
+    Владельца можно не называть: судьбу побежденного города решает чужая
+    армия, и в этот момент фракция-хозяин известна только самому городу.
     """
 
-    def __init__(self, town_id: str, faction_id: str) -> None:
+    def __init__(self, town_id: str, faction_id: Optional[str] = None) -> None:
         self.town_id = town_id
         self.faction_id = faction_id
-        super().__init__(
-            f"Пограничный город '{town_id}' не найден у фракции '{faction_id}'."
-        )
+        owner_info = f" у фракции '{faction_id}'" if faction_id else " на карте"
+        super().__init__(f"Пограничный город '{town_id}' не найден{owner_info}.")
 
 
 class BorderTownMaxLevelReachedError(FactionError):
@@ -253,6 +255,35 @@ class HexNotAdjacentToTownError(FactionError):
         self.zone_id = zone_id
         super().__init__(
             f"Земля '{zone_id}' не граничит с пограничным городом '{town_name}'."
+        )
+
+
+class BorderTownResolutionInvalidError(FactionError):
+    """
+    Решать судьбу города нельзя: он еще держится, армия победителя стоит не
+    на его гексе или город и вовсе свой собственный.
+    """
+
+    def __init__(self, town_id: str, reason: str) -> None:
+        self.town_id = town_id
+        self.reason = reason
+        super().__init__(
+            f"Судьбу пограничного города '{town_id}' решить нельзя: {reason}."
+        )
+
+
+class BorderTownOperationInProgressError(FactionError):
+    """
+    Над городом уже идет операция: два войска не могут жечь и грабить
+    одно и то же поселение одновременно.
+    """
+
+    def __init__(self, town_id: str, resolution_type: str) -> None:
+        self.town_id = town_id
+        self.resolution_type = resolution_type
+        super().__init__(
+            f"Над пограничным городом '{town_id}' уже идет операция "
+            f"'{resolution_type}': дождитесь ее завершения."
         )
 
 

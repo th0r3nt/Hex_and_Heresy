@@ -110,6 +110,68 @@ def border_town_upgrade_cost(target_level: int) -> dict[ResourceType, float]:
 
 
 # ==================================================================
+# СУДЬБА ПОБЕЖДЕННОГО ПОГРАНИЧНОГО ГОРОДА
+# ==================================================================
+
+
+class BorderTownResolutionType(str, Enum):
+    """
+    Что победитель делает с городом, чей гарнизон выбит подчистую.
+
+    Выбор - это размен времени на добычу и на землю: сжечь город быстро
+    не выйдет, а взять его целым - значит уйти почти без трофеев.
+    """
+
+    RAZE = "raze"  # разрушение: города и его земель больше нет
+    PILLAGE = "pillage"  # разграбление: город остается прежнему хозяину, но обескровлен
+    OCCUPY = "occupy"  # захват: город и его земли переходят победителю
+    IGNORE = "ignore"  # пропуск: армия идет дальше, ничего не тронув
+
+
+# Сколько глобальных тактов армия стоит на гексе города, пока идет операция.
+# Разрушение самое долгое: снести стены труднее, чем вынести амбары.
+BORDER_TOWN_RESOLUTION_TICKS: Final[dict[BorderTownResolutionType, int]] = {
+    BorderTownResolutionType.RAZE: 3,
+    BorderTownResolutionType.PILLAGE: 2,
+    BorderTownResolutionType.OCCUPY: 2,
+    BorderTownResolutionType.IGNORE: 0,
+}
+
+# Какая доля вложений города (BorderTown.invested_resources) достается
+# захватчику. Чем меньше от города остается, тем больше он уносит с собой.
+BORDER_TOWN_RESOLUTION_LOOT_RATIO: Final[dict[BorderTownResolutionType, float]] = {
+    BorderTownResolutionType.RAZE: 0.50,
+    BorderTownResolutionType.PILLAGE: 0.75,
+    BorderTownResolutionType.OCCUPY: 0.25,
+    BorderTownResolutionType.IGNORE: 0.0,
+}
+
+# Урон инфраструктуре: разграбление сносит несколько случайных построек и
+# отбрасывает город на два уровня, захват щадит уровень, но не постройки
+PILLAGE_BUILDINGS_DESTROY_MIN: Final[int] = 2
+PILLAGE_BUILDINGS_DESTROY_MAX: Final[int] = 3
+PILLAGE_LEVEL_DOWNGRADE: Final[int] = 2
+OCCUPY_LEVEL_DOWNGRADE: Final[int] = 1
+
+
+def border_town_resolution_loot(
+    resolution_type: "BorderTownResolutionType",
+    invested_resources: dict[ResourceType, float],
+) -> dict[ResourceType, float]:
+    """
+    Считает добычу победителя от суммы, вложенной фракцией в город.
+
+    Отдельная функция, а не метод операции: та же математика нужна окну
+    выбора сценария еще до того, как игрок хоть что-то решил.
+    """
+    ratio = BORDER_TOWN_RESOLUTION_LOOT_RATIO.get(resolution_type, 0.0)
+    if ratio <= 0.0:
+        return {}
+
+    return {resource: amount * ratio for resource, amount in invested_resources.items()}
+
+
+# ==================================================================
 # СТРОИТЕЛЬСТВО/СНОС
 # ==================================================================
 

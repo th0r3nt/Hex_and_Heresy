@@ -649,3 +649,186 @@ def test_faction_border_towns_are_listed(
         "Врата висельников",
         "Пепельный острог",
     ]
+
+
+# ==================================================================
+# СУДЬБА ПОБЕЖДЕННОГО ПОГРАНИЧНОГО ГОРОДА
+# ==================================================================
+
+
+def _defeated_town(world_state: WorldState) -> tuple[Faction, BorderTown, StrategicArmy]:
+    """
+    Готовая обстановка после штурма: город людей с пустым гарнизоном и
+    орочья армия на его гексе.
+    """
+    owner = _rich_faction(world_state)
+    center = HexCoordinates(q=2, r=-4, s=2)
+
+    town = BorderTown(faction_id=owner.id, name="Врата висельников", center_hex=center)
+    town.register_investment({ResourceType.GOLD: 1000.0})
+    owner.add_border_town(town)
+    owner.gain_zone(town.zone_id)
+
+    world_state.add_garrison(
+        Garrison(zone_id=town.zone_id, faction_id=owner.id, hex_coordinates=center)
+    )
+
+    conqueror = Faction(
+        id="greenskins",
+        race=FactionRace.GREENSKINS,
+        name="Орда Ржавых Клыков",
+        lord=Lord(faction_id="greenskins", name="Гром", title="Вождь"),
+        headquarters=Headquarters(faction_id="greenskins", name="Шатер Вождя"),
+    )
+    world_state.add_faction(conqueror)
+
+    horde = StrategicArmy(faction_id=conqueror.id, name="Орда", current_hex=center)
+    world_state.add_army(horde)
+
+    return owner, town, horde
+
+
+def test_resolve_endpoint_starts_the_operation(
+    client: TestClient, container: FakeContainer, active_party: WorldState
+):
+    container.turns_facade = TurnsFacade()
+    _, town, horde = _defeated_town(active_party)
+
+    response = client.post(
+        f"/api/strategic/border-towns/{town.id}/resolve",
+        json={"army_id": horde.id, "resolution_type": "raze"},
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    body = response.json()
+    assert body["operation_id"]
+    assert body["resolution_type"] == "raze"
+    assert body["ticks_remaining"] == 3
+    assert body["estimated_loot"]["gold"] == 500.0
+
+    # Приказ доехал именно до мира, а не до копии
+    assert horde.is_busy_with_operation
+    assert active_party.get_town_operation(town.id) is not None
+
+
+def test_ignored_town_answers_without_an_operation(
+    client: TestClient, container: FakeContainer, active_party: WorldState
+):
+    container.turns_facade = TurnsFacade()
+    _, town, horde = _defeated_town(active_party)
+
+    response = client.post(
+        f"/api/strategic/border-towns/{town.id}/resolve",
+        json={"army_id": horde.id, "resolution_type": "ignore"},
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    body = response.json()
+    assert body["operation_id"] is None
+    assert body["ticks_remaining"] == 0
+    assert body["estimated_loot"] == {}
+    assert not horde.is_busy_with_operation
+    assert active_party.border_town_operations == {}
+
+
+def test_resolve_of_unknown_town_answers_not_found(
+    client: TestClient, container: FakeContainer, active_party: WorldState
+):
+    container.turns_facade = TurnsFacade()
+    _, _, horde = _defeated_town(active_party)
+
+    response = client.post(
+        "/api/strategic/border-towns/нет-такого/resolve",
+        json={"army_id": horde.id, "resolution_type": "raze"},
+    )
+
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert response.json()["error"] == "BorderTownNotFoundError"
+
+
+def test_resolve_of_a_town_still_holding_answers_conflict(
+    client: TestClient, container: FakeContainer, active_party: WorldState
+):
+    container.turns_facade = TurnsFacade()
+    _, town, horde = _defeated_town(active_party)
+    active_party.get_garrison(town.zone_id).stationed_squads.append(_garrison_squad())
+
+    response = client.post(
+        f"/api/strategic/border-towns/{town.id}/resolve",
+        json={"army_id": horde.id, "resolution_type": "pillage"},
+    )
+
+    assert response.status_code == status.HTTP_409_CONFLICT
+    assert response.json()["error"] == "BorderTownResolutionInvalidError"
+    assert not horde.is_busy_with_operation
+
+
+def test_second_operation_on_the_same_town_answers_conflict(
+    client: TestClient, container: FakeContainer, active_party: WorldState
+):
+    container.turns_facade = TurnsFacade()
+    owner, town, horde = _defeated_town(active_party)
+    second_horde = StrategicArmy(
+        faction_id="greenskins", name="Вторая орда", current_hex=town.center_hex
+    )
+    active_party.add_army(second_horde)
+
+    client.post(
+        f"/api/strategic/border-towns/{town.id}/resolve",
+        json={"army_id": horde.id, "resolution_type": "raze"},
+    )
+    response = client.post(
+        f"/api/strategic/border-towns/{town.id}/resolve",
+        json={"army_id": second_horde.id, "resolution_type": "pillage"},
+    )
+
+    assert response.status_code == status.HTTP_409_CONFLICT
+    assert response.json()["error"] == "BorderTownOperationInProgressError"
+
+
+def test_unknown_resolution_type_is_rejected_by_the_schema(
+    client: TestClient, container: FakeContainer, active_party: WorldState
+):
+    container.turns_facade = TurnsFacade()
+    _, town, horde = _defeated_town(active_party)
+
+    response = client.post(
+        f"/api/strategic/border-towns/{town.id}/resolve",
+        json={"army_id": horde.id, "resolution_type": "продать в рабство"},
+    )
+
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+
+
+def test_operation_progress_is_readable(
+    client: TestClient, container: FakeContainer, active_party: WorldState
+):
+    container.turns_facade = TurnsFacade()
+    _, town, horde = _defeated_town(active_party)
+    client.post(
+        f"/api/strategic/border-towns/{town.id}/resolve",
+        json={"army_id": horde.id, "resolution_type": "occupy"},
+    )
+
+    response = client.get(f"/api/strategic/border-towns/{town.id}/operation")
+
+    assert response.status_code == status.HTTP_200_OK
+    body = response.json()
+    assert body["resolution_type"] == "occupy"
+    assert body["ticks_remaining"] == 2
+    assert body["estimated_loot"]["gold"] == 250.0
+
+
+def test_untouched_town_reports_an_idle_operation(
+    client: TestClient, container: FakeContainer, active_party: WorldState
+):
+    container.turns_facade = TurnsFacade()
+    _, town, _ = _defeated_town(active_party)
+
+    response = client.get(f"/api/strategic/border-towns/{town.id}/operation")
+
+    assert response.status_code == status.HTTP_200_OK
+    body = response.json()
+    assert body["operation_id"] is None
+    assert body["resolution_type"] == "ignore"
+    assert body["ticks_remaining"] == 0
