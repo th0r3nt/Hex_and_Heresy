@@ -33,6 +33,7 @@ from src.back.l02_services.saves.loader import LoadedSession
 from src.back.l02_services.turns.facade import TurnsFacade
 from src.back.l02_services.turns.strategic.orchestrator import StrategicTurnOrchestrator
 from src.back.l02_services.turns.tactical.orchestrator import TacticalTurnOrchestrator
+from src.back.l02_services.world.generator import WorldGenerator
 
 from src.back.l03_infrastructure.databases.manager import DatabaseManager
 from src.back.l03_infrastructure.databases.sql.db import SQLDB
@@ -90,6 +91,7 @@ class AppContainer:
     saves_facade: SavesFacade
     victory_facade: VictoryFacade
     vision_facade: VisionFacade
+    world_generator: WorldGenerator
     gameflow_fsm: GameFlowFSM
     gameflow_facade: GameFlowFacade
     turns_facade: TurnsFacade
@@ -202,6 +204,14 @@ def create_app_container(
     # событий - экземпляр один на всех, свое состояние он держит в WorldState
     vision_facade = VisionFacade(event_bus=event_bus)
 
+    # Мир новой партии собирает генератор: он ставит державы, застройку и
+    # армии, а затем сам просит подсистему тумана посчитать стартовый обзор
+    world_generator = WorldGenerator(
+        gamedata=registry,
+        vision_facade=vision_facade,
+        event_bus=event_bus,
+    )
+
     gameflow_fsm = GameFlowFSM(
         initial_state=GameState.MAIN_MENU,
         event_bus=event_bus,
@@ -210,6 +220,7 @@ def create_app_container(
         fsm=gameflow_fsm,
         event_bus=event_bus,
         victory_facade=victory_facade,
+        world_generator=world_generator,
     )
 
     # 4. Оркестрация ходов
@@ -251,6 +262,7 @@ def create_app_container(
         saves_facade=saves_facade,
         victory_facade=victory_facade,
         vision_facade=vision_facade,
+        world_generator=world_generator,
         gameflow_fsm=gameflow_fsm,
         gameflow_facade=gameflow_facade,
         turns_facade=turns_facade,

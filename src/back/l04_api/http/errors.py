@@ -84,7 +84,10 @@ from src.back.l01_domain.exceptions.workers import (
 )
 from src.back.l01_domain.exceptions.world import (
     BattlefieldDepletedError,
+    InvalidStartingSetupError,
     NoArmiesLockedForBattleError,
+    RulerTemplateNotFoundError,
+    WorldGenerationError,
 )
 from src.back.l02_services.gameflow.guards import (
     ActionForbiddenInCurrentStateError,
@@ -110,6 +113,7 @@ ERROR_STATUS_MAP: tuple[tuple[type[DomainError], int], ...] = (
     (AdvisorProposalNotFoundError, status.HTTP_404_NOT_FOUND),
     (GarrisonNotFoundError, status.HTTP_404_NOT_FOUND),
     (BorderTownNotFoundError, status.HTTP_404_NOT_FOUND),
+    (RulerTemplateNotFoundError, status.HTTP_404_NOT_FOUND),
     # 401 / 502 - провайдер языковой модели
     (LLMAuthorizationError, status.HTTP_401_UNAUTHORIZED),
     (LLMKeyMissingError, status.HTTP_401_UNAUTHORIZED),
@@ -166,6 +170,10 @@ ERROR_STATUS_MAP: tuple[tuple[type[DomainError], int], ...] = (
     (InvalidCubeCoordinatesError, status.HTTP_400_BAD_REQUEST),
     (InvalidRadiusError, status.HTTP_400_BAD_REQUEST),
     (InvalidZoneIdError, status.HTTP_400_BAD_REQUEST),
+    (InvalidStartingSetupError, status.HTTP_400_BAD_REQUEST),
+    # Родитель ошибок генератора идет последним: партию по таким настройкам
+    # собрать нельзя, и это всегда вина запроса, а не сервера
+    (WorldGenerationError, status.HTTP_400_BAD_REQUEST),
 )
 
 

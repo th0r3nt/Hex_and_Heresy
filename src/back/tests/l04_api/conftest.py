@@ -17,6 +17,11 @@ from src.back.l01_domain.world.models.state import WorldState
 from src.back.l02_services.gameflow.facade import GameFlowFacade
 from src.back.l02_services.gameflow.fsm import GameFlowFSM
 from src.back.l02_services.gameflow.states import GameState
+from src.back.l02_services.mechanics.vision.facade import VisionFacade
+from src.back.l02_services.saves.facade import SavesFacade
+from src.back.l02_services.turns.facade import TurnsFacade
+from src.back.l02_services.world.generator import WorldGenerator
+from src.back.l03_infrastructure.gamedata.loader import StaticGameDataRegistry
 from src.back.l04_api.http.errors import register_exception_handlers
 from src.back.l04_api.http.routers import api_router
 from src.back.l04_api.ws.manager import ConnectionManager
@@ -47,6 +52,7 @@ class FakeContainer:
     advisor_facade: Any = None
     llm_facade: Any = None
     event_bus: Any = None
+    world_generator: Any = None
 
     bound_sessions: list[Any] = field(default_factory=list)
 
@@ -64,9 +70,27 @@ class FakeContainer:
 
 
 @pytest.fixture
-def container() -> FakeContainer:
-    """Контейнер с настоящим игровым потоком: его переходы тесты проверяют."""
-    return FakeContainer(gameflow_facade=GameFlowFacade())
+def container(static_registry: StaticGameDataRegistry) -> FakeContainer:
+    """
+    Контейнер с настоящим игровым потоком: его переходы тесты проверяют.
+
+    Генератор мира, сессии и туман войны тоже настоящие - без них эндпоинт
+    старта новой партии проверять нечем.
+    """
+    vision_facade = VisionFacade()
+    world_generator = WorldGenerator(
+        gamedata=static_registry, vision_facade=vision_facade
+    )
+
+    return FakeContainer(
+        gameflow_facade=GameFlowFacade(world_generator=world_generator),
+        saves_facade=SavesFacade(
+            repository=EmptySaveRepository(),
+            gamedata_factory=lambda custom_equipment: static_registry,
+        ),
+        turns_facade=TurnsFacade(vision_facade=vision_facade, gamedata=static_registry),
+        world_generator=world_generator,
+    )
 
 
 @pytest.fixture
@@ -110,6 +134,27 @@ def active_party(container: FakeContainer, world_state: WorldState) -> WorldStat
 # ==================================================================
 # ВСПОМОГАТЕЛЬНОЕ
 # ==================================================================
+
+
+class EmptySaveRepository:
+    """
+    Хранилище сохранений-пустышка: старту новой партии база не нужна, но
+    фасад сохранений собирает загрузчик поверх какого-то репозитория.
+    """
+
+    async def save_world_state(
+        self, save_id: str, save_name: str, state: WorldState
+    ) -> None:
+        return None
+
+    async def load_world_state(self, save_id: str) -> Optional[WorldState]:
+        return None
+
+    async def list_saves(self) -> list[dict[str, Any]]:
+        return []
+
+    async def delete_save(self, save_id: str) -> bool:
+        return False
 
 
 class FakeSession:

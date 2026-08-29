@@ -4,6 +4,8 @@
 """
 
 from enum import Enum
+from typing import Final
+
 from pydantic import BaseModel, Field
 
 
@@ -17,6 +19,18 @@ class FactionRace(str, Enum):
     CONGREGATION_OF_THE_METEORITE = "congregation_of_the_meteorite"
     MERCENARIES = "mercenaries"
     NEUTRALS = "neutrals"
+
+
+# Расы, за которые можно начать партию. Наемники и нейтралы державы не
+# держат: у них нет ни своих зданий, ни правителей - только войска, которые
+# нанимают и встречают на карте остальные
+PLAYABLE_RACES: Final[tuple[FactionRace, ...]] = (
+    FactionRace.HUMANS,
+    FactionRace.GREENSKINS,
+    FactionRace.ELFS,
+    FactionRace.BARONIAL_TROOPS,
+    FactionRace.CONGREGATION_OF_THE_METEORITE,
+)
 
 
 class CharacterGenerationType(str, Enum):

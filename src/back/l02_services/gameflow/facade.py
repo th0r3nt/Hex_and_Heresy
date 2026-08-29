@@ -16,6 +16,7 @@ from src.back.l01_domain.world.models.gameflow import (
     GameOverPayload,
     GlobalEventTransitionPayload,
 )
+from src.back.l01_domain.world.models.setup import NewGameConfig
 from src.back.l01_domain.world.models.state import WorldState
 from src.back.l01_domain.world.models.victory import VictoryEvaluationResult
 from src.back.l02_services.gameflow.fsm import GameFlowFSM
@@ -29,6 +30,7 @@ from src.back.l02_services.gameflow.guards import (
 )
 from src.back.l02_services.gameflow.states import GameFlowTrigger, GameState
 from src.back.l02_services.mechanics.victory.facade import VictoryFacade
+from src.back.l02_services.world.generator import WorldGenerator
 
 
 class GameFlowFacade:
@@ -42,12 +44,16 @@ class GameFlowFacade:
         fsm: Optional[GameFlowFSM] = None,
         event_bus: Optional[EventBusProtocol] = None,
         victory_facade: Optional[VictoryFacade] = None,
+        world_generator: Optional[WorldGenerator] = None,
     ) -> None:
         self._fsm = fsm or GameFlowFSM(event_bus=event_bus)
         self._world_state: Optional[WorldState] = None
         # Без подсистемы победы поток работает как раньше: финал партии
         # объявляют вручную снаружи. Корень компоновки ее подкладывает
         self._victory_facade = victory_facade
+        # Генератор мира нужен только старту новой партии: без него поток
+        # умеет лишь переключить экран, а мир ему привяжут снаружи
+        self._world_generator = world_generator
 
     @property
     def current_state(self) -> GameState:
@@ -131,11 +137,30 @@ class GameFlowFacade:
     # УПРАВЛЕНИЕ РЕЖИМАМИ И СОСТОЯНИЯМИ
     # ==================================================================
 
-    async def start_new_game(self) -> GameState:
+    async def start_new_game(
+        self, config: Optional[NewGameConfig] = None
+    ) -> GameState:
         """
         Начинает новую партию и переводит игру на глобальную карту.
+
+        С настройками лобби мир партии собирает генератор, и игра выходит на
+        карту уже с привязанным WorldState. Без настроек (или без самого
+        генератора) метод только переключает экран - мир такой партии
+        привязывают снаружи через bind_world_state.
+
+        Мир создается до перехода: если настройки окажутся негодными, игра
+        должна остаться в главном меню, а не встать на пустую карту.
         """
-        return await self._fsm.trigger(GameFlowTrigger.START_NEW_GAME)
+        world_state = None
+        if config is not None and self._world_generator is not None:
+            world_state = await self._world_generator.generate(config)
+
+        new_state = await self._fsm.trigger(GameFlowTrigger.START_NEW_GAME)
+
+        if world_state is not None:
+            self.bind_world_state(world_state)
+
+        return new_state
 
     async def load_game(self) -> GameState:
         """

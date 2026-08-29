@@ -5,8 +5,11 @@
 только передают ему триггер и возвращают новое состояние.
 """
 
+from typing import Optional
+
 from fastapi import APIRouter, HTTPException, Request, status
 
+from src.back.l01_domain.exceptions.factions import FactionNotFoundError
 from src.back.l02_services.gameflow.facade import GameFlowFacade
 from src.back.l02_services.gameflow.states import GameState
 from src.back.l04_api.dependencies import GameFlow, World, get_container
@@ -15,6 +18,8 @@ from src.back.l04_api.http.schemas.gameflow import (
     GameOverRequest,
     GameStateResponse,
     GlobalEventScreenRequest,
+    NewGameRequest,
+    NewGameResponse,
 )
 
 router = APIRouter(prefix="/gameflow", tags=["gameflow"])
@@ -43,17 +48,38 @@ async def get_state(gameflow: GameFlow) -> GameStateResponse:
 # ====================================================
 
 
-@router.post("/new-game", response_model=GameStateResponse)
-async def start_new_game(gameflow: GameFlow) -> GameStateResponse:
+@router.post("/new-game", response_model=NewGameResponse)
+async def start_new_game(
+    request: Request, payload: Optional[NewGameRequest] = None
+) -> NewGameResponse:
     """
-    Переводит игру из меню на глобальную карту.
+    Создает мир новой партии и выводит игру на глобальную карту.
 
-    Мир новой партии сюда еще не приезжает: генератора мира в проекте нет,
-    и привязку WorldState делает корень компоновки (bind_world_state) сразу
-    после его появления. До этого игровые эндпоинты отвечают 409.
+    Пустой запрос запускает быструю партию настройками по умолчанию.
+    Разослать созданный мир по сервисам активной игры - работа корня
+    компоновки: он один знает состав контейнера.
     """
-    await gameflow.start_new_game()
-    return _as_response(gameflow)
+    container = get_container(request)
+    config = (payload or NewGameRequest()).to_config()
+
+    await container.gameflow_facade.start_new_game(config)
+    world = container.gameflow_facade.world_state
+
+    container.bind_session(container.saves_facade.start_session(world))
+
+    player = world.get_player_faction()
+    if player is None:
+        raise FactionNotFoundError("player")
+
+    return NewGameResponse(
+        state=container.gameflow_facade.current_state,
+        session_id=world.id,
+        seed=str(config.seed),
+        player_faction_id=player.id,
+        world=container.turns_facade.get_world_view(
+            world_state=world, faction_id=player.id
+        ),
+    )
 
 
 # ====================================================
