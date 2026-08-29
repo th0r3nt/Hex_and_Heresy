@@ -145,6 +145,7 @@ class ChroniclerEvents(str, Enum):
 
     BATTLE_RECORDED = "chronicler.battle_recorded"
     FALLEN_RECORDED = "chronicler.fallen_recorded"
+    FINALE_RECORDED = "chronicler.finale_recorded"
     RUMOR_GENERATED = "chronicler.rumor_generated"
     SQUAD_PROMOTED = "chronicler.squad_promoted"
 

@@ -25,6 +25,8 @@ from src.back.l04_api.http.schemas.strategic import (
     TaxRateResponse,
     UnstationSquadRequest,
     UpgradeBorderTownRequest,
+    VictoryOverviewResponse,
+    VictoryProgressResponse,
     WorkerAssignRequest,
 )
 
@@ -42,6 +44,37 @@ async def execute_turn(turns: Turns, world: World) -> GlobalTurnReport:
     Считает глобальный такт: события, экспедиции, экономику, марши и дипломатию.
     """
     return await turns.execute_strategic_turn(world)
+
+
+# ====================================================
+# Глобальные цели партии
+# ====================================================
+
+
+@router.get("/victory-progress", response_model=VictoryOverviewResponse)
+async def get_victory_progress(turns: Turns, world: World) -> VictoryOverviewResponse:
+    """
+    Панель глобальных целей: насколько игрок и его соперники продвинулись к
+    победе по каждой из трех веток.
+    """
+
+    def summary(faction_id: str) -> VictoryProgressResponse:
+        return VictoryProgressResponse.from_progress(
+            progress=turns.get_victory_progress(world, faction_id),
+            config=world.victory_config,
+            is_finished=world.is_finished,
+        )
+
+    player = world.get_player_faction()
+
+    return VictoryOverviewResponse(
+        player=None if player is None else summary(player.id),
+        rivals=[
+            summary(faction.id)
+            for faction in world.factions.values()
+            if player is None or faction.id != player.id
+        ],
+    )
 
 
 # ====================================================

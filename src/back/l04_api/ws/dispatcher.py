@@ -74,6 +74,7 @@ BROADCAST_EVENTS: tuple[Enum, ...] = (
     # Летописец: тексты дописываются в фоне и прилетают отдельно от хода
     GameEvents.Chronicler.BATTLE_RECORDED,
     GameEvents.Chronicler.FALLEN_RECORDED,
+    GameEvents.Chronicler.FINALE_RECORDED,
     GameEvents.Chronicler.RUMOR_GENERATED,
     GameEvents.Chronicler.SQUAD_PROMOTED,
     # Оружейник и мастер игры

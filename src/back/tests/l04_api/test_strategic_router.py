@@ -31,6 +31,12 @@ from src.back.l01_domain.maps.models.strategic import (
     hex_neighbors,
     hex_zone_id,
 )
+from src.back.l01_domain.world.constants import (
+    VICTORY_ECONOMIC_FOOD,
+    VICTORY_ECONOMIC_GOLD,
+    VICTORY_ECONOMIC_MATERIAL,
+    VICTORY_EXPANSION_TOWNS_COUNT,
+)
 from src.back.l01_domain.world.models.state import WorldState
 from src.back.l02_services.turns.facade import TurnsFacade
 from src.back.tests.l04_api.conftest import FakeContainer
@@ -832,3 +838,88 @@ def test_untouched_town_reports_an_idle_operation(
     assert body["operation_id"] is None
     assert body["resolution_type"] == "ignore"
     assert body["ticks_remaining"] == 0
+
+
+# ==================================================================
+# ГЛОБАЛЬНЫЕ ЦЕЛИ ПАРТИИ
+# ==================================================================
+
+
+def _rival(world_state: WorldState) -> Faction:
+    """Соперник игрока: своя цитадель и своя казна."""
+    faction = Faction(
+        id="greenskins",
+        race=FactionRace.GREENSKINS,
+        name="Орда Ржавых Клыков",
+        lord=Lord(faction_id="greenskins", name="Гром", title="Вождь"),
+        headquarters=Headquarters(faction_id="greenskins", name="Шатер Вождя"),
+    )
+    world_state.add_faction(faction)
+    return faction
+
+
+def test_victory_progress_reports_all_three_branches(
+    client: TestClient, container: FakeContainer, active_party: WorldState
+):
+    container.turns_facade = TurnsFacade()
+    faction = _faction(active_party)
+    # Половина каждого порога: полоска экономики идет по самому пустому складу
+    faction.resources[ResourceType.GOLD] = VICTORY_ECONOMIC_GOLD / 2
+    faction.resources[ResourceType.MATERIAL] = VICTORY_ECONOMIC_MATERIAL / 2
+    faction.resources[ResourceType.FOOD] = VICTORY_ECONOMIC_FOOD / 2
+
+    response = client.get("/api/strategic/victory-progress")
+
+    assert response.status_code == status.HTTP_200_OK
+    body = response.json()
+    assert body["player"]["faction_id"] == faction.id
+    assert body["player"]["is_finished"] is False
+
+    branches = {b["victory_type"]: b for b in body["player"]["branches"]}
+    assert set(branches) == {"domination", "economic", "expansion"}
+    assert all(branch["is_enabled"] for branch in branches.values())
+    assert all(not branch["is_complete"] for branch in branches.values())
+    assert branches["economic"]["ratio"] == 0.5
+
+
+def test_victory_progress_counts_developed_towns(
+    client: TestClient, container: FakeContainer, active_party: WorldState
+):
+    container.turns_facade = TurnsFacade()
+    faction = _faction(active_party)
+    for index in range(VICTORY_EXPANSION_TOWNS_COUNT):
+        faction.add_border_town(
+            BorderTown(
+                faction_id=faction.id,
+                name=f"Застава-{index}",
+                level=MAX_BORDER_TOWN_LEVEL,
+                center_hex=HexCoordinates(q=5 + index, r=-5, s=-index),
+            )
+        )
+
+    response = client.get("/api/strategic/victory-progress")
+
+    branches = {b["victory_type"]: b for b in response.json()["player"]["branches"]}
+    assert branches["expansion"]["is_complete"] is True
+    assert branches["expansion"]["ratio"] == 1.0
+
+
+def test_victory_progress_includes_rivals(
+    client: TestClient, container: FakeContainer, active_party: WorldState
+):
+    container.turns_facade = TurnsFacade()
+    _faction(active_party)
+    rival = _rival(active_party)
+
+    response = client.get("/api/strategic/victory-progress")
+
+    body = response.json()
+    assert [summary["faction_id"] for summary in body["rivals"]] == [rival.id]
+
+
+def test_victory_progress_needs_an_active_party(
+    client: TestClient, container: FakeContainer
+):
+    response = client.get("/api/strategic/victory-progress")
+
+    assert response.status_code == status.HTTP_409_CONFLICT

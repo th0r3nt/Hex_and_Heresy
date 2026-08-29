@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from src.back.l01_domain.combat.models.state import TacticalBattleState
 from src.back.l01_domain.maps.models.strategic import HexCoordinates
+from src.back.l01_domain.world.constants import VictoryType
 from src.back.l01_domain.world.models.events import GlobalEvent
 
 
@@ -70,3 +71,10 @@ class GameOverPayload(BaseModel):
         ..., min_length=1, description="Причина окончания игры (напр. гибель цитадели)"
     )
     total_ticks_survived: int = Field(default=0, ge=0)
+    victory_type: Optional[VictoryType] = Field(
+        default=None,
+        description=(
+            "Ветка глобальной цели, которой закончилась партия. None у поражения "
+            "и у финалов, объявленных вручную"
+        ),
+    )

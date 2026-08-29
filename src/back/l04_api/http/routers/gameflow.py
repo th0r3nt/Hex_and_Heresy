@@ -160,6 +160,7 @@ async def declare_game_over(
         is_player_victorious=payload.is_player_victorious,
         reason=payload.reason,
         total_ticks=payload.total_ticks,
+        victory_type=payload.victory_type,
     )
     return _as_response(gameflow)
 

@@ -27,11 +27,16 @@ from src.back.l01_domain.world.models.battleground import BattlefieldLootSite
 from src.back.l01_domain.world.models.chronicle import (
     ChronicleEntry,
     FallenRecord,
+    FinaleChronicle,
     RumorEntry,
 )
 from src.back.l01_domain.world.models.events import GlobalEvent
 from src.back.l01_domain.world.models.points_of_interest import PointOfInterest
 from src.back.l01_domain.world.models.timekeeping import GameTime
+from src.back.l01_domain.world.models.victory import (
+    VictoryConditionConfig,
+    VictoryEvaluationResult,
+)
 
 
 class WorldState(BaseModel):
@@ -127,11 +132,50 @@ class WorldState(BaseModel):
     rumors: list[RumorEntry] = Field(
         default_factory=list, description="Фоновые слухи для окна логов"
     )
+    finale: Optional[FinaleChronicle] = Field(
+        default=None,
+        description=(
+            "Последняя страница летописи: ода триумфатору или реквием павшей "
+            "державе. Пишется однажды, в такт окончания партии"
+        ),
+    )
     ticks_since_last_battle: int = Field(
         default=0,
         ge=0,
         description="Сколько тактов не было ни одного боя: порог болтливости летописца",
     )
+
+    # ==================================================================
+    # ГЛОБАЛЬНЫЕ ЦЕЛИ ПАРТИИ
+    # ==================================================================
+
+    victory_config: VictoryConditionConfig = Field(
+        default_factory=VictoryConditionConfig,
+        description=(
+            "Правила победы этой партии: пороги ресурсов, требования к городам "
+            "и набор разыгрываемых веток. Задаются в лобби и живут до конца игры"
+        ),
+    )
+    victory_outcome: Optional[VictoryEvaluationResult] = Field(
+        default=None,
+        description=(
+            "Записанный финал партии. Пока None - партия идет; заполняется ровно "
+            "один раз, поэтому повторные проверки не объявляют победу дважды"
+        ),
+    )
+
+    @property
+    def is_finished(self) -> bool:
+        """Партия уже дошла до финала и новых вердиктов не ждет."""
+        return self.victory_outcome is not None
+
+    def record_victory_outcome(self, outcome: VictoryEvaluationResult) -> None:
+        """
+        Заносит финал партии в мир. Первый вердикт остается навсегда: партия
+        заканчивается однажды.
+        """
+        if self.victory_outcome is None:
+            self.victory_outcome = outcome
 
     def get_faction(self, faction_id: str) -> Optional[Faction]:
         return self.factions.get(faction_id)
@@ -399,6 +443,14 @@ class WorldState(BaseModel):
 
     def add_rumor(self, rumor: RumorEntry) -> None:
         self.rumors.append(rumor)
+
+    def set_finale(self, finale: FinaleChronicle) -> None:
+        """
+        Дописывает последнюю страницу летописи. Партия заканчивается один
+        раз, поэтому переписать финал нельзя.
+        """
+        if self.finale is None:
+            self.finale = finale
 
     def register_battle_happened(self) -> None:
         """

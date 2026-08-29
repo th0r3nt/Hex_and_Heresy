@@ -82,3 +82,34 @@ CHRONICLE_TITLE_MAX_LENGTH: Final[int] = 120
 CHRONICLE_QUOTE_MAX_LENGTH: Final[int] = 400
 CHRONICLE_BODY_MAX_LENGTH: Final[int] = 4000
 RUMOR_TEXT_MAX_LENGTH: Final[int] = 300
+
+
+# ==================================================================
+# ГЛОБАЛЬНЫЕ ЦЕЛИ ПАРТИИ (см. docs/game_mechanics/victory.md)
+# ==================================================================
+
+
+class VictoryType(str, Enum):
+    """
+    Три способа выиграть партию.
+    """
+
+    # Территориальное господство: у соперников не осталось действующих цитаделей
+    DOMINATION = "domination"
+    # Экономическое процветание: казна одновременно держит все три порога
+    ECONOMIC = "economic"
+    # Основание страны: три пограничных города доведены до четвертого уровня
+    EXPANSION = "expansion"
+
+
+# Пороги экономической победы. Считаются одновременно: перевес золота не
+# заменяет пустых амбаров, поэтому казна обязана взять все три планки разом
+VICTORY_ECONOMIC_GOLD: Final[float] = 6000.0
+VICTORY_ECONOMIC_MATERIAL: Final[float] = 4000.0
+VICTORY_ECONOMIC_FOOD: Final[float] = 8000.0
+
+# Пороги градостроительной победы: сколько городов и какого уровня нужно
+# держать ОДНОВРЕМЕННО. Разграбленный город выпадает из зачета, пока не
+# отстроится обратно
+VICTORY_EXPANSION_TOWNS_COUNT: Final[int] = 3
+VICTORY_EXPANSION_TOWN_LEVEL: Final[int] = 4

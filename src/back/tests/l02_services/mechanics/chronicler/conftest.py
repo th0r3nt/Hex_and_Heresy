@@ -26,6 +26,7 @@ from src.back.l01_domain.maps.models.strategic import HexCoordinates
 from src.back.l01_domain.world.models.chronicle import (
     LLMChronicleResponse,
     LLMEpitaphResponse,
+    LLMFinaleResponse,
 )
 from src.back.l01_domain.world.models.state import WorldState
 
@@ -68,6 +69,7 @@ class FakeLLMClient:
         self,
         chronicle: Optional[LLMChronicleResponse] = None,
         epitaph: Optional[LLMEpitaphResponse] = None,
+        finale: Optional[LLMFinaleResponse] = None,
         rumor: str = "Торговцы говорят, что барон опять поднял налоги.",
     ) -> None:
         self.chronicle = chronicle or LLMChronicleResponse(
@@ -78,6 +80,10 @@ class FakeLLMClient:
         self.epitaph = epitaph or LLMEpitaphResponse(
             title="Грязные стрелки Маркуса",
             epitaph="Они держали фланг до последнего болта.",
+        )
+        self.finale = finale or LLMFinaleResponse(
+            title="Последняя глава",
+            body="Знамена свернули, и хронику закрыли на этой странице.",
         )
         self.rumor = rumor
 
@@ -116,6 +122,8 @@ class FakeLLMClient:
         )
         if response_model is LLMEpitaphResponse:
             return self.epitaph
+        if response_model is LLMFinaleResponse:
+            return self.finale
         return self.chronicle
 
 

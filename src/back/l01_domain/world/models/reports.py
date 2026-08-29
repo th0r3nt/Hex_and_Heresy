@@ -8,6 +8,7 @@ from src.back.l01_domain.combat.constants import TimeOfDay
 from src.back.l01_domain.combat.models.reports import MovementStepReport
 from src.back.l01_domain.factions.models.economy import FactionEconomyReport
 from src.back.l01_domain.world.models.events import GlobalEvent
+from src.back.l01_domain.world.models.victory import VictoryEvaluationResult
 
 
 class EventsStepReport(BaseModel):
@@ -124,3 +125,10 @@ class GlobalTurnReport(BaseModel):
     diplomacy_report: DiplomacyTickReport = Field(default_factory=DiplomacyTickReport)
     completed_expedition_ids: list[str] = Field(default_factory=list)
     service_veterancy_candidate_ids: list[str] = Field(default_factory=list)
+    victory_result: VictoryEvaluationResult = Field(
+        default_factory=VictoryEvaluationResult,
+        description=(
+            "Вердикт по глобальным целям на конец такта: прогресс всех сторон "
+            "и признак того, что партия закончилась"
+        ),
+    )

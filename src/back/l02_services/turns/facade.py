@@ -28,7 +28,9 @@ from src.back.l01_domain.protocols.events import EventBusProtocol
 from src.back.l01_domain.protocols.gamedata import GameDataRepositoryProtocol
 from src.back.l01_domain.world.models.reports import GlobalTurnReport
 from src.back.l01_domain.world.models.state import WorldState
+from src.back.l01_domain.world.models.victory import VictoryProgress
 from src.back.l02_services.mechanics.settlements.facade import SettlementsFacade
+from src.back.l02_services.mechanics.victory.facade import VictoryFacade
 from src.back.l02_services.turns.strategic.garrison import GarrisonService
 from src.back.l02_services.turns.strategic.orchestrator import (
     StrategicTurnOrchestrator,
@@ -53,12 +55,16 @@ class TurnsFacade:
         self,
         strategic_orchestrator: Optional[StrategicTurnOrchestrator] = None,
         tactical_orchestrator: Optional[TacticalTurnOrchestrator] = None,
+        victory_facade: Optional[VictoryFacade] = None,
         gamedata: Optional[GameDataRepositoryProtocol] = None,
         event_bus: Optional[EventBusProtocol] = None,
     ) -> None:
         self._event_bus = event_bus
+        # Тот же фасад целей, что стоит шагом 4.8 в конвейере такта: своего
+        # состояния он не держит, поэтому годится и для чтения прогресса
+        self._victory = victory_facade or VictoryFacade(event_bus=event_bus)
         self._strategic_orchestrator = strategic_orchestrator or StrategicTurnOrchestrator(
-            gamedata=gamedata, event_bus=event_bus
+            victory_facade=self._victory, gamedata=gamedata, event_bus=event_bus
         )
         self._tactical_orchestrator = tactical_orchestrator or TacticalTurnOrchestrator(
             event_bus=event_bus
@@ -315,6 +321,29 @@ class TurnsFacade:
         if garrison is None:
             raise GarrisonNotFoundError(zone_id)
         return garrison
+
+    # ==================================================================
+    # ГЛОБАЛЬНЫЕ ЦЕЛИ ПАРТИИ
+    # ==================================================================
+
+    def get_victory_progress(
+        self, world_state: WorldState, faction_id: str
+    ) -> VictoryProgress:
+        """
+        Насколько фракция продвинулась к победе - для панели глобальных целей.
+        """
+        return self._victory.get_faction_progress(
+            world_state=world_state, faction_id=faction_id
+        )
+
+    def is_faction_defeated(self, world_state: WorldState, faction_id: str) -> bool:
+        """
+        Выбыла ли фракция из партии: цитадель пала или от державы ничего
+        не осталось.
+        """
+        return self._victory.is_faction_defeated(
+            world_state=world_state, faction_id=faction_id
+        )
 
     # ==================================================================
     # РАСЧЕТ ХОДОВ

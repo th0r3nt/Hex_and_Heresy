@@ -7,6 +7,8 @@ import pytest
 
 from src.back.l01_domain.combat.models.reports import MeleeCombatReport
 from src.back.l01_domain.exceptions.llm import LLMRequestFailedError
+from src.back.l01_domain.world.constants import VictoryType
+from src.back.l01_domain.world.models.victory import VictoryEvaluationResult
 from src.back.l02_services.mechanics.chronicler.facade import ChroniclerFacade
 from src.back.l02_services.mechanics.chronicler.listener import ChroniclerListener
 from src.back.l02_services.turns.tactical.orchestrator import TacticalTurnOrchestrator
@@ -50,6 +52,7 @@ class TestSubscriptions:
         assert bus.listener_count(GameEvents.Tactical.TURN_COMPLETED) == 1
         assert bus.listener_count(GameEvents.Tactical.BATTLE_COMPLETED) == 1
         assert bus.listener_count(GameEvents.Strategic.TURN_COMPLETED) == 1
+        assert bus.listener_count(GameEvents.GameFlow.GAME_OVER) == 1
 
         listener.unregister(bus)
 
@@ -311,3 +314,45 @@ class TestWithTacticalOrchestrator:
         assert report.is_battle_finished is True
         assert len(world.chronicle_entries) == 1
         assert world.ticks_since_last_battle == 0
+
+
+# ==================================================================
+# ФИНАЛ ПАРТИИ
+# ==================================================================
+
+
+class TestFinaleSubscription:
+    @pytest.mark.asyncio
+    async def test_game_over_makes_the_chronicler_close_the_book(
+        self, listener, bus, world
+    ):
+        """Событие конца партии само доводит хронику до последней главы."""
+        listener.register(bus)
+
+        await bus.publish(
+            GameEvents.GameFlow.GAME_OVER,
+            result=VictoryEvaluationResult(
+                is_game_over=True,
+                is_player_victorious=True,
+                victory_type=VictoryType.DOMINATION,
+                winner_faction_id="humans",
+                reason="Территориальное господство.",
+            ),
+        )
+
+        assert world.finale is not None
+        assert world.finale.victory_type is VictoryType.DOMINATION
+
+    @pytest.mark.asyncio
+    async def test_manual_game_over_without_a_verdict_writes_nothing(
+        self, listener, bus, world
+    ):
+        """
+        Финал, объявленный вручную из меню, приезжает без вердикта - главы
+        для него нет, и падать на этом незачем.
+        """
+        listener.register(bus)
+
+        await bus.publish(GameEvents.GameFlow.GAME_OVER, reason="выход из партии")
+
+        assert world.finale is None

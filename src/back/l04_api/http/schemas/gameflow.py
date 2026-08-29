@@ -6,6 +6,7 @@ from typing import Optional
 
 from pydantic import BaseModel, Field
 
+from src.back.l01_domain.world.constants import VictoryType
 from src.back.l02_services.gameflow.states import GameState
 
 
@@ -28,6 +29,13 @@ class GameOverRequest(BaseModel):
     is_player_victorious: bool = Field(...)
     reason: str = Field(..., min_length=1, description="Причина окончания партии")
     total_ticks: int = Field(default=0, ge=0)
+    victory_type: Optional[VictoryType] = Field(
+        default=None,
+        description=(
+            "Ветка глобальной цели, если финал объявляется по ней. Сами условия "
+            "проверяет такт: этот эндпоинт нужен ручному завершению партии"
+        ),
+    )
 
 
 class GlobalEventScreenRequest(BaseModel):

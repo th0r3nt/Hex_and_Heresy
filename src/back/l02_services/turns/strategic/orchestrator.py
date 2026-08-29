@@ -8,8 +8,10 @@ from src.back.l01_domain.protocols.events import EventBusProtocol
 from src.back.l01_domain.protocols.gamedata import GameDataRepositoryProtocol
 from src.back.l01_domain.world.models.reports import GlobalTurnReport
 from src.back.l01_domain.world.models.state import WorldState
+from src.back.l02_services.gameflow.facade import GameFlowFacade
 from src.back.l02_services.mechanics.diplomacy.facade import DiplomacyFacade
 from src.back.l02_services.mechanics.settlements.facade import SettlementsFacade
+from src.back.l02_services.mechanics.victory.facade import VictoryFacade
 from src.back.l02_services.turns.strategic.economy import StrategicEconomyService
 from src.back.l02_services.turns.strategic.garrison import GarrisonService
 from src.back.l02_services.turns.strategic.veterancy import StrategicVeterancyService
@@ -27,7 +29,7 @@ class StrategicTurnOrchestrator:
     """
     Главный оркестратор глобального хода.
     Строго последовательно выполняет конвейер:
-    [1. События и время] -> [1.6. Судьба взятых городов] -> [1.7. Гарнизоны] -> [2. Экспедиции] -> [3. Экономика и содержание] -> [4. Передвижения] -> [4.5. Дипломатия] -> [5. Итоговый отчет].
+    [1. События и время] -> [1.6. Судьба взятых городов] -> [1.7. Гарнизоны] -> [2. Экспедиции] -> [3. Экономика и содержание] -> [4. Передвижения] -> [4.5. Дипломатия] -> [4.8. Глобальные цели] -> [5. Итоговый отчет].
     """
 
     def __init__(
@@ -40,6 +42,8 @@ class StrategicTurnOrchestrator:
         expedition_service: Optional[ExpeditionWorkerService] = None,
         veterancy_service: Optional[StrategicVeterancyService] = None,
         diplomacy_facade: Optional[DiplomacyFacade] = None,
+        victory_facade: Optional[VictoryFacade] = None,
+        gameflow_facade: Optional[GameFlowFacade] = None,
         gamedata: Optional[GameDataRepositoryProtocol] = None,
         event_bus: Optional[EventBusProtocol] = None,
     ) -> None:
@@ -69,6 +73,11 @@ class StrategicTurnOrchestrator:
         )
         # Дипломатии на такте нужны только пакты и логистика, LLM здесь не участвует
         self._diplomacy_facade = diplomacy_facade or DiplomacyFacade(event_bus=event_bus)
+        # Глобальные цели партии: свой вердикт такт выносит всегда, а вот
+        # переключить игру на экран финала может только игровой поток -
+        # без него такт молча кладет вердикт в отчет
+        self._victory_facade = victory_facade or VictoryFacade(event_bus=event_bus)
+        self._gameflow_facade = gameflow_facade
 
     async def execute_turn(
         self,
@@ -123,6 +132,13 @@ class StrategicTurnOrchestrator:
         # Очистка завершенных назначений
         world_state.cleanup_completed_assignments()
 
+        # Шаг 4.8. Глобальные цели партии. Идет последним расчетным шагом:
+        # и добыча, и налоги, и марши уже отработали, поэтому вердикт
+        # выносится по окончательному состоянию мира на конец такта
+        victory_result = await self._victory_facade.evaluate_world(world_state)
+        if self._gameflow_facade is not None:
+            await self._gameflow_facade.declare_victory_result(victory_result)
+
         # Шаг 5. Сборка итогового отчета
         final_report = GlobalTurnReport(
             events_report=events_report,
@@ -133,6 +149,7 @@ class StrategicTurnOrchestrator:
             diplomacy_report=diplomacy_report,
             completed_expedition_ids=completed_expeditions,
             service_veterancy_candidate_ids=service_veterancy_report.veterancy_candidate_ids,
+            victory_result=victory_result,
         )
 
         if self._event_bus is not None:

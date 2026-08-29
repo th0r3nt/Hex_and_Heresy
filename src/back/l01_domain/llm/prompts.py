@@ -103,6 +103,7 @@ class PromptCatalog:
         class CHRONICLER:
             PROMPT = "roles.chronicler.prompt"
             RUMORS = "roles.chronicler.rumors"
+            FINALE = "roles.chronicler.finale"
 
             class WRITING:
                 NEUTRAL = "roles.chronicler.neutral.writing"

@@ -39,14 +39,17 @@ from src.back.l01_domain.world.models.chronicle import (
     ChronicleEntry,
     FallenRecord,
     FallenSubject,
+    FinaleChronicle,
     RumorEntry,
 )
 from src.back.l01_domain.world.models.state import WorldState
+from src.back.l01_domain.world.models.victory import VictoryEvaluationResult
 from src.back.l02_services.mechanics.chronicler.archives.fallens import HallOfFallen
 from src.back.l02_services.mechanics.chronicler.archives.history import ChronicleArchive
 from src.back.l02_services.mechanics.chronicler.generation.battles import BattleLogCollector
 from src.back.l02_services.mechanics.chronicler.generation.chronicles import ChronicleGenerator
 from src.back.l02_services.mechanics.chronicler.generation.rumors import RumorGenerator
+from src.back.utils.event.registry import GameEvents
 
 
 class ChroniclerFacade:
@@ -192,6 +195,135 @@ class ChroniclerFacade:
         world_state.ticks_since_last_battle = 0
 
         return rumor
+
+    # ==================================================================
+    # ФИНАЛ ПАРТИИ
+    # ==================================================================
+
+    async def write_finale(
+        self, world_state: WorldState, result: VictoryEvaluationResult
+    ) -> Optional[FinaleChronicle]:
+        """
+        Дописывает последнюю главу хроники по вердикту подсистемы победы.
+
+        Глава пишется однажды и только по законченной партии. Без языковой
+        модели финал все равно заносится в мир - но с одной сухой причиной
+        вместо художественного текста: экран окончания игры не должен
+        оставаться пустым из-за молчания модели.
+        """
+        if not result.is_game_over or world_state.finale is not None:
+            return None
+
+        faction = self._finale_viewpoint_faction(world_state, result)
+        finale = await self._compose_finale(world_state, result, faction)
+
+        world_state.set_finale(finale)
+        await self._publish_finale(finale)
+
+        return finale
+
+    async def _compose_finale(
+        self,
+        world_state: WorldState,
+        result: VictoryEvaluationResult,
+        faction: Optional[Faction],
+    ) -> FinaleChronicle:
+        """
+        Просит модель написать оду или реквием, а при ее отказе собирает
+        финал из одной причины.
+        """
+        bare = FinaleChronicle(
+            is_player_victorious=result.is_player_victorious,
+            victory_type=result.victory_type,
+            reason=result.reason,
+            tick=world_state.time.total_ticks,
+            faction_id=faction.id if faction is not None else None,
+        )
+        if self._chronicles is None or self._rumors is None:
+            return bare
+
+        try:
+            response = await self._chronicles.generate_finale(
+                world_context=self._rumors.render_world_context(world_state, faction),
+                outcome_context=self._describe_outcome(result),
+                faction=faction,
+            )
+        except ChronicleGenerationFailedError as error:
+            main_logger.error(f"[Chronicler] {error.message}")
+            return bare
+
+        return FinaleChronicle.from_response(
+            response,
+            is_player_victorious=result.is_player_victorious,
+            reason=result.reason,
+            victory_type=result.victory_type,
+            tick=world_state.time.total_ticks,
+            faction_id=faction.id if faction is not None else None,
+        )
+
+    @staticmethod
+    def _describe_outcome(result: VictoryEvaluationResult) -> str:
+        """
+        Карточка исхода для user_prompt: чем закончилась партия и с какими
+        числами победитель к этому пришел.
+        """
+        lines = [result.reason]
+
+        if result.victory_type is not None:
+            lines.append(f"Тип финала: {result.victory_type.value}.")
+
+        progress = (
+            None
+            if result.winner_faction_id is None
+            else result.get_progress(result.winner_faction_id)
+        )
+        if progress is not None:
+            lines.append(
+                f"Казна победителя: {progress.current_gold:.0f} золота, "
+                f"{progress.current_material:.0f} материалов, "
+                f"{progress.current_food:.0f} провизии."
+            )
+            lines.append(
+                f"Соперников выбито: {progress.domination_defeated_factions} "
+                f"из {progress.domination_total_enemies}."
+            )
+            lines.append(
+                f"Городов {progress.required_town_level}-го уровня: "
+                f"{progress.max_level_towns_count}."
+            )
+
+        return "\n".join(lines)
+
+    def _finale_viewpoint_faction(
+        self, world_state: WorldState, result: VictoryEvaluationResult
+    ) -> Optional[Faction]:
+        """
+        Чьим голосом написан финал.
+
+        Хронику читает игрок, поэтому его культура важнее культуры
+        победителя: реквием собственной державе пишет ее же писарь.
+        """
+        player = world_state.get_player_faction()
+        if player is not None:
+            return player
+        return self._faction_of(world_state, result.winner_faction_id)
+
+    async def _publish_finale(self, finale: FinaleChronicle) -> None:
+        """Отдает готовую главу интерфейсу: экран финала ждет именно ее."""
+        if self._event_bus is None:
+            return
+
+        await self._event_bus.publish(
+            GameEvents.Chronicler.FINALE_RECORDED,
+            finale_id=finale.id,
+            title=finale.title,
+            is_player_victorious=finale.is_player_victorious,
+            victory_type=(
+                None if finale.victory_type is None else finale.victory_type.value
+            ),
+            faction_id=finale.faction_id,
+            tick=finale.tick,
+        )
 
     # ==================================================================
     # ВИТРИНА ДЛЯ ИНТЕРФЕЙСА

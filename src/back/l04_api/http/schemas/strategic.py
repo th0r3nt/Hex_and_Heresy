@@ -26,6 +26,11 @@ from src.back.l01_domain.factions.models.border_town import (
 from src.back.l01_domain.factions.models.faction import Faction
 from src.back.l01_domain.factions.models.garrison import Garrison
 from src.back.l01_domain.maps.models.strategic import HexCoordinates
+from src.back.l01_domain.world.constants import VictoryType
+from src.back.l01_domain.world.models.victory import (
+    VictoryConditionConfig,
+    VictoryProgress,
+)
 
 
 class MarchOrderRequest(BaseModel):
@@ -369,3 +374,96 @@ class GarrisonResponse(BaseModel):
             upkeep_food=garrison.total_upkeep_food,
             is_locked_in_battle=garrison.is_locked_in_battle,
         )
+
+
+# ====================================================
+# Глобальные цели партии
+# ====================================================
+
+
+class VictoryBranchView(BaseModel):
+    """
+    Одна ветка глобальной цели в панели интерфейса: подпись, полоска
+    прогресса и признак взятой планки.
+    """
+
+    victory_type: VictoryType = Field(...)
+    is_enabled: bool = Field(..., description="Разыгрывается ли эта ветка в партии")
+    is_complete: bool = Field(..., description="Условие выполнено прямо сейчас")
+    ratio: float = Field(..., ge=0.0, le=1.0, description="Доля выполнения от 0 до 1")
+    current: str = Field(..., description="Текущие значения строкой для подсказки")
+    target: str = Field(..., description="Требуемые значения строкой для подсказки")
+
+
+class VictoryProgressResponse(BaseModel):
+    """
+    Сводка продвижения фракции к глобальным целям.
+
+    Собирается из доменного замера: роутер сам ничего не считает, а панель
+    целей получает готовые проценты и подписи.
+    """
+
+    faction_id: str = Field(...)
+    is_finished: bool = Field(..., description="Партия уже дошла до финала")
+    branches: list[VictoryBranchView] = Field(default_factory=list)
+
+    @classmethod
+    def from_progress(
+        cls,
+        progress: VictoryProgress,
+        config: VictoryConditionConfig,
+        is_finished: bool = False,
+    ) -> "VictoryProgressResponse":
+        """
+        Раскладывает замер по трем веткам панели.
+        """
+        labels = {
+            VictoryType.DOMINATION: (
+                f"{progress.domination_defeated_factions} соперников выбито",
+                f"{progress.domination_total_enemies} соперников на карте",
+            ),
+            VictoryType.ECONOMIC: (
+                f"{progress.current_gold:.0f} золота, "
+                f"{progress.current_material:.0f} материалов, "
+                f"{progress.current_food:.0f} провизии",
+                f"{progress.target_gold:.0f} золота, "
+                f"{progress.target_material:.0f} материалов, "
+                f"{progress.target_food:.0f} провизии",
+            ),
+            VictoryType.EXPANSION: (
+                f"{progress.max_level_towns_count} городов "
+                f"{progress.required_town_level}-го уровня",
+                f"{progress.required_towns_count} городов "
+                f"{progress.required_town_level}-го уровня",
+            ),
+        }
+
+        return cls(
+            faction_id=progress.faction_id,
+            is_finished=is_finished,
+            branches=[
+                VictoryBranchView(
+                    victory_type=victory_type,
+                    is_enabled=config.is_enabled(victory_type),
+                    is_complete=progress.is_complete(victory_type),
+                    ratio=progress.ratio(victory_type),
+                    current=current,
+                    target=target,
+                )
+                for victory_type, (current, target) in labels.items()
+            ],
+        )
+
+
+class VictoryOverviewResponse(BaseModel):
+    """
+    Панель глобальных целей целиком: сводка игрока и сводки его соперников.
+
+    Соперники показываются теми же полосками: скрытых зон в этих числах
+    нет - казна и уровни чужих городов видны разведке и так.
+    """
+
+    player: Optional[VictoryProgressResponse] = Field(
+        default=None, description="Сводка фракции игрока. None у партии-наблюдения"
+    )
+    rivals: list[VictoryProgressResponse] = Field(default_factory=list)

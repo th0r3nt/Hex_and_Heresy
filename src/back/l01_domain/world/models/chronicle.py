@@ -19,6 +19,7 @@ from src.back.l01_domain.world.constants import (
     CHRONICLE_QUOTE_MAX_LENGTH,
     CHRONICLE_TITLE_MAX_LENGTH,
     RUMOR_TEXT_MAX_LENGTH,
+    VictoryType,
 )
 from src.back.l01_domain.world.models.battle_log import SquadBattleLog
 
@@ -63,6 +64,26 @@ class LLMChronicleResponse(BaseModel):
     @classmethod
     def _clamp_quote(cls, value: str) -> str:
         return _clamp(value, CHRONICLE_QUOTE_MAX_LENGTH)
+
+    @field_validator("body")
+    @classmethod
+    def _clamp_body(cls, value: str) -> str:
+        return _clamp(value, CHRONICLE_BODY_MAX_LENGTH)
+
+
+class LLMFinaleResponse(BaseModel):
+    """
+    Ожидаемый JSON-ответ летописца о финале партии: ода триумфатору или
+    реквием погибшей державе.
+    """
+
+    title: str = Field(..., description="Заголовок финальной главы летописи")
+    body: str = Field(..., description="Ода или реквием - чем закончилась партия")
+
+    @field_validator("title")
+    @classmethod
+    def _clamp_title(cls, value: str) -> str:
+        return _clamp(value, CHRONICLE_TITLE_MAX_LENGTH)
 
     @field_validator("body")
     @classmethod
@@ -238,6 +259,59 @@ class FallenRecord(BaseModel):
             battle_id=battle_id,
             killer_name=subject.killer_name,
             kills_earned=subject.kills,
+        )
+
+
+class FinaleChronicle(BaseModel):
+    """
+    Последняя страница летописи: чем закончилась партия.
+
+    Пишется однажды и живет в самом мире, поэтому переживает перезагрузку
+    сохранения: экран финала должен читаться и после возвращения в игру.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    id: str = Field(default_factory=lambda: str(uuid4()))
+
+    is_player_victorious: bool = Field(...)
+    victory_type: Optional[VictoryType] = Field(
+        default=None, description="Ветка победы. None у поражения"
+    )
+    reason: str = Field(
+        ..., min_length=1, description="Сухая причина финала - она же подпись на экране"
+    )
+
+    title: str = Field(default="", description="Заголовок финальной главы")
+    body: str = Field(default="", description="Текст летописца. Пуст, если модель молчала")
+
+    tick: int = Field(default=0, ge=0, description="Такт, которым датирован финал")
+    faction_id: Optional[str] = Field(
+        default=None, description="Фракция, чьими глазами написан финал"
+    )
+    created_at: datetime = Field(default_factory=_utc_now)
+
+    @classmethod
+    def from_response(
+        cls,
+        response: LLMFinaleResponse,
+        is_player_victorious: bool,
+        reason: str,
+        victory_type: Optional[VictoryType] = None,
+        tick: int = 0,
+        faction_id: Optional[str] = None,
+    ) -> "FinaleChronicle":
+        """
+        Собирает финальную главу из ответа языковой модели.
+        """
+        return cls(
+            is_player_victorious=is_player_victorious,
+            victory_type=victory_type,
+            reason=reason,
+            title=response.title,
+            body=response.body,
+            tick=tick,
+            faction_id=faction_id,
         )
 
 

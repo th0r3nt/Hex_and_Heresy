@@ -26,6 +26,7 @@ from src.back.l02_services.mechanics.chronicler.listener import ChroniclerListen
 from src.back.l02_services.mechanics.diplomacy.facade import DiplomacyFacade
 from src.back.l02_services.mechanics.game_master.facade import GameMasterFacade
 from src.back.l02_services.mechanics.gunsmith.facade import GunsmithFacade
+from src.back.l02_services.mechanics.victory.facade import VictoryFacade
 from src.back.l02_services.saves.facade import SavesFacade
 from src.back.l02_services.saves.loader import LoadedSession
 from src.back.l02_services.turns.facade import TurnsFacade
@@ -85,6 +86,7 @@ class AppContainer:
     gunsmith_facade: GunsmithFacade
     game_master_facade: GameMasterFacade
     saves_facade: SavesFacade
+    victory_facade: VictoryFacade
     gameflow_fsm: GameFlowFSM
     gameflow_facade: GameFlowFacade
     turns_facade: TurnsFacade
@@ -188,6 +190,11 @@ def create_app_container(
     )
 
     # 3. Игровой поток и конечный автомат
+    # Подсистема целей нужна и потоку (внеочередная проверка после штурма),
+    # и такту (шаг 4.8), поэтому экземпляр один на всех: своего состояния
+    # она не держит, а финал партии живет в самом WorldState
+    victory_facade = VictoryFacade(event_bus=event_bus)
+
     gameflow_fsm = GameFlowFSM(
         initial_state=GameState.MAIN_MENU,
         event_bus=event_bus,
@@ -195,11 +202,14 @@ def create_app_container(
     gameflow_facade = GameFlowFacade(
         fsm=gameflow_fsm,
         event_bus=event_bus,
+        victory_facade=victory_facade,
     )
 
     # 4. Оркестрация ходов
     strategic_orchestrator = StrategicTurnOrchestrator(
         diplomacy_facade=diplomacy_facade,
+        victory_facade=victory_facade,
+        gameflow_facade=gameflow_facade,
         gamedata=registry,
         event_bus=event_bus,
     )
@@ -209,6 +219,7 @@ def create_app_container(
     turns_facade = TurnsFacade(
         strategic_orchestrator=strategic_orchestrator,
         tactical_orchestrator=tactical_orchestrator,
+        victory_facade=victory_facade,
         event_bus=event_bus,
     )
 
@@ -229,6 +240,7 @@ def create_app_container(
         game_master_facade=game_master_facade,
         advisor_facade=advisor_facade,
         saves_facade=saves_facade,
+        victory_facade=victory_facade,
         gameflow_fsm=gameflow_fsm,
         gameflow_facade=gameflow_facade,
         turns_facade=turns_facade,

@@ -64,6 +64,7 @@ class ChroniclerListener:
             (GameEvents.Tactical.BATTLE_COMPLETED, self.on_battle_completed),
             (GameEvents.Tactical.HERO_SLAIN, self.on_hero_slain),
             (GameEvents.Strategic.TURN_COMPLETED, self.on_strategic_turn_completed),
+            (GameEvents.GameFlow.GAME_OVER, self.on_game_over),
         ]
 
     # ==================================================================
@@ -132,6 +133,23 @@ class ChroniclerListener:
 
         world_state.ticks_since_last_battle += 1
         return self._run(self._facade.speak_rumor(world_state))
+
+    def on_game_over(self, result: Any = None, **_: Any) -> Optional[Awaitable[Any]]:
+        """
+        Дописывает последнюю главу хроники: партия закончилась.
+
+        Как и летопись боя, текст уходит в фон - экран финала показывается
+        игроку сразу, а ода или реквием прилетают на него отдельно.
+        Финалы, объявленные не подсистемой победы (например, вручную из
+        меню), приходят без вердикта и главы не получают.
+        """
+        if result is None:
+            return None
+        world_state = self._require_world_state("финал партии")
+        if world_state is None:
+            return None
+
+        return self._run(self._facade.write_finale(world_state, result))
 
     # ==================================================================
     # ФОНОВЫЕ ЗАДАЧИ

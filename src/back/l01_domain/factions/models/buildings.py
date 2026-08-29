@@ -102,6 +102,14 @@ class Headquarters(BaseModel):
     )
     level: int = Field(default=1, ge=MIN_HQ_LEVEL, le=MAX_HQ_LEVEL)
 
+    is_destroyed: bool = Field(
+        default=False,
+        description=(
+            "Цитадель взята штурмом и сожжена. Отстроить ее нельзя: фракция "
+            "с павшей цитаделью выбывает из партии"
+        ),
+    )
+
     @property
     def building_slots(self) -> int:
         return HQ_BASE_BUILDING_SLOTS + max(0, self.level - 1) * HQ_BUILDING_SLOTS_PER_LEVEL
@@ -110,6 +118,15 @@ class Headquarters(BaseModel):
         if self.level >= MAX_HQ_LEVEL:
             raise BuildingMaxLevelReachedError(self.name, MAX_HQ_LEVEL)
         self.level += 1
+
+    def destroy(self) -> None:
+        """
+        Отмечает падение цитадели - конец игры для ее владельца.
+
+        Само по себе это только флаг: выводы из него делает проверка
+        глобальных целей партии (см. VictoryEvaluator).
+        """
+        self.is_destroyed = True
 
 
 class RegionalHall(BaseModel):

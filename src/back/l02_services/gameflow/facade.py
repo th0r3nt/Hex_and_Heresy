@@ -2,11 +2,12 @@
 Главный фасад игрового потока для внешних слоев и API.
 """
 
-from typing import Optional
+from typing import Any, Optional
 
 from src.back.l01_domain.combat.models.state import TacticalBattleState
 from src.back.l01_domain.maps.models.strategic import HexCoordinates
 from src.back.l01_domain.protocols.events import EventBusProtocol
+from src.back.l01_domain.world.constants import VictoryType
 from src.back.l01_domain.world.models.events import GlobalEvent
 from src.back.l01_domain.world.models.gameflow import (
     CombatResolutionPayload,
@@ -16,6 +17,7 @@ from src.back.l01_domain.world.models.gameflow import (
     GlobalEventTransitionPayload,
 )
 from src.back.l01_domain.world.models.state import WorldState
+from src.back.l01_domain.world.models.victory import VictoryEvaluationResult
 from src.back.l02_services.gameflow.fsm import GameFlowFSM
 from src.back.l02_services.gameflow.guards import (
     ActionForbiddenInCurrentStateError,
@@ -26,6 +28,7 @@ from src.back.l02_services.gameflow.guards import (
     is_saving_allowed,
 )
 from src.back.l02_services.gameflow.states import GameFlowTrigger, GameState
+from src.back.l02_services.mechanics.victory.facade import VictoryFacade
 
 
 class GameFlowFacade:
@@ -38,9 +41,13 @@ class GameFlowFacade:
         self,
         fsm: Optional[GameFlowFSM] = None,
         event_bus: Optional[EventBusProtocol] = None,
+        victory_facade: Optional[VictoryFacade] = None,
     ) -> None:
         self._fsm = fsm or GameFlowFSM(event_bus=event_bus)
         self._world_state: Optional[WorldState] = None
+        # Без подсистемы победы поток работает как раньше: финал партии
+        # объявляют вручную снаружи. Корень компоновки ее подкладывает
+        self._victory_facade = victory_facade
 
     @property
     def current_state(self) -> GameState:
@@ -190,22 +197,53 @@ class GameFlowFacade:
         """
         Завершает тактический бой, возвращает игру на глобальную карту
         и снимает лок с армий и гарнизона, задействованных в этом бою.
+
+        Штурм, снесший базу защитника, сразу тянет за собой внеочередную
+        проверку глобальных целей: падение последней вражеской цитадели
+        заканчивает партию тем же запросом, а не следующим тактом.
         """
 
         if self._world_state is None:
             raise WorldStateNotBoundError("finish_tactical_combat")
+
+        # Контекст боя нужен до перехода: он же и хранит, чью базу штурмовали,
+        # а после RESOLVE_COMBAT автомат подменит его итогами сражения
+        combat = self._fsm.current_payload
 
         payload = CombatResolutionPayload(
             battle_id=battle_id,
             victor_faction_id=victor_faction_id,
             is_base_destroyed=is_base_destroyed,
         )
-        new_state = await self._fsm.trigger(GameFlowTrigger.RESOLVE_COMBAT, payload=payload)
+        await self._fsm.trigger(GameFlowTrigger.RESOLVE_COMBAT, payload=payload)
 
         self._world_state.release_armies_from_battle(battle_id)
         self._world_state.release_garrisons_from_battle(battle_id)
 
-        return new_state
+        if is_base_destroyed:
+            self._raze_defender_headquarters(combat)
+            await self.check_victory_conditions()
+
+        return self.current_state
+
+    def _raze_defender_headquarters(self, combat: Any) -> None:
+        """
+        Заносит в мир падение цитадели защитника.
+
+        Тактический бой сообщает только сам факт "база разрушена", и чья
+        именно она была, видно лишь из контекста сражения. Флаг ставится,
+        только если штурмовали гекс столицы: снесенный пограничный город -
+        это потеря поселения, а не конец фракции.
+        """
+        if not isinstance(combat, CombatTransitionPayload) or self._world_state is None:
+            return
+
+        defender = self._world_state.get_faction(combat.defender_faction_id)
+        if defender is None or defender.capital_hex is None:
+            return
+
+        if defender.capital_hex == combat.hex_coordinates:
+            defender.headquarters.destroy()
 
     async def open_diplomatic_session(
         self,
@@ -279,7 +317,11 @@ class GameFlowFacade:
         return await self._fsm.trigger(GameFlowTrigger.CLOSE_CREDITS)
 
     async def trigger_game_over(
-        self, is_player_victorious: bool, reason: str, total_ticks: int = 0
+        self,
+        is_player_victorious: bool,
+        reason: str,
+        total_ticks: int = 0,
+        victory_type: Optional[VictoryType] = None,
     ) -> GameState:
         """
         Фиксирует окончание партии (победу или поражение).
@@ -288,8 +330,67 @@ class GameFlowFacade:
             is_player_victorious=is_player_victorious,
             reason=reason,
             total_ticks_survived=total_ticks,
+            victory_type=victory_type,
         )
         return await self._fsm.trigger(GameFlowTrigger.DECLARE_GAME_OVER, payload=payload)
+
+    # ==================================================================
+    # ГЛОБАЛЬНЫЕ ЦЕЛИ ПАРТИИ
+    # ==================================================================
+
+    @property
+    def can_declare_game_over(self) -> bool:
+        """
+        Позволяет ли текущий режим объявить финал.
+
+        Финал объявляется с глобальной карты и из боя, но не из меню, не из
+        паузы и не с уже открытого экрана окончания. Ответ спрашивается у
+        самой матрицы переходов, чтобы не держать ее копию здесь: пробный
+        контекст нужен только стражу и никуда не уезжает.
+        """
+        probe = GameOverPayload(is_player_victorious=False, reason="проверка перехода")
+        return self._fsm.can_trigger(GameFlowTrigger.DECLARE_GAME_OVER, payload=probe)
+
+    async def check_victory_conditions(self) -> Optional[VictoryEvaluationResult]:
+        """
+        Сверяет партию с ее глобальными целями и переводит игру на экран
+        финала, если они выполнены.
+
+        Без подсистемы победы или без привязанной партии проверять нечего -
+        тогда метод молча возвращает None.
+        """
+        if self._victory_facade is None or self._world_state is None:
+            return None
+
+        result = await self._victory_facade.evaluate_world(self._world_state)
+        await self.declare_victory_result(result)
+        return result
+
+    async def declare_victory_result(
+        self, result: VictoryEvaluationResult
+    ) -> Optional[GameState]:
+        """
+        Переводит игру на экран финала по готовому вердикту подсистемы победы.
+
+        Отдельно от check_victory_conditions, потому что вердикт может быть
+        вынесен и снаружи - например, шагом глобального такта, который уже
+        посчитал мир целиком.
+
+        Возвращает None, если объявлять нечего или режим этого не позволяет:
+        партия, доигранная в паузе, не должна ронять запрос игрока ошибкой
+        недопустимого перехода.
+        """
+        if not result.is_game_over or not self.can_declare_game_over:
+            return None
+
+        total_ticks = 0 if self._world_state is None else self._world_state.time.total_ticks
+
+        return await self.trigger_game_over(
+            is_player_victorious=result.is_player_victorious,
+            reason=result.reason,
+            total_ticks=total_ticks,
+            victory_type=result.victory_type,
+        )
 
     async def quit_to_main_menu(self) -> GameState:
         """

@@ -28,10 +28,16 @@ from src.back.l01_domain.world.models.chronicle import (
     FallenSubject,
     LLMChronicleResponse,
     LLMEpitaphResponse,
+    LLMFinaleResponse,
 )
 
 CHRONICLE_TEMPERATURE = 0.85
 EPITAPH_TEMPERATURE = 0.75
+FINALE_TEMPERATURE = 0.9
+
+# Финал партии пишется один раз за всю игру и боем не датируется: досье
+# сражения у него нет, поэтому ошибки модели помечаются этим идентификатором
+FINALE_SUBJECT_ID = "finale"
 
 
 class ChronicleGenerator:
@@ -101,6 +107,36 @@ class ChronicleGenerator:
             )
         return response
 
+    async def generate_finale(
+        self,
+        world_context: str,
+        outcome_context: str,
+        faction: Optional[Faction] = None,
+    ) -> LLMFinaleResponse:
+        """
+        Пишет последнюю главу хроники: оду триумфатору или реквием павшей
+        державе.
+
+        Числа исхода приходят готовыми в outcome_context - генератор только
+        решает, чьим голосом их пересказать.
+        """
+        response = await self._ask(
+            system_prompt=self._build_finale_prompt(faction),
+            user_prompt=(
+                f"Сводка мира:\n{world_context}\n\n"
+                f"Чем закончилась партия:\n{outcome_context}"
+            ),
+            response_model=LLMFinaleResponse,
+            temperature=FINALE_TEMPERATURE,
+            battle_id=FINALE_SUBJECT_ID,
+        )
+
+        if not response.body.strip() or not response.title.strip():
+            raise ChronicleGenerationFailedError(
+                FINALE_SUBJECT_ID, "модель вернула пустой финал"
+            )
+        return response
+
     # ==================================================================
     # СБОРКА ПРОМПТОВ
     # ==================================================================
@@ -137,6 +173,20 @@ class ChronicleGenerator:
         )
 
         return f"{static_context}\n\n{dynamic_context}"
+
+    def _build_finale_prompt(self, faction: Optional[Faction]) -> str:
+        """
+        Промпт финальной главы: к обычному голосу летописца добавляется
+        стратегический контекст - итог партии считается по глобальной карте,
+        а не по одному сражению.
+        """
+        blocks = self._role_blocks(faction)
+        blocks.append(PromptCatalog.ROLES.CHRONICLER.FINALE)
+        blocks.append(PromptCatalog.BASE.MECHANICS.STRATEGIC)
+        if faction is not None:
+            blocks.append(get_faction_prompt_key(faction.race))
+
+        return self._prompt_builder.build(blocks)
 
     def _role_blocks(self, faction: Optional[Faction]) -> list[str]:
         """
