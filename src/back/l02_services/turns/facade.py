@@ -23,14 +23,17 @@ from src.back.l01_domain.factions.models.border_town import (
 from src.back.l01_domain.factions.models.faction import Faction
 from src.back.l01_domain.factions.models.garrison import Garrison
 from src.back.l01_domain.factions.models.workers import WorkerAssignment
+from src.back.l01_domain.maps.constants import HexVisibilityState
 from src.back.l01_domain.maps.models.strategic import HexCoordinates, hex_line
 from src.back.l01_domain.protocols.events import EventBusProtocol
 from src.back.l01_domain.protocols.gamedata import GameDataRepositoryProtocol
 from src.back.l01_domain.world.models.reports import GlobalTurnReport
 from src.back.l01_domain.world.models.state import WorldState
 from src.back.l01_domain.world.models.victory import VictoryProgress
+from src.back.l01_domain.world.models.visibility import FactionVisionMap
 from src.back.l02_services.mechanics.settlements.facade import SettlementsFacade
 from src.back.l02_services.mechanics.victory.facade import VictoryFacade
+from src.back.l02_services.mechanics.vision.facade import VisionFacade
 from src.back.l02_services.turns.strategic.garrison import GarrisonService
 from src.back.l02_services.turns.strategic.orchestrator import (
     StrategicTurnOrchestrator,
@@ -56,6 +59,7 @@ class TurnsFacade:
         strategic_orchestrator: Optional[StrategicTurnOrchestrator] = None,
         tactical_orchestrator: Optional[TacticalTurnOrchestrator] = None,
         victory_facade: Optional[VictoryFacade] = None,
+        vision_facade: Optional[VisionFacade] = None,
         gamedata: Optional[GameDataRepositoryProtocol] = None,
         event_bus: Optional[EventBusProtocol] = None,
     ) -> None:
@@ -63,8 +67,14 @@ class TurnsFacade:
         # Тот же фасад целей, что стоит шагом 4.8 в конвейере такта: своего
         # состояния он не держит, поэтому годится и для чтения прогресса
         self._victory = victory_facade or VictoryFacade(event_bus=event_bus)
+        # Тот же фасад тумана, что стоит шагом 4.6 в конвейере такта: маски
+        # видимости живут в самом мире, поэтому он же отдает срез карты игроку
+        self._vision = vision_facade or VisionFacade(event_bus=event_bus)
         self._strategic_orchestrator = strategic_orchestrator or StrategicTurnOrchestrator(
-            victory_facade=self._victory, gamedata=gamedata, event_bus=event_bus
+            victory_facade=self._victory,
+            vision_facade=self._vision,
+            gamedata=gamedata,
+            event_bus=event_bus,
         )
         self._tactical_orchestrator = tactical_orchestrator or TacticalTurnOrchestrator(
             event_bus=event_bus
@@ -342,6 +352,46 @@ class TurnsFacade:
         не осталось.
         """
         return self._victory.is_faction_defeated(
+            world_state=world_state, faction_id=faction_id
+        )
+
+    # ==================================================================
+    # ТУМАН ВОЙНЫ
+    # ==================================================================
+
+    def get_faction_vision(
+        self, world_state: WorldState, faction_id: str
+    ) -> FactionVisionMap:
+        """
+        Маска тумана фракции: что она видит сейчас и что успела открыть.
+        """
+        return self._vision.get_vision_map(world_state=world_state, faction_id=faction_id)
+
+    def get_hex_visibility(
+        self, world_state: WorldState, faction_id: str, coord: HexCoordinates
+    ) -> HexVisibilityState:
+        """
+        Состояние одного гекса глазами фракции - для подсказок интерфейса.
+        """
+        return self._vision.get_hex_status(
+            world_state=world_state, faction_id=faction_id, coord=coord
+        )
+
+    def is_hex_visible(
+        self, world_state: WorldState, faction_id: str, coord: HexCoordinates
+    ) -> bool:
+        """
+        Просматривает ли фракция гекс прямо сейчас.
+        """
+        return self._vision.is_hex_visible(
+            world_state=world_state, faction_id=faction_id, coord=coord
+        )
+
+    def get_world_view(self, world_state: WorldState, faction_id: str) -> WorldState:
+        """
+        Срез мира глазами фракции: без чужих армий, гонцов и неоткрытых земель.
+        """
+        return self._vision.build_world_view(
             world_state=world_state, faction_id=faction_id
         )
 

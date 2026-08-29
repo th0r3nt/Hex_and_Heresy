@@ -41,6 +41,7 @@ class StatName(str, Enum):
     FIREARM_MISFIRE_CHANCE = "firearm_misfire_chance"
     MOVEMENT_SPEED = "movement_speed"
     VISIBILITY_RANGE_CELLS = "visibility_range_cells"
+    VISION_RANGE_HEXES = "vision_range_hexes"
     HP_DRAIN_PER_TICK = "hp_drain_per_tick"
     MAGIC_DISABLED = "magic_disabled"
     UPKEEP_GOLD = "upkeep_gold"

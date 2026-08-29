@@ -7,7 +7,10 @@ from typing import Any
 
 from src.back.l01_domain.factions.constants import BuildingCategory, ResourceType
 from src.back.l01_domain.factions.models.buildings import BuildingUpgrade
-from src.back.l01_domain.maps.constants import TerritoryZoneType
+from src.back.l01_domain.maps.constants import (
+    VISION_RADIUS_WATCHTOWER,
+    TerritoryZoneType,
+)
 from src.back.gamedata.humans.common import HumanBuildingId, HumanUnitId
 
 _FACTION = "humans"
@@ -290,6 +293,7 @@ BUILDINGS_LIST: dict[str, dict[str, Any]] = {
         "construction_ticks": 1,
         "requires_workers": False,
         "resource_output_per_worker": {},
+        "vision_radius_hexes": VISION_RADIUS_WATCHTOWER,
         "special_rules": "Снимает Туман войны с прилегающих Ничейных земель. Очень низкий запас прочности.",
     },
 }

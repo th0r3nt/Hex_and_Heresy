@@ -44,6 +44,10 @@ class EquipmentStats(BaseModel):
     stamina_drain_per_turn: float = Field(
         default=0.0, ge=0, description="Доп. расход выносливости за ход"
     )
+    # Прибавка к радиусу обзора отряда на глобальной карте (линзы, подзорные трубы)
+    vision_bonus_hexes: int = Field(
+        default=0, ge=0, description="Доп. радиус обзора носителя в гексах"
+    )
     # Доп. урон против больших целей
     damage_bonus_vs_size: dict[UnitSizeCategory, float] = Field(
         default_factory=dict,

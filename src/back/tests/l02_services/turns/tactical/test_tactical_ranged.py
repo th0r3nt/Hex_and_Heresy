@@ -3,7 +3,12 @@
 """
 
 from src.back.l01_domain.army.models.card.squad import Squad
-from src.back.l01_domain.combat.constants import TerrainType, WeatherCondition
+from src.back.l01_domain.combat.constants import (
+    NIGHT_VISION_RANGE_CELLS,
+    TerrainType,
+    TimeOfDay,
+    WeatherCondition,
+)
 from src.back.l01_domain.combat.models.state import SquadOrder
 from src.back.l01_domain.maps.models.tactical import CellCoordinates
 from src.back.l02_services.turns.tactical.combat.ranged import TacticalRangedService
@@ -109,3 +114,102 @@ class TestTacticalRangedService:
         assert reports[0].is_misfire is True
         assert reports[0].kills == 0
         assert sq_target.state.unit_count == 100
+
+class TestRangedVisibilityLimits:
+    """
+    Туман войны на тактической сетке: дальность оружия ничего не значит,
+    если цель не видно (см. combat/visibility.py).
+    """
+
+    @staticmethod
+    def _archers_and_target(battle_state, archetype, weapon, target_x: int):
+        """Ставит лучников в начало ряда, а мишень - на заданной дистанции."""
+        archers = Squad.create_new(archetype=archetype, weapon=weapon)
+        archers.id = "archers"
+        target = Squad.create_new(archetype=archetype)
+        target.id = "target"
+
+        place_squad_on_grid(battle_state, "archers", 0, 0)
+        place_squad_on_grid(battle_state, "target", target_x, 0)
+        battle_state.queue_order(
+            SquadOrder(squad_id="archers", target_cell=CellCoordinates(x=target_x, y=0))
+        )
+
+        return {"archers": archers, "target": target}, target
+
+    def test_night_forbids_shots_beyond_three_cells(
+        self, empty_battle_state, archetype_human_sword, weapon_bow
+    ):
+        """
+        Ночью лук бьет на шесть клеток, а видно на три: залпа по дальней
+        цели не будет.
+        """
+        squads, target = self._archers_and_target(
+            empty_battle_state, archetype_human_sword, weapon_bow, target_x=5
+        )
+        empty_battle_state.time_of_day = TimeOfDay.NEON_HOURS
+
+        reports = TacticalRangedService().resolve_ranged_attacks(
+            empty_battle_state, squads
+        )
+
+        assert len(reports) == 1
+        assert reports[0].is_out_of_sight is True
+        assert reports[0].kills == 0
+        assert target.state.unit_count == 100
+
+    def test_night_still_allows_shots_inside_the_lit_circle(
+        self, empty_battle_state, archetype_human_sword, weapon_bow
+    ):
+        """Цель на границе ночного обзора остается под обстрелом."""
+        squads, target = self._archers_and_target(
+            empty_battle_state,
+            archetype_human_sword,
+            weapon_bow,
+            target_x=NIGHT_VISION_RANGE_CELLS,
+        )
+        empty_battle_state.time_of_day = TimeOfDay.NEON_HOURS
+
+        reports = TacticalRangedService().resolve_ranged_attacks(
+            empty_battle_state, squads
+        )
+
+        assert len(reports) == 1
+        assert reports[0].is_out_of_sight is False
+        assert reports[0].kills > 0
+        assert target.state.unit_count < 100
+
+    def test_clear_grey_hours_do_not_limit_the_bow(
+        self, empty_battle_state, archetype_human_sword, weapon_bow
+    ):
+        """Днем при ясном небе поле просматривается на всю дальность оружия."""
+        squads, target = self._archers_and_target(
+            empty_battle_state, archetype_human_sword, weapon_bow, target_x=6
+        )
+
+        reports = TacticalRangedService().resolve_ranged_attacks(
+            empty_battle_state, squads
+        )
+
+        assert reports[0].is_out_of_sight is False
+        assert target.state.unit_count < 100
+
+    def test_ash_storm_at_night_leaves_only_the_next_cell(
+        self, empty_battle_state, archetype_human_sword, weapon_arquebus
+    ):
+        """
+        Пепельная буря в неоновые часы забирает весь ночной запас: аркебузир
+        не различает цель уже в двух клетках.
+        """
+        squads, target = self._archers_and_target(
+            empty_battle_state, archetype_human_sword, weapon_arquebus, target_x=2
+        )
+        empty_battle_state.time_of_day = TimeOfDay.NEON_HOURS
+        empty_battle_state.weather = WeatherCondition.ASH_STORM
+
+        reports = TacticalRangedService().resolve_ranged_attacks(
+            empty_battle_state, squads
+        )
+
+        assert reports[0].is_out_of_sight is True
+        assert target.state.unit_count == 100

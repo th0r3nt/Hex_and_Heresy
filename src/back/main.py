@@ -27,6 +27,7 @@ from src.back.l02_services.mechanics.diplomacy.facade import DiplomacyFacade
 from src.back.l02_services.mechanics.game_master.facade import GameMasterFacade
 from src.back.l02_services.mechanics.gunsmith.facade import GunsmithFacade
 from src.back.l02_services.mechanics.victory.facade import VictoryFacade
+from src.back.l02_services.mechanics.vision.facade import VisionFacade
 from src.back.l02_services.saves.facade import SavesFacade
 from src.back.l02_services.saves.loader import LoadedSession
 from src.back.l02_services.turns.facade import TurnsFacade
@@ -49,6 +50,7 @@ from src.back.l04_api.http.routers import api_router
 from src.back.l04_api.ws.dispatcher import EventDispatcher
 from src.back.l04_api.ws.manager import ConnectionManager
 from src.back.l04_api.ws.router import router as ws_router
+from src.back.l04_api.ws.visibility import PlayerVisionGate
 
 from src.back.utils.event.bus import EventBus
 from src.back.utils.logger import main_logger
@@ -87,6 +89,7 @@ class AppContainer:
     game_master_facade: GameMasterFacade
     saves_facade: SavesFacade
     victory_facade: VictoryFacade
+    vision_facade: VisionFacade
     gameflow_fsm: GameFlowFSM
     gameflow_facade: GameFlowFacade
     turns_facade: TurnsFacade
@@ -195,6 +198,10 @@ def create_app_container(
     # она не держит, а финал партии живет в самом WorldState
     victory_facade = VictoryFacade(event_bus=event_bus)
 
+    # Туман войны считается на такте, отдается роутерам карты и гейтит ленту
+    # событий - экземпляр один на всех, свое состояние он держит в WorldState
+    vision_facade = VisionFacade(event_bus=event_bus)
+
     gameflow_fsm = GameFlowFSM(
         initial_state=GameState.MAIN_MENU,
         event_bus=event_bus,
@@ -209,6 +216,7 @@ def create_app_container(
     strategic_orchestrator = StrategicTurnOrchestrator(
         diplomacy_facade=diplomacy_facade,
         victory_facade=victory_facade,
+        vision_facade=vision_facade,
         gameflow_facade=gameflow_facade,
         gamedata=registry,
         event_bus=event_bus,
@@ -220,6 +228,7 @@ def create_app_container(
         strategic_orchestrator=strategic_orchestrator,
         tactical_orchestrator=tactical_orchestrator,
         victory_facade=victory_facade,
+        vision_facade=vision_facade,
         event_bus=event_bus,
     )
 
@@ -241,6 +250,7 @@ def create_app_container(
         advisor_facade=advisor_facade,
         saves_facade=saves_facade,
         victory_facade=victory_facade,
+        vision_facade=vision_facade,
         gameflow_fsm=gameflow_fsm,
         gameflow_facade=gameflow_facade,
         turns_facade=turns_facade,
@@ -315,7 +325,16 @@ def create_app(container: Optional[AppContainer] = None) -> FastAPI:
     # 1. Зависимости. Роутеры достают их из app.state через dependencies.py
     app.state.container = container or create_app_container()
     app.state.ws_manager = ConnectionManager()
-    app.state.ws_dispatcher = EventDispatcher(manager=app.state.ws_manager)
+    # Лента событий идет игроку через туман войны: чужой марш в неразведанном
+    # секторе до окна клиента не доезжает
+    container = app.state.container
+    app.state.ws_dispatcher = EventDispatcher(
+        manager=app.state.ws_manager,
+        visibility_gate=PlayerVisionGate(
+            gameflow_facade=container.gameflow_facade,
+            vision_facade=container.vision_facade,
+        ),
+    )
 
     # 2. Доступ клиента к серверу
     app.add_middleware(

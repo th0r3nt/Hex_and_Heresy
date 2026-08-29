@@ -13,6 +13,7 @@ from src.back.l01_domain.army.constants import (
 from src.back.l01_domain.army.models.card.squad import Squad
 from src.back.l01_domain.army.models.characters.commanders import Commander
 from src.back.l01_domain.army.models.characters.heroes import Hero
+from src.back.l01_domain.maps.constants import VISION_RADIUS_ARMY
 from src.back.l01_domain.maps.models.strategic import HexCoordinates
 
 
@@ -101,6 +102,23 @@ class StrategicArmy(BaseModel):
         if self.commander is not None:
             base_speed += self.commander.strategic_movement_bonus
         return max(1, base_speed)
+
+    @property
+    def vision_radius_hexes(self) -> int:
+        """
+        Радиус обзора армии на глобальной карте.
+
+        Оптика не складывается по всей колонне: вперед высылают тех, кто
+        видит дальше всех, поэтому от отрядов берется лучший прибор, а не
+        сумма всех. Перк разведки полководца ложится сверху.
+        """
+        best_squad_bonus = max(
+            (squad.vision_bonus_hexes for squad in self.squads), default=0
+        )
+        commander_bonus = (
+            0 if self.commander is None else self.commander.vision_range_bonus
+        )
+        return max(0, VISION_RADIUS_ARMY + best_squad_bonus + commander_bonus)
 
     def add_squad(self, squad: Squad) -> None:
         """

@@ -12,6 +12,7 @@ from src.back.l02_services.gameflow.facade import GameFlowFacade
 from src.back.l02_services.mechanics.diplomacy.facade import DiplomacyFacade
 from src.back.l02_services.mechanics.settlements.facade import SettlementsFacade
 from src.back.l02_services.mechanics.victory.facade import VictoryFacade
+from src.back.l02_services.mechanics.vision.facade import VisionFacade
 from src.back.l02_services.turns.strategic.economy import StrategicEconomyService
 from src.back.l02_services.turns.strategic.garrison import GarrisonService
 from src.back.l02_services.turns.strategic.veterancy import StrategicVeterancyService
@@ -29,7 +30,10 @@ class StrategicTurnOrchestrator:
     """
     Главный оркестратор глобального хода.
     Строго последовательно выполняет конвейер:
-    [1. События и время] -> [1.6. Судьба взятых городов] -> [1.7. Гарнизоны] -> [2. Экспедиции] -> [3. Экономика и содержание] -> [4. Передвижения] -> [4.5. Дипломатия] -> [4.8. Глобальные цели] -> [5. Итоговый отчет].
+    [1. События и время] -> [1.6. Судьба взятых городов] -> [1.7. Гарнизоны] 
+    -> [2. Экспедиции] -> [3. Экономика и содержание] -> [4. Передвижения] 
+    -> [4.5. Дипломатия] -> [4.6. Туман войны] -> [4.8. Глобальные цели] 
+    -> [5. Итоговый отчет].
     """
 
     def __init__(
@@ -43,6 +47,7 @@ class StrategicTurnOrchestrator:
         veterancy_service: Optional[StrategicVeterancyService] = None,
         diplomacy_facade: Optional[DiplomacyFacade] = None,
         victory_facade: Optional[VictoryFacade] = None,
+        vision_facade: Optional[VisionFacade] = None,
         gameflow_facade: Optional[GameFlowFacade] = None,
         gamedata: Optional[GameDataRepositoryProtocol] = None,
         event_bus: Optional[EventBusProtocol] = None,
@@ -73,10 +78,10 @@ class StrategicTurnOrchestrator:
         )
         # Дипломатии на такте нужны только пакты и логистика, LLM здесь не участвует
         self._diplomacy_facade = diplomacy_facade or DiplomacyFacade(event_bus=event_bus)
-        # Глобальные цели партии: свой вердикт такт выносит всегда, а вот
-        # переключить игру на экран финала может только игровой поток -
-        # без него такт молча кладет вердикт в отчет
         self._victory_facade = victory_facade or VictoryFacade(event_bus=event_bus)
+        # Туман войны пересчитывается по итогам марша, поэтому фасад обзора
+        # стоит в конвейере, а не только в чтении карты интерфейсом
+        self._vision_facade = vision_facade or VisionFacade(event_bus=event_bus)
         self._gameflow_facade = gameflow_facade
 
     async def execute_turn(
@@ -98,21 +103,17 @@ class StrategicTurnOrchestrator:
 
         # Шаг 1.5. Учёт выслуги лет отрядов в армиях под командованием полководцев
         service_veterancy_report = (
-            await self._veterancy_service.process_service_accumulation(  # noqa: F841
+            await self._veterancy_service.process_service_accumulation(
                 world_state
             )
         )
 
-        # Шаг 1.6. Судьба взятых пограничных городов: сожжение, разграбление
-        # и захват. Идет до гарнизонов и экономики, чтобы добыча победителя и
-        # перешедшие к нему земли учитывались уже в этом такте.
+        # Шаг 1.6. Судьба взятых пограничных городов: сожжение, разграбление и захват
         border_town_report = await self._settlements_facade.process_town_resolutions(
             world_state
         )
 
-        # Шаг 1.7. Гарнизоны земель: подъем ополчения под уровень зданий и
-        # восполнение его потерь. Идет до экономики: содержание гарнизонов
-        # списывается уже с обновленным составом.
+        # Шаг 1.7. Гарнизоны земель: подъем ополчения под уровень зданий и восполнение его потерь
         garrison_report = await self._garrison_service.process_garrisons(world_state)
 
         # Шаг 2. Обработка экспедиций (добыча, разворот караванов, сдача груза в казну)
@@ -128,6 +129,10 @@ class StrategicTurnOrchestrator:
 
         # Шаг 4.5. Дипломатия: исполнение пактов, движение гонцов и послов
         diplomacy_report = await self._diplomacy_facade.process_tick(world_state)
+
+        # Шаг 4.6. Туман войны: обзор пересчитывается уже по конечным
+        # позициям армий и с учетом пактов, заключенных на этом же такте
+        vision_report = await self._vision_facade.refresh_world_vision(world_state)
 
         # Очистка завершенных назначений
         world_state.cleanup_completed_assignments()
@@ -147,6 +152,7 @@ class StrategicTurnOrchestrator:
             economy_reports=economy_reports,
             movement_report=movement_report,
             diplomacy_report=diplomacy_report,
+            vision_report=vision_report,
             completed_expedition_ids=completed_expeditions,
             service_veterancy_candidate_ids=service_veterancy_report.veterancy_candidate_ids,
             victory_result=victory_result,

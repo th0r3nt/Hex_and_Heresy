@@ -39,6 +39,10 @@ class StrategicEvents(str, Enum):
     HERO_RECOVERED = "strategic.hero_recovered"
     EVENT_EXPIRED = "strategic.event_expired"
 
+    # Туман войны: пересчет обзора и вскрытая разведкой чужая армия
+    VISION_UPDATED = "strategic.vision_updated"
+    ARMY_SPOTTED = "strategic.army_spotted"
+
     # Гарнизоны земель: ротация войск и городское ополчение
     SQUAD_STATIONED = "strategic.squad_stationed"
     SQUAD_UNSTATIONED = "strategic.squad_unstationed"

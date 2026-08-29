@@ -7,11 +7,15 @@
 Пересылается не все подряд, а именно то, что видно игроку: список событий
 задан явно. Так канал не забивается служебной механикой вроде фаз раунда,
 а добавление нового события в реестр не начинает молча течь на фронт.
+
+Поверх списка стоит второй рубеж - гейт тумана войны (ws/visibility.py):
+он снимает с ленты то, что происходит вне поля зрения игрока. Гейт можно
+не подключать - тогда мост вещает все разрешенные события как раньше.
 """
 
 from enum import Enum
 from functools import partial
-from typing import Any
+from typing import Any, Callable, Optional
 
 from pydantic import BaseModel
 
@@ -37,6 +41,8 @@ BROADCAST_EVENTS: tuple[Enum, ...] = (
     GameEvents.Strategic.GREY_HOURS_STARTED,
     GameEvents.Strategic.NEON_HOURS_STARTED,
     GameEvents.Strategic.ENCOUNTER_DETECTED,
+    GameEvents.Strategic.VISION_UPDATED,
+    GameEvents.Strategic.ARMY_SPOTTED,
     GameEvents.Strategic.DISPATCH_DELIVERED,
     GameEvents.Strategic.DISPATCH_INTERCEPTED,
     GameEvents.Strategic.AMBASSADOR_ARRIVED,
@@ -94,6 +100,9 @@ class _Unserializable:
 
 _UNSERIALIZABLE = _Unserializable()
 
+# Предикат "показывать ли это событие игроку": ключ события и его нагрузка
+VisibilityGate = Callable[[str, dict[str, Any]], bool]
+
 
 class EventDispatcher:
     """
@@ -104,9 +113,13 @@ class EventDispatcher:
         self,
         manager: ConnectionManager,
         events: tuple[Enum, ...] = BROADCAST_EVENTS,
+        visibility_gate: Optional[VisibilityGate] = None,
     ) -> None:
         self._manager = manager
         self._events = events
+        # Гейт тумана войны. Без него мост вещает все разрешенные события:
+        # так удобно тестам и сценариям запуска без активной партии
+        self._visibility_gate = visibility_gate
         # Обработчик на каждое событие свой (в нем зашито имя), поэтому его
         # нужно запомнить: отписаться можно только тем же объектом
         self._handlers: dict[str, Any] = {}
@@ -138,14 +151,36 @@ class EventDispatcher:
 
     async def _forward(self, event_key: str, *args: Any, **kwargs: Any) -> None:
         """
-        Отправляет событие клиенту.
+        Отправляет событие клиенту, если туман войны его не закрывает.
 
         Позиционные аргументы игнорируются: сервисы публикуют события
         именованными полями, и только они превращаются в тело сообщения.
         """
+        if not self._is_visible_to_player(event_key, kwargs):
+            main_logger.debug(
+                f"[WS] Событие '{event_key}' скрыто туманом войны и в сокет не поехало."
+            )
+            return
+
         await self._manager.broadcast(
             ServerMessage(event=event_key, data=self._to_payload(event_key, kwargs))
         )
+
+    def _is_visible_to_player(self, event_key: str, kwargs: dict[str, Any]) -> bool:
+        """
+        Спрашивает гейт, вправе ли игрок узнать об этом событии.
+
+        Сбой самого гейта ленту не рвет: событие уезжает клиенту, а разбор
+        причины остается в логе.
+        """
+        if self._visibility_gate is None:
+            return True
+
+        try:
+            return self._visibility_gate(event_key, kwargs)
+        except Exception as error:
+            main_logger.warning(f"[WS] Гейт видимости отказал на '{event_key}': {error}")
+            return True
 
     def _to_payload(self, event_key: str, kwargs: dict[str, Any]) -> dict[str, Any]:
         """

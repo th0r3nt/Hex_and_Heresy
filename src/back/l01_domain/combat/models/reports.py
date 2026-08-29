@@ -95,6 +95,13 @@ class RangedCombatReport(BaseModel):
     damage_dealt: float = Field(default=0.0)
     kills: int = Field(default=0)
     is_misfire: bool = Field(default=False)
+    is_out_of_sight: bool = Field(
+        default=False,
+        description=(
+            "Цель дальше предела видимости: ночь или непогода срезали обзор "
+            "ниже дальности оружия, и выстрел не состоялся"
+        ),
+    )
     friendly_fire_kills: int = Field(default=0)
     friendly_fire_squad_id: Optional[str] = Field(default=None)
     cover_reduction: float = Field(default=0.0)

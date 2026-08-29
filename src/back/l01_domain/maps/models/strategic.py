@@ -16,7 +16,11 @@ from src.back.l01_domain.maps.constants import (
     TerritoryZoneType,
 )
 
-from src.back.l01_domain.exceptions.maps import InvalidCubeCoordinatesError, InvalidRadiusError
+from src.back.l01_domain.exceptions.maps import (
+    InvalidCubeCoordinatesError,
+    InvalidRadiusError,
+    InvalidZoneIdError,
+)
 
 
 class HexCoordinates(BaseModel):
@@ -223,6 +227,25 @@ def hex_zone_id(coord: HexCoordinates) -> str:
     однозначно выводится из первых двух (q + r + s == 0).
     """
     return f"{coord.q},{coord.r}"
+
+
+def hex_from_zone_id(zone_id: str) -> HexCoordinates:
+    """
+    Разбирает ключ территориальной зоны обратно в координаты ее гекса.
+
+    Обратная операция к hex_zone_id: здания и гарнизоны хранят у себя
+    только строковый ключ, а обзору и геометрии нужен сам гекс.
+    """
+    parts = zone_id.split(",")
+    if len(parts) != 2:
+        raise InvalidZoneIdError(zone_id)
+
+    try:
+        q, r = int(parts[0]), int(parts[1])
+    except ValueError as error:
+        raise InvalidZoneIdError(zone_id) from error
+
+    return HexCoordinates.from_axial(q, r)
 
 
 def determine_zone_type(

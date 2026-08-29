@@ -22,6 +22,7 @@ from src.back.l01_domain.factions.models.diplomacy.relation import DiplomaticRel
 from src.back.l01_domain.factions.models.faction import Faction
 from src.back.l01_domain.factions.models.garrison import Garrison
 from src.back.l01_domain.factions.models.workers import WorkerAssignment
+from src.back.l01_domain.maps.constants import HexVisibilityState
 from src.back.l01_domain.maps.models.strategic import HexCoordinates, hex_zone_id
 from src.back.l01_domain.world.models.battleground import BattlefieldLootSite
 from src.back.l01_domain.world.models.chronicle import (
@@ -33,6 +34,7 @@ from src.back.l01_domain.world.models.chronicle import (
 from src.back.l01_domain.world.models.events import GlobalEvent
 from src.back.l01_domain.world.models.points_of_interest import PointOfInterest
 from src.back.l01_domain.world.models.timekeeping import GameTime
+from src.back.l01_domain.world.models.visibility import FactionVisionMap
 from src.back.l01_domain.world.models.victory import (
     VictoryConditionConfig,
     VictoryEvaluationResult,
@@ -69,6 +71,15 @@ class WorldState(BaseModel):
     points_of_interest: dict[str, PointOfInterest] = Field(
         default_factory=dict,
         description="Лорные ориентиры и аномалии Ничьей земли: poi_id -> PointOfInterest",
+    )
+
+    vision_maps: dict[str, FactionVisionMap] = Field(
+        default_factory=dict,
+        description=(
+            "Туман войны: faction_id -> FactionVisionMap. Прямой обзор "
+            "пересчитывается каждый такт, история открытых гексов копится "
+            "всю партию"
+        ),
     )
 
     garrisons: dict[str, Garrison] = Field(
@@ -291,6 +302,50 @@ class WorldState(BaseModel):
             if army is not None:
                 army.release_from_tactical_battle()
         return army_ids
+
+    # ==================================================================
+    # ТУМАН ВОЙНЫ
+    # ==================================================================
+
+    def get_or_create_vision_map(self, faction_id: str) -> FactionVisionMap:
+        """
+        Маска тумана фракции, заводя пустую при первом обращении.
+
+        Фракция, которая еще ни разу не считала обзор, не видит ничего -
+        и это ровно то, что должна вернуть пустая маска.
+        """
+        vision_map = self.vision_maps.get(faction_id)
+        if vision_map is None:
+            vision_map = FactionVisionMap(faction_id=faction_id)
+            self.vision_maps[faction_id] = vision_map
+        return vision_map
+
+    def get_vision_map(self, faction_id: str) -> Optional[FactionVisionMap]:
+        """Маска тумана фракции без ее создания. None - обзор еще не считался."""
+        return self.vision_maps.get(faction_id)
+
+    def set_vision_map(self, vision_map: FactionVisionMap) -> None:
+        """Кладет в мир пересчитанную маску тумана."""
+        self.vision_maps[vision_map.faction_id] = vision_map
+
+    def is_hex_visible_to(self, faction_id: str, coord: HexCoordinates) -> bool:
+        """
+        Просматривает ли фракция гекс прямо сейчас.
+
+        Пока обзор ни разу не считался, видимым не считается ничего: лучше
+        скрыть лишнее, чем показать врага там, где его никто не разведал.
+        """
+        vision_map = self.vision_maps.get(faction_id)
+        return vision_map is not None and vision_map.is_visible(coord)
+
+    def get_hex_visibility(
+        self, faction_id: str, coord: HexCoordinates
+    ) -> HexVisibilityState:
+        """Состояние гекса глазами фракции - для отрисовки слоя тумана."""
+        vision_map = self.vision_maps.get(faction_id)
+        if vision_map is None:
+            return HexVisibilityState.UNEXPLORED
+        return vision_map.get_hex_status(coord)
 
     # ==================================================================
     # ГАРНИЗОНЫ ЗЕМЕЛЬ

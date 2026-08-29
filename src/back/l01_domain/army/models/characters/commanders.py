@@ -156,6 +156,16 @@ class Commander(BaseModel):
         return bonus
 
     @property
+    def vision_range_bonus(self) -> int:
+        """Бонус к радиусу обзора армии от перков разведки в чертах полководца."""
+        bonus = 0
+        for trait in self.traits:
+            for mod in trait.modifiers:
+                if mod.stat_name == StatName.VISION_RANGE_HEXES:
+                    bonus += int(mod.value)
+        return bonus
+
+    @property
     def upkeep_gold_multiplier(self) -> float:
         """Итоговый множитель содержания армии от черт."""
         multiplier = 1.0

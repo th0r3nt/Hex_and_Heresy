@@ -96,6 +96,31 @@ class BorderTownResolutionStepReport(BaseModel):
     )
 
 
+class VisionStepReport(BaseModel):
+    """
+    Отчет о шаге пересчета тумана войны за один глобальный такт.
+
+    Числа здесь - на фракцию: интерфейсу игрока нужен только его срез, а
+    советнику и летописцу полезно знать, кого именно вскрыла разведка.
+    """
+
+    visible_hexes_by_faction: dict[str, int] = Field(
+        default_factory=dict,
+        description="Сколько гексов фракция просматривает на конец такта",
+    )
+    newly_explored_by_faction: dict[str, int] = Field(
+        default_factory=dict,
+        description="Сколько гексов фракция открыла впервые на этом такте",
+    )
+    spotted_army_ids_by_faction: dict[str, list[str]] = Field(
+        default_factory=dict,
+        description=(
+            "Чужие армии, впервые попавшие в поле зрения фракции на этом "
+            "такте: faction_id -> army_id[]"
+        ),
+    )
+
+
 class DiplomacyTickReport(BaseModel):
     """
     Отчет о дипломатическом шаге такта: логистика гонцов и послов, судьба пактов.
@@ -123,6 +148,13 @@ class GlobalTurnReport(BaseModel):
     economy_reports: dict[str, FactionEconomyReport] = Field(default_factory=dict)
     movement_report: MovementStepReport = Field(...)
     diplomacy_report: DiplomacyTickReport = Field(default_factory=DiplomacyTickReport)
+    vision_report: VisionStepReport = Field(
+        default_factory=VisionStepReport,
+        description=(
+            "Туман войны на конец такта: марши уже отработали, поэтому обзор "
+            "считается по итоговым позициям армий"
+        ),
+    )
     completed_expedition_ids: list[str] = Field(default_factory=list)
     service_veterancy_candidate_ids: list[str] = Field(default_factory=list)
     victory_result: VictoryEvaluationResult = Field(

@@ -24,7 +24,7 @@ ACCESSORIES_LIST: dict[str, dict[str, Any]] = {
         "tier": 0,
         "cost_gold": 2.0,
         "cost_material": 4.0,
-        "stats": EquipmentStats(range_hexes=1),
+        "stats": EquipmentStats(range_hexes=1, vision_bonus_hexes=1),
         "special_rules": "Тактическая разведка: значительно увеличивают радиус обзора отряда на стратегической и тактической картах.",
     },
     ElfsAccessoryId.FACELESS_MASKS_01.value: {

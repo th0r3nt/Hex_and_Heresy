@@ -68,6 +68,7 @@ from src.back.l01_domain.exceptions.maps import (
     HexOutOfBoundsError,
     InvalidCubeCoordinatesError,
     InvalidRadiusError,
+    InvalidZoneIdError,
 )
 from src.back.l01_domain.exceptions.saves import (
     EmptySaveNameError,
@@ -164,6 +165,7 @@ ERROR_STATUS_MAP: tuple[tuple[type[DomainError], int], ...] = (
     (HexOutOfBoundsError, status.HTTP_400_BAD_REQUEST),
     (InvalidCubeCoordinatesError, status.HTTP_400_BAD_REQUEST),
     (InvalidRadiusError, status.HTTP_400_BAD_REQUEST),
+    (InvalidZoneIdError, status.HTTP_400_BAD_REQUEST),
 )
 
 

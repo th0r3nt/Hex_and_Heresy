@@ -25,12 +25,14 @@ from src.back.l01_domain.factions.models.border_town import (
 )
 from src.back.l01_domain.factions.models.faction import Faction
 from src.back.l01_domain.factions.models.garrison import Garrison
+from src.back.l01_domain.maps.constants import HexVisibilityState
 from src.back.l01_domain.maps.models.strategic import HexCoordinates
 from src.back.l01_domain.world.constants import VictoryType
 from src.back.l01_domain.world.models.victory import (
     VictoryConditionConfig,
     VictoryProgress,
 )
+from src.back.l01_domain.world.models.visibility import FactionVisionMap
 
 
 class MarchOrderRequest(BaseModel):
@@ -467,3 +469,58 @@ class VictoryOverviewResponse(BaseModel):
         default=None, description="Сводка фракции игрока. None у партии-наблюдения"
     )
     rivals: list[VictoryProgressResponse] = Field(default_factory=list)
+
+
+# ====================================================
+# Туман войны
+# ====================================================
+
+
+class FactionVisionResponse(BaseModel):
+    """
+    Маска тумана войны для слоя карты в интерфейсе.
+
+    Множества гексов приходят списками: JSON множеств не знает, а порядок
+    отрисовке слоя безразличен. Гексы прямого обзора в explored_hexes не
+    дублируются - клиент рисует их поверх разведанных.
+    """
+
+    faction_id: str = Field(...)
+    visible_hexes: list[HexCoordinates] = Field(
+        default_factory=list, description="Гексы под прямым обзором на текущий такт"
+    )
+    explored_hexes: list[HexCoordinates] = Field(
+        default_factory=list,
+        description="Гексы, открытые ранее: ландшафт известен, движение скрыто",
+    )
+    visible_count: int = Field(default=0, ge=0)
+    explored_count: int = Field(default=0, ge=0)
+
+    @classmethod
+    def from_vision_map(cls, vision_map: FactionVisionMap) -> "FactionVisionResponse":
+        """
+        Раскладывает доменную маску в упорядоченные списки для клиента.
+        """
+        ordered = sorted(vision_map.visible_hexes, key=lambda c: (c.q, c.r))
+        fogged = sorted(
+            vision_map.explored_hexes - vision_map.visible_hexes,
+            key=lambda c: (c.q, c.r),
+        )
+
+        return cls(
+            faction_id=vision_map.faction_id,
+            visible_hexes=ordered,
+            explored_hexes=fogged,
+            visible_count=len(vision_map.visible_hexes),
+            explored_count=len(vision_map.explored_hexes),
+        )
+
+
+class HexVisibilityResponse(BaseModel):
+    """
+    Состояние одного гекса глазами фракции - для подсказки под курсором.
+    """
+
+    faction_id: str = Field(...)
+    hex_coordinates: HexCoordinates = Field(...)
+    state: HexVisibilityState = Field(...)

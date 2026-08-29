@@ -7,7 +7,9 @@ from fastapi import APIRouter
 
 from src.back.l01_domain.exceptions.factions import FactionNotFoundError
 from src.back.l01_domain.factions.models.workers import WorkerAssignment
+from src.back.l01_domain.maps.models.strategic import HexCoordinates
 from src.back.l01_domain.world.models.reports import GlobalTurnReport
+from src.back.l01_domain.world.models.state import WorldState
 from src.back.l04_api.dependencies import Turns, World
 from src.back.l04_api.http.schemas.common import OperationResult
 from src.back.l04_api.http.schemas.strategic import (
@@ -15,8 +17,10 @@ from src.back.l04_api.http.schemas.strategic import (
     BorderTownResponse,
     ClaimBorderLandRequest,
     ExpeditionRequest,
+    FactionVisionResponse,
     FoundBorderTownRequest,
     GarrisonResponse,
+    HexVisibilityResponse,
     MarchOrderRequest,
     MarchOrderResponse,
     ResolveBorderTownRequest,
@@ -44,6 +48,67 @@ async def execute_turn(turns: Turns, world: World) -> GlobalTurnReport:
     Считает глобальный такт: события, экспедиции, экономику, марши и дипломатию.
     """
     return await turns.execute_strategic_turn(world)
+
+
+# ====================================================
+# Туман войны
+# ====================================================
+
+
+def _player_faction_id(world: WorldState) -> str:
+    """
+    Фракция игрока, за которую и считается туман.
+
+    Партии без игрока не бывает: смотреть на карту глазами некому, поэтому
+    запрос слоя тумана в такой партии - честная ошибка, а не пустой ответ.
+    """
+    player = world.get_player_faction()
+    if player is None:
+        raise FactionNotFoundError("player")
+    return player.id
+
+
+@router.get("/vision", response_model=FactionVisionResponse)
+async def get_vision(turns: Turns, world: World) -> FactionVisionResponse:
+    """
+    Маска тумана войны активной фракции игрока: что видно сейчас и что
+    было открыто раньше.
+    """
+    vision_map = turns.get_faction_vision(
+        world_state=world, faction_id=_player_faction_id(world)
+    )
+    return FactionVisionResponse.from_vision_map(vision_map)
+
+
+@router.get("/vision/hex", response_model=HexVisibilityResponse)
+async def get_hex_visibility(
+    q: int, r: int, turns: Turns, world: World
+) -> HexVisibilityResponse:
+    """
+    Состояние одного гекса глазами игрока - подсказка под курсором на карте.
+    """
+    faction_id = _player_faction_id(world)
+    coord = HexCoordinates.from_axial(q, r)
+
+    return HexVisibilityResponse(
+        faction_id=faction_id,
+        hex_coordinates=coord,
+        state=turns.get_hex_visibility(
+            world_state=world, faction_id=faction_id, coord=coord
+        ),
+    )
+
+
+@router.get("/world-view", response_model=WorldState)
+async def get_world_view(turns: Turns, world: World) -> WorldState:
+    """
+    Состояние мира глазами игрока.
+
+    В отличие от сырого WorldState, из среза вырезано все, чего разведка не
+    видит: чужие армии и караваны вне поля зрения, чужие гонцы, неоткрытые
+    места и застройка соседей на неразведанных гексах.
+    """
+    return turns.get_world_view(world_state=world, faction_id=_player_faction_id(world))
 
 
 # ====================================================

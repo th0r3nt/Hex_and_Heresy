@@ -140,6 +140,21 @@ class Squad(BaseModel):
         return max(0.0, self.archetype.base_stats.base_speed * (1.0 + modifier_sum))
 
     @property
+    def vision_bonus_hexes(self) -> int:
+        """
+        Прибавка к радиусу обзора армии от снаряжения отряда.
+
+        Оптику носят в любом слоте (линзы эльфов - аксессуар, но у прицела
+        оружия та же природа), поэтому слагаются все три предмета.
+        """
+
+        bonus = 0
+        for item in (self.weapon, self.armor, self.accessory):
+            if item is not None:
+                bonus += item.stats.vision_bonus_hexes
+        return bonus
+
+    @property
     def size_category(self) -> UnitSizeCategory:
         """
         Габарит бойцов этого отряда.

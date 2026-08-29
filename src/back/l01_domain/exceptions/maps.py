@@ -45,3 +45,15 @@ class InvalidRadiusError(MapGeometryError):
     def __init__(self, radius: int) -> None:
         self.radius = radius
         super().__init__(f"Радиус должен быть неотрицательным числом: получено {radius}.")
+
+
+class InvalidZoneIdError(MapGeometryError):
+    """
+    Ключ территориальной зоны не разбирается обратно в координаты гекса.
+    """
+
+    def __init__(self, zone_id: str) -> None:
+        self.zone_id = zone_id
+        super().__init__(
+            f"Ключ зоны '{zone_id}' не является парой координат вида 'q,r'."
+        )

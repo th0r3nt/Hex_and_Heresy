@@ -86,6 +86,16 @@ class Building(BaseModel):
         default=None, ge=MIN_BUILDING_UNLOCK_TIER, le=MAX_BUILDING_UNLOCK_TIER
     )  # На каком тире будет доступна постройка
 
+    vision_radius_hexes: int = Field(
+        default=0,
+        ge=0,
+        description=(
+            "Радиус обзора, который здание снимает с тумана войны вокруг своего "
+            "гекса. Ноль - здание не смотрит наружу; смотрят только вышки, "
+            "обсерватории и прочая наблюдательная застройка"
+        ),
+    )
+
     available_upgrades: list[BuildingUpgrade] = Field(default_factory=list)
     special_rules: Optional[str] = Field(default=None)
 
@@ -172,6 +182,18 @@ class ConstructedBuilding(BaseModel):
     construction_ticks_remaining: int = Field(default=0, ge=0)
 
     assigned_worker_squad_ids: list[str] = Field(default_factory=list)
+
+    @property
+    def vision_radius_hexes(self) -> int:
+        """
+        Радиус обзора, который дает уже работающее здание.
+
+        Стройплощадка не смотрит никуда: пока вышка не достроена, наверх
+        некому подняться.
+        """
+        if self.is_under_construction:
+            return 0
+        return self.building.vision_radius_hexes
 
     def apply_upgrade(self, upgrade: BuildingUpgrade) -> None:
         if any(u.id == upgrade.id for u in self.active_upgrades):

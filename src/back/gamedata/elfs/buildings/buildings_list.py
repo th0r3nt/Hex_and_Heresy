@@ -7,10 +7,17 @@ from typing import Any
 
 from src.back.l01_domain.factions.constants import BuildingCategory, ResourceType
 from src.back.l01_domain.factions.models.buildings import BuildingUpgrade
-from src.back.l01_domain.maps.constants import TerritoryZoneType
+from src.back.l01_domain.maps.constants import (
+    VISION_RADIUS_WATCHTOWER,
+    TerritoryZoneType,
+)
 from src.back.gamedata.elfs.common import ElfsBuildingId, ElfsUnitId
 
 _FACTION = "elfs"
+
+# Обсерватория пробивает пепел стратосферы и смотрит вдвое дальше обычной
+# сторожевой вышки - это расовое преимущество эльфийской разведки
+ELF_OBSERVATORY_VISION_RADIUS = VISION_RADIUS_WATCHTOWER * 2
 
 BUILDINGS_LIST: dict[str, dict[str, Any]] = {
     # ==================================================================
@@ -228,6 +235,7 @@ BUILDINGS_LIST: dict[str, dict[str, Any]] = {
         "construction_ticks": 1,
         "requires_workers": False,
         "resource_output_per_worker": {},
+        "vision_radius_hexes": ELF_OBSERVATORY_VISION_RADIUS,
         "special_rules": "Глаз Зенита: полностью снимает туман войны в огромном радиусе и дает 100% иммунитет к вражеским засадам в прилегающих нейтральных зонах.",
     },
 }

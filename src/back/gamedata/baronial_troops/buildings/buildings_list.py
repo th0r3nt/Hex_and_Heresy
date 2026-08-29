@@ -7,7 +7,10 @@ from typing import Any
 
 from src.back.l01_domain.factions.constants import BuildingCategory, ResourceType
 from src.back.l01_domain.factions.models.buildings import BuildingUpgrade
-from src.back.l01_domain.maps.constants import TerritoryZoneType
+from src.back.l01_domain.maps.constants import (
+    VISION_RADIUS_WATCHTOWER,
+    TerritoryZoneType,
+)
 from src.back.gamedata.baronial_troops.common import BaronialBuildingId, BaronialUnitId
 
 _FACTION = "baronial_troops"
@@ -152,6 +155,7 @@ BUILDINGS_LIST: dict[str, dict[str, Any]] = {
         "unlocked_unit_ids": [
             BaronialUnitId.SIGNALMEN_00.value,
         ],
+        "vision_radius_hexes": VISION_RADIUS_WATCHTOWER,
         "available_upgrades": [],
         "special_rules": "Информационный брокер: позволяет видеть состав проходящих армий в радиусе 2 гексов и продавать эту информацию другим фракциям.",
     },

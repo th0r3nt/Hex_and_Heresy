@@ -15,6 +15,7 @@ from src.back.l01_domain.army.constants import EquipmentTag
 from src.back.l01_domain.combat.models.effects import TerrainProfile
 from src.back.l01_domain.combat.models.reports import RangedCombatReport
 from src.back.l01_domain.combat.models.state import TacticalBattleState, TacticalCellState
+from src.back.l01_domain.combat.visibility import resolve_visibility_range_cells
 from src.back.l01_domain.maps.models.tactical import (
     CellCoordinates,
     cell_distance_chebyshev,
@@ -26,6 +27,10 @@ class TacticalRangedService:
     """
     Выполняет проверки видимости алгоритмом Брезенхэма, расчет укрытий,
     погодных условий, дружественного огня и наносит дистанционный урон.
+
+    Дальность оружия - это не то же самое, что дальность стрельбы: ночью и
+    в пепельной буре отряд просто не различает цель, докуда бы ни добивал
+    его лук.
     """
 
     def resolve_ranged_attacks(
@@ -40,6 +45,12 @@ class TacticalRangedService:
 
         profiles = terrain_profiles or {}
         reports: list[RangedCombatReport] = []
+
+        # Предел видимости на поле общий для всех: он задается временем суток
+        # и погодой боя, а не снаряжением конкретного отряда
+        visibility_range = resolve_visibility_range_cells(
+            battle_state.time_of_day, battle_state.weather
+        )
 
         cell_map = {cell.coordinates.to_tuple(): cell for cell in battle_state.cells}
         squad_positions: dict[str, CellCoordinates] = {
@@ -73,6 +84,20 @@ class TacticalRangedService:
             # Дистанция до целевого отряда
             distance = cell_distance_chebyshev(attacker_pos, order.target_cell)
             if distance > weapon_range or distance <= 1:
+                continue
+
+            # =======================================================================
+            # Проверка предела видимости: во тьму и в бурю не стреляют
+            # =======================================================================
+
+            if distance > visibility_range:
+                reports.append(
+                    RangedCombatReport(
+                        attacker_squad_id=order.squad_id,
+                        target_cell=order.target_cell,
+                        is_out_of_sight=True,
+                    )
+                )
                 continue
 
             # =======================================================================
