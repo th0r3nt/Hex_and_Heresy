@@ -1,5 +1,5 @@
 """
-Исключения обращений к языковым моделям.
+Исключения обращений к языковым моделям и вызова инструментов.
 """
 
 from typing import Optional
@@ -20,7 +20,11 @@ class LLMProviderNotConfiguredError(LLMError):
 
     def __init__(self, provider_id: Optional[str] = None) -> None:
         self.provider_id = provider_id
-        target = f"Провайдер LLM '{provider_id}' не зарегистрирован" if provider_id else "Активный провайдер LLM не выбран"
+        target = (
+            f"Провайдер LLM '{provider_id}' не зарегистрирован"
+            if provider_id
+            else "Активный провайдер LLM не выбран"
+        )
         super().__init__(f"{target}: проверьте настройки языковых моделей.")
 
 
@@ -71,3 +75,33 @@ class LLMResponseFormatError(LLMError):
         self.model = model
         self.reason = reason
         super().__init__(f"Модель '{model}' вернула невалидный структурный ответ: {reason}.")
+
+
+class ToolError(LLMError):
+    """
+    Базовое исключение для ошибок инструментов и навыков.
+    """
+
+
+class ToolContextMissingError(ToolError):
+    """
+    Для выполнения инструмента в контексте не хватает обязательных данных.
+    """
+
+    def __init__(self, tool_name: str, missing_detail: str) -> None:
+        self.tool_name = tool_name
+        self.missing_detail = missing_detail
+        super().__init__(
+            f"Для выполнения инструмента '{tool_name}' не хватает контекста: {missing_detail}."
+        )
+
+
+class InvalidToolCallError(ToolError):
+    """
+    Вызов инструмента невалиден (неизвестное имя или некорректные аргументы).
+    """
+
+    def __init__(self, tool_name: str, reason: str) -> None:
+        self.tool_name = tool_name
+        self.reason = reason
+        super().__init__(f"Некорректный вызов инструмента '{tool_name}': {reason}.")

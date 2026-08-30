@@ -1,12 +1,8 @@
 """
-Протоколы работы с большими языковыми моделями (LLM): сам клиент, сборщик
-статических промптов и сборщик изменчивого контекста.
-
-Домен объявляет, что ему нужно, а инфраструктура решает, откуда это взять:
-из файлов на диске, из базы или из памяти.
+Протоколы работы с большими языковыми моделями (LLM).
 """
 
-from typing import Optional, Protocol, TypeVar, Union, runtime_checkable
+from typing import Any, Optional, Protocol, TypeVar, Union, runtime_checkable
 from pydantic import BaseModel
 
 from src.back.l01_domain.army.models.card.squad import Squad
@@ -17,6 +13,7 @@ from src.back.l01_domain.combat.models.state import TacticalBattleState
 from src.back.l01_domain.factions.models.diplomacy.messengers import Ambassador
 from src.back.l01_domain.factions.models.faction import Faction
 from src.back.l01_domain.llm.models.context import ContextBlock
+from src.back.l01_domain.llm.models.skills import ToolCall, ToolDefinition
 from src.back.l01_domain.world.models.battle_log import BattleDossier
 from src.back.l01_domain.world.models.state import WorldState
 
@@ -52,7 +49,21 @@ class LLMClientProtocol(Protocol):
         temperature: float = 0.6,
     ) -> T:
         """
-        Генерация строго валидированного JSON по Pydantic-модели через function calling.
+        Генерация строго валидированного JSON по Pydantic-модели через Structured Outputs.
+        """
+        ...
+
+    async def generate_with_tools(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        tools: list[ToolDefinition],
+        temperature: float = 0.6,
+        tool_choice: Optional[Union[str, dict[str, Any]]] = "auto",
+    ) -> tuple[str, list[ToolCall]]:
+        """
+        Генерация с передачей доступных инструментов (Function Calling).
+        Возвращает текстовый ответ модели и список вызванных инструментов.
         """
         ...
 

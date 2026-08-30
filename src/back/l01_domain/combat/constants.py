@@ -80,6 +80,27 @@ SPEED_CHARGE_PACE: Final[float] = 2.0
 CHARGE_DAMAGE_BONUS: Final[float] = 1.5
 
 
+class TacticalMovementPace(str, Enum):
+    """
+    Темп движения отряда в тактическом бою.
+    """
+
+    DEFENSE = "defense"
+    TACTICAL = "tactical"
+    SLOW = "slow"
+    MARCH = "march"
+    CHARGE = "charge"
+
+
+TACTICAL_PACE_SPEEDS: Final[dict[TacticalMovementPace, float]] = {
+    TacticalMovementPace.DEFENSE: SPEED_DEFENSE_PACE,
+    TacticalMovementPace.TACTICAL: SPEED_TACTICAL_PACE,
+    TacticalMovementPace.SLOW: SPEED_SLOW_PACE,
+    TacticalMovementPace.MARCH: SPEED_MARCH_PACE,
+    TacticalMovementPace.CHARGE: SPEED_CHARGE_PACE,
+}
+
+
 # ==================================================================
 # МОРАЛЬ И ПОСЛЕДСТВИЯ БОЯ
 # ==================================================================

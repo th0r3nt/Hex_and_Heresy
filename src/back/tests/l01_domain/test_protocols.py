@@ -43,6 +43,16 @@ class FakeLLMClient:
     ) -> BaseModel:
         return response_model()
 
+    async def generate_with_tools(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        tools: list[Any],
+        temperature: float = 0.6,
+        tool_choice: Optional[Any] = "auto",
+    ) -> tuple[str, list[Any]]:
+        return "fake text", []
+
 
 class FakeGameDataRepository:
     def get_unit_archetype(self, unit_id: str) -> Optional[UnitArchetype]:
@@ -88,9 +98,7 @@ class FakeGameDataRepository:
     ) -> list[LegendaryCommanderTemplate]:
         return []
 
-    def list_faction_legendary_heroes(
-        self, faction_id: str
-    ) -> list[LegendaryHeroTemplate]:
+    def list_faction_legendary_heroes(self, faction_id: str) -> list[LegendaryHeroTemplate]:
         return []
 
     def get_point_of_interest(self, poi_id: str) -> Optional[PointOfInterestBlueprint]:
