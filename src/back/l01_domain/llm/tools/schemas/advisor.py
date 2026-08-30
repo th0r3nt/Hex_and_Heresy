@@ -1,11 +1,9 @@
 """
-Инструменты советника державы.
+Схемы параметров инструментов советника державы.
 """
 
 from typing import Any, Optional
 from pydantic import BaseModel, Field
-
-from src.back.l01_domain.llm.models.skills import ToolDefinition
 
 
 class ProposeAdvisorActionParams(BaseModel):
@@ -26,10 +24,3 @@ class ProposeAdvisorActionParams(BaseModel):
     action_arguments: dict[str, Any] = Field(
         default_factory=dict, description="Аргументы для предлагаемого инструмента"
     )
-
-
-PROPOSE_ADVISOR_ACTION = ToolDefinition(
-    name="propose_advisor_action",
-    description="Сформировать инициативное предложение правителю с вариантами решений и кнопками выбора.",
-    parameters_model=ProposeAdvisorActionParams,
-)

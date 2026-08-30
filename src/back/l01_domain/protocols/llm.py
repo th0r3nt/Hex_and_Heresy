@@ -13,7 +13,7 @@ from src.back.l01_domain.combat.models.state import TacticalBattleState
 from src.back.l01_domain.factions.models.diplomacy.messengers import Ambassador
 from src.back.l01_domain.factions.models.faction import Faction
 from src.back.l01_domain.llm.models.context import ContextBlock
-from src.back.l01_domain.llm.models.skills import ToolCall, ToolDefinition
+from src.back.l01_domain.llm.models.tools import ToolCall, ToolDefinition
 from src.back.l01_domain.world.models.battle_log import BattleDossier
 from src.back.l01_domain.world.models.state import WorldState
 

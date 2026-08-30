@@ -1,47 +1,44 @@
 """
-Изолированный исполнитель запросов к LLM.
+Исполнитель прикладных задач языковых моделей.
 
-Инкапсулирует логику общения с OpenAI-совместимыми API:
-- Управление ретраями (сетевые ошибки и таймауты).
-- Обработка Rate Limits (HTTP 429) и удаление мертвых ключей (HTTP 401).
-- Валидация JSON-схем и авто-исправление ответов модели при ошибках Pydantic.
+Реализует `LLMClientProtocol`:
+- Генерацию свободного художественного текста;
+- Валидацию структурированного JSON через Pydantic с диалоговым исправлением ошибок;
+- Вызов инструментов (Function Calling / Tools) и парсинг аргументов.
 """
 
-import asyncio
 import json
 import re
-import time
-from typing import Any, Optional, Type, TypeVar
+from typing import Any, Optional, Type, TypeVar, Union
 
-import openai
 from pydantic import BaseModel, ValidationError
 
-from src.back.utils.logger import main_logger
-from src.back.l01_domain.exceptions.llm import (
-    LLMAuthorizationError,
-    LLMRequestFailedError,
-    LLMResponseFormatError,
-)
+from src.back.l01_domain.exceptions.llm import LLMResponseFormatError
 from src.back.l01_domain.llm.models.provider import LLMProviderConfig
+from src.back.l01_domain.llm.models.tools import ToolCall, ToolDefinition
 from src.back.l01_domain.protocols.llm import LLMClientProtocol
 from src.back.l03_infrastructure.llm.client import LLMClient
-from src.back.l03_infrastructure.llm.keys.rotator import AllKeysExhaustedError
+from src.back.utils.logger import main_logger
 
 T = TypeVar("T", bound=BaseModel)
 
-# Регулярка для очистки ответа от markdown-форматирования (```json ... ```)
+# Регулярное выражение для извлечения JSON из markdown-блоков (```json ... ```)
 _JSON_FENCE = re.compile(r"^\s*```(?:json)?\s*(.*?)\s*```\s*$", re.DOTALL)
 
 
 class LLMExecutor(LLMClientProtocol):
     """
-    Единая точка входа для вызова языковых моделей.
-    Скрывает всю сложность обработки сети и адаптации ответов.
+    Прикладной исполнитель обращений к языковой модели.
+    Делегирует сетевой транспорт клиенту LLMClient.
     """
 
     def __init__(self, config: LLMProviderConfig, client: LLMClient) -> None:
         self.config = config
         self.client = client
+
+    # =========================================================================
+    # Генерация текста
+    # =========================================================================
 
     async def generate_text(
         self,
@@ -51,20 +48,24 @@ class LLMExecutor(LLMClientProtocol):
         max_tokens: Optional[int] = None,
     ) -> str:
         """
-        Генерация свободного текста (письма, летописи, слухи).
+        Генерация свободного художественного текста (письма, летописи, слухи).
         """
-
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ]
 
-        response = await self._execute_network_call(
+        response = await self.client.create_chat_completion(
+            model=self.config.model,
             messages=messages,
             temperature=temperature,
             max_tokens=max_tokens,
         )
         return response.choices[0].message.content or ""
+
+    # =========================================================================
+    # Структурированная генерация (Pydantic / Structured Outputs)
+    # =========================================================================
 
     async def generate_structured(
         self,
@@ -74,15 +75,12 @@ class LLMExecutor(LLMClientProtocol):
         temperature: float = 0.6,
     ) -> T:
         """
-        Генерация строго валидированного JSON по Pydantic-модели.
+        Генерация строго валидированного JSON по Pydantic-модели с циклом авто-исправления.
         """
-
         schema = self._harden_schema(response_model.model_json_schema())
         response_format = self._build_response_format(response_model.__name__, schema)
 
         system_content = system_prompt
-        # Если провайдер (например, локальный) не поддерживает строгий json_schema,
-        # зашиваем схему текстом в системный промпт
         if not self.config.supports_json_schema:
             system_content = (
                 f"{system_prompt}\n\n"
@@ -90,132 +88,123 @@ class LLMExecutor(LLMClientProtocol):
                 f"{json.dumps(schema, ensure_ascii=False)}"
             )
 
-        messages = [
+        messages: list[dict[str, Any]] = [
             {"role": "system", "content": system_content},
             {"role": "user", "content": user_prompt},
         ]
 
         last_error = ""
-        # Цикл авто-исправления JSON
         for attempt in range(self.config.structured_retries + 1):
-            response = await self._execute_network_call(
+            response = await self.client.create_chat_completion(
+                model=self.config.model,
                 messages=messages,
                 temperature=temperature,
                 response_format=response_format,
             )
+
             raw_content = response.choices[0].message.content or ""
             clean_json = self._extract_json(raw_content)
 
             try:
                 return response_model.model_validate_json(clean_json)
-            except (ValidationError, ValueError) as e:
-                last_error = str(e)
+            except (ValidationError, ValueError) as err:
+                last_error = str(err)
                 main_logger.warning(
                     f"[LLM] Модель '{self.config.model}' вернула невалидный JSON "
-                    f"(попытка {attempt + 1}): {last_error}"
+                    f"(попытка {attempt + 1}/{self.config.structured_retries + 1}): {last_error}"
                 )
-                # Добавляем ошибку в контекст и заставляем модель исправить её
+
+                # Добавляем ошибку в историю диалога для исправления моделью
                 messages.append({"role": "assistant", "content": raw_content})
                 messages.append(
                     {
                         "role": "user",
-                        "content": f"Твой ответ не прошел валидацию схемы. Ошибка:\n{last_error}\nВерни исправленный JSON-объект.",
+                        "content": (
+                            f"Твой ответ не прошел валидацию схемы. Ошибка:\n{last_error}\n"
+                            "Верни исправленный JSON-объект без пояснений."
+                        ),
                     }
                 )
 
         raise LLMResponseFormatError(self.config.model, last_error)
 
     # =========================================================================
-    # Внутренние механизмы сети и парсинга
+    # Вызов инструментов (Function Calling / Tools)
     # =========================================================================
 
-    async def _execute_network_call(self, **kwargs: Any) -> Any:
+    async def generate_with_tools(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        tools: list[ToolDefinition],
+        temperature: float = 0.6,
+        tool_choice: Optional[Union[str, dict[str, Any]]] = "auto",
+    ) -> tuple[str, list[ToolCall]]:
         """
-        Сетевой цикл с обработкой лимитов, банов ключей и таймаутов.
+        Генерация с передачей доступных инструментов.
+        Возвращает текстовый ответ модели и список распознанных вызовов инструментов.
         """
-        timeout_count = 0
+        messages: list[dict[str, Any]] = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
 
-        # Подготавливаем аргументы (убираем None)
-        api_kwargs = {"model": self.config.model}
-        api_kwargs.update({k: v for k, v in kwargs.items() if v is not None})
+        formatted_tools = [
+            tool.to_openai_schema(strict=self.config.strict_json_schema) for tool in tools
+        ]
 
-        for attempt in range(self.config.max_retries + 1):
-            try:
-                session = self.client.get_session()
-                # Вызов SDK OpenAI
-                return await session.chat.completions.create(**api_kwargs)
-
-            except AllKeysExhaustedError as e:
-                await asyncio.sleep(e.wait_time + 1)
-                continue
-
-            except openai.RateLimitError as e:
-                wait_time = self._calculate_rate_limit_cooldown(e)
-                self.client.rotator.cooldown_key(session.api_key, wait_time)
-                if self.client.rotator.total_keys() <= 1:
-                    await asyncio.sleep(wait_time + 1)
-                else:
-                    await asyncio.sleep(1)  # Быстрый переход к следующему ключу
-                continue
-
-            except openai.AuthenticationError:
-                self.client.rotator.ban_key(session.api_key)
-                if self.client.rotator.total_keys() == 0:
-                    raise LLMAuthorizationError(
-                        self.config.id, self.config.model, "Все ключи забанены."
-                    )
-                continue
-
-            except (openai.APITimeoutError, asyncio.TimeoutError) as e:
-                timeout_count += 1
-                if timeout_count > self.config.max_retries:
-                    raise LLMRequestFailedError(
-                        self.config.id, self.config.model, "Таймаут провайдера."
-                    ) from e
-                main_logger.warning(
-                    f"[LLM] Таймаут ({timeout_count}/{self.config.max_retries}). Повтор..."
-                )
-                continue
-
-            except openai.APIError as e:
-                if attempt == self.config.max_retries:
-                    raise LLMRequestFailedError(
-                        self.config.id, self.config.model, str(e)
-                    ) from e
-                main_logger.error(f"[LLM] Ошибка API: {e}. Повтор через 2 сек...")
-                await asyncio.sleep(2)
-                continue
-
-            except Exception as e:  # Падение DNS или отвал локальной сети
-                raise LLMRequestFailedError(self.config.id, self.config.model, str(e)) from e
-
-        raise LLMRequestFailedError(
-            self.config.id, self.config.model, "Превышено число попыток."
+        response = await self.client.create_chat_completion(
+            model=self.config.model,
+            messages=messages,
+            temperature=temperature,
+            tools=formatted_tools if formatted_tools else None,
+            tool_choice=tool_choice if formatted_tools else None,
         )
 
-    def _calculate_rate_limit_cooldown(self, error: openai.RateLimitError) -> int:
+        message = response.choices[0].message
+        content = message.content or ""
+        tool_calls = self._parse_tool_calls(message.tool_calls)
+
+        return content, tool_calls
+
+    # =========================================================================
+    # Вспомогательные методы парсинга и форматирования схем
+    # =========================================================================
+
+    def _parse_tool_calls(self, raw_tool_calls: Any) -> list[ToolCall]:
         """
-        Извлекает время заморозки ключа из заголовков ответа провайдера.
+        Преобразует вызовы инструментов из SDK OpenAI в доменные модели ToolCall.
         """
+        if not raw_tool_calls:
+            return []
 
-        err_code = getattr(error.body, "get", lambda x: None)("code")
-        if err_code == "insufficient_quota" or "billing" in str(error).lower():
-            return 86400  # Денег нет, морозим на 24 часа
+        parsed_calls: list[ToolCall] = []
+        for raw in raw_tool_calls:
+            func_name = getattr(raw.function, "name", "")
+            raw_args = getattr(raw.function, "arguments", "{}")
 
-        wait_time = 30
-        if error.response is not None:
-            headers = error.response.headers
-            retry_after = headers.get("retry-after") or headers.get("x-ratelimit-reset")
-            if retry_after:
-                try:
-                    wait_time = int(float(retry_after))
-                    if wait_time > time.time():  # Если вернули UNIX timestamp
-                        wait_time = int(wait_time - time.time())
-                except ValueError:
-                    pass
-        return max(2, min(wait_time, 300))
+            try:
+                parsed_args = json.loads(raw_args)
+                if not isinstance(parsed_args, dict):
+                    parsed_args = {}
+            except (json.JSONDecodeError, TypeError):
+                parsed_args = {}
 
-    def _build_response_format(self, name: str, schema: dict) -> dict:
+            parsed_calls.append(
+                ToolCall(
+                    id=getattr(raw, "id", f"call_{func_name}"),
+                    name=func_name,
+                    arguments=parsed_args,
+                    raw_arguments=raw_args,
+                )
+            )
+
+        return parsed_calls
+
+    def _build_response_format(self, name: str, schema: dict[str, Any]) -> dict[str, Any]:
+        """
+        Формирует параметр response_format для структурированного вывода.
+        """
         if not self.config.supports_json_schema:
             return {"type": "json_object"}
         return {
@@ -227,11 +216,10 @@ class LLMExecutor(LLMClientProtocol):
             },
         }
 
-    def _harden_schema(self, schema: dict) -> dict:
+    def _harden_schema(self, schema: dict[str, Any]) -> dict[str, Any]:
         """
-        Добавляет additionalProperties: false для строгого режима (Strict JSON).
+        Рекурсивно добавляет additionalProperties: false для строгого режима валидации схем.
         """
-        
         if schema.get("type") == "object":
             schema.setdefault("additionalProperties", False)
         for key in ("properties", "$defs", "definitions"):
@@ -245,5 +233,8 @@ class LLMExecutor(LLMClientProtocol):
         return schema
 
     def _extract_json(self, raw: str) -> str:
+        """
+        Очищает текст от markdown-оберток JSON.
+        """
         fenced = _JSON_FENCE.match(raw)
         return fenced.group(1) if fenced else raw.strip()

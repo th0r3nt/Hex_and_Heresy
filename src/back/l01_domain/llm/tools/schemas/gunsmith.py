@@ -1,12 +1,11 @@
 """
-Инструменты оружейной мастерской (создание и валидация чертежей экипировки).
+Схемы параметров инструментов оружейной мастерской.
 """
 
 from typing import Optional
 from pydantic import BaseModel, Field
 
 from src.back.l01_domain.army.constants import EquipmentSlot, EquipmentTag
-from src.back.l01_domain.llm.models.skills import ToolDefinition
 
 
 class DraftBlueprintParams(BaseModel):
@@ -25,19 +24,28 @@ class DraftBlueprintParams(BaseModel):
     )
     tier: int = Field(default=1, ge=1, le=6, description="Присвоенный тир предмета от 1 до 6")
     tags: list[EquipmentTag] = Field(
-        default_factory=list, description="Теги снаряжения (two_handed, heavy, blackpowder и т.д.)"
+        default_factory=list,
+        description="Теги снаряжения (two_handed, heavy, blackpowder и т.д.)",
     )
     damage_priority: int = Field(default=0, ge=0, le=10, description="Приоритет урона")
     armor_piercing_priority: int = Field(
         default=0, ge=0, le=10, description="Приоритет пробития брони"
     )
     armor_bonus_priority: int = Field(default=0, ge=0, le=10, description="Приоритет защиты")
-    range_priority: int = Field(default=0, ge=0, le=10, description="Приоритет дальности атаки")
+    range_priority: int = Field(
+        default=0, ge=0, le=10, description="Приоритет дальности атаки"
+    )
     heavy_weight_tradeoff: int = Field(
-        default=0, ge=0, le=10, description="Штраф к скорости за дополнительный бюджет характеристик"
+        default=0,
+        ge=0,
+        le=10,
+        description="Штраф к скорости за дополнительный бюджет характеристик",
     )
     clunkiness_tradeoff: int = Field(
-        default=0, ge=0, le=10, description="Штраф к инициативе за дополнительный бюджет характеристик"
+        default=0,
+        ge=0,
+        le=10,
+        description="Штраф к инициативе за дополнительный бюджет характеристик",
     )
     master_reply: str = Field(
         ..., description="Художественный комментарий мастера-оружейника к созданному чертежу"
@@ -54,16 +62,3 @@ class RejectBlueprintParams(BaseModel):
     master_reply: str = Field(
         ..., min_length=1, description="Стилизованная реплика мастера с отказом правителю"
     )
-
-
-DRAFT_BLUEPRINT = ToolDefinition(
-    name="draft_blueprint",
-    description="Спроектировать чертеж нового предмета экипировки с расчетом характеристик и стоимости.",
-    parameters_model=DraftBlueprintParams,
-)
-
-REJECT_BLUEPRINT = ToolDefinition(
-    name="reject_blueprint",
-    description="Отклонить запрос на создание предмета, если идея противоречит лору или культуре расы.",
-    parameters_model=RejectBlueprintParams,
-)

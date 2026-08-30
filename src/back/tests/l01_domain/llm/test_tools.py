@@ -2,15 +2,7 @@
 Тесты схем параметров инструментов по всем направлениям.
 """
 
-from src.back.l01_domain.army.constants import EquipmentSlot, EquipmentTag
-from src.back.l01_domain.combat.constants import ReactionType, TacticalMovementPace
-from src.back.l01_domain.factions.constants import (
-    BorderTownResolutionType,
-    NegotiationMode,
-    ResourceType,
-)
-from src.back.l01_domain.llm.models.skills import ToolDefinition
-from src.back.l01_domain.llm.tools import (
+from src.back.l01_domain.llm.tools.definitions import (
     advisor as adv_tools,
     chronicler as chr_tools,
     diplomacy as dip_tools,
@@ -18,6 +10,16 @@ from src.back.l01_domain.llm.tools import (
     general as gen_tools,
     gunsmith as gun_tools,
     strategic as str_tools,
+)
+from src.back.l01_domain.army.constants import EquipmentSlot, EquipmentTag
+from src.back.l01_domain.combat.constants import ReactionType, TacticalMovementPace
+from src.back.l01_domain.factions.constants import (
+    BorderTownResolutionType,
+    NegotiationMode,
+    ResourceType,
+)
+from src.back.l01_domain.llm.models.tools import ToolDefinition
+from src.back.l01_domain.llm.tools.definitions import (
     tactical as tac_tools,
 )
 from src.back.l01_domain.maps.models.strategic import HexCoordinates

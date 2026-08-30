@@ -45,10 +45,13 @@ class Deployment(BaseModel):
 def build(llm_fakes):
     """Собирает исполнителя с фейковым клиентом по сценарию ответов."""
 
-    def _build(script, keys=("key-alpha",), **config_overrides):
+    def _build(script, keys=("key-alpha",), max_retries=2, **config_overrides):
         rotator = APIKeyRotator(provider_id="test_provider", keys=list(keys))
-        client = llm_fakes.Client(rotator, list(script))
-        executor = LLMExecutor(config=llm_fakes.config(**config_overrides), client=client)
+        client = llm_fakes.Client(rotator, list(script), max_retries=max_retries)
+        executor = LLMExecutor(
+            config=llm_fakes.config(max_retries=max_retries, **config_overrides),
+            client=client,
+        )
         return executor, client
 
     return _build
@@ -158,7 +161,7 @@ class TestGenerateStructured:
         assert call["response_format"] == {"type": "json_object"}
         system_content = call["messages"][0]["content"]
         assert system_content.startswith("Ты — лорд.")
-        assert "confidence" in system_content  # схема зашита текстом
+        assert "confidence" in system_content
 
     async def test_invalid_json_triggers_self_correction(self, build):
         executor, client = build(
@@ -221,7 +224,7 @@ class TestSchemaHardening:
 
 class TestJsonExtraction:
     @pytest.mark.parametrize(
-        "raw, expected",
+        ("raw", "expected"),
         [
             ('{"a": 1}', '{"a": 1}'),
             ('   {"a": 1}   ', '{"a": 1}'),
@@ -235,10 +238,60 @@ class TestJsonExtraction:
         assert executor._extract_json(raw) == expected
 
 
+class TestRateLimitCooldown:
+    def test_quota_exhaustion_freezes_key_for_a_day(self, build, llm_fakes):
+        _, client = build([])
+        error = llm_fakes.rate_limit_error(body={"code": "insufficient_quota"})
+
+        assert client._calculate_rate_limit_cooldown(error) == 86400
+
+    def test_billing_message_freezes_key_for_a_day(self, build, llm_fakes):
+        _, client = build([])
+        error = llm_fakes.rate_limit_error("Your billing plan is out of credits")
+
+        assert client._calculate_rate_limit_cooldown(error) == 86400
+
+    def test_retry_after_header_is_respected(self, build, llm_fakes):
+        _, client = build([])
+        error = llm_fakes.rate_limit_error(headers={"retry-after": "45"})
+
+        assert client._calculate_rate_limit_cooldown(error) == 45
+
+    def test_reset_header_is_used_as_fallback(self, build, llm_fakes):
+        _, client = build([])
+        error = llm_fakes.rate_limit_error(headers={"x-ratelimit-reset": "12"})
+
+        assert client._calculate_rate_limit_cooldown(error) == 12
+
+    def test_unix_timestamp_is_converted_to_delay(self, build, llm_fakes):
+        _, client = build([])
+        error = llm_fakes.rate_limit_error(
+            headers={"retry-after": str(int(time.time()) + 120)}
+        )
+
+        assert 110 <= client._calculate_rate_limit_cooldown(error) <= 130
+
+    def test_garbage_header_falls_back_to_default(self, build, llm_fakes):
+        _, client = build([])
+        error = llm_fakes.rate_limit_error(headers={"retry-after": "скоро"})
+
+        assert client._calculate_rate_limit_cooldown(error) == 30
+
+    def test_missing_headers_fall_back_to_default(self, build, llm_fakes):
+        _, client = build([])
+
+        assert client._calculate_rate_limit_cooldown(llm_fakes.rate_limit_error()) == 30
+
+    @pytest.mark.parametrize(("raw", "expected"), [("0", 2), ("1", 2), ("99999", 300)])
+    def test_cooldown_is_clamped(self, build, llm_fakes, raw: str, expected: int):
+        _, client = build([])
+        error = llm_fakes.rate_limit_error(headers={"retry-after": raw})
+
+        assert client._calculate_rate_limit_cooldown(error) == expected
+
+
 class TestNetworkResilience:
-    async def test_rate_limit_freezes_key_and_switches_to_next(
-        self, build, llm_fakes, sleeps
-    ):
+    async def test_rate_limit_freezes_key_and_switches_to_next(self, build, llm_fakes, sleeps):
         executor, client = build(
             [llm_fakes.rate_limit_error(headers={"retry-after": "45"}), "готово"],
             keys=("key-alpha", "key-bravo"),
@@ -248,7 +301,7 @@ class TestNetworkResilience:
 
         assert result == "готово"
         assert client.used_keys == ["key-alpha", "key-bravo"]
-        assert sleeps == [1]  # есть живой ключ — ждать долго незачем
+        assert sleeps == [1]
 
     async def test_last_key_rate_limit_waits_out_the_cooldown(
         self, build, llm_fakes, sleeps, monkeypatch
@@ -275,9 +328,7 @@ class TestNetworkResilience:
         assert result == "готово"
         assert client.rotator.keys == ["key-bravo"]
 
-    async def test_all_keys_banned_raises_authorization_error(
-        self, build, llm_fakes, sleeps
-    ):
+    async def test_all_keys_banned_raises_authorization_error(self, build, llm_fakes, sleeps):
         executor, client = build([llm_fakes.auth_error()], keys=("key-alpha",))
 
         with pytest.raises(LLMAuthorizationError) as exc_info:
@@ -294,7 +345,7 @@ class TestNetworkResilience:
             await executor.generate_text(system_prompt="s", user_prompt="u")
 
         assert len(client.calls) == 3
-        assert "Таймаут" in exc_info.value.reason
+        assert "таймаут" in exc_info.value.reason.lower()
 
     async def test_timeout_followed_by_success(self, build, llm_fakes, sleeps):
         executor, _ = build([llm_fakes.timeout_error(), "готово"], max_retries=2)
@@ -325,21 +376,21 @@ class TestNetworkResilience:
         with pytest.raises(LLMRequestFailedError) as exc_info:
             await executor.generate_text(system_prompt="s", user_prompt="u")
 
-        assert len(client.calls) == 1  # без ретраев: сеть лежит
+        assert len(client.calls) == 1
         assert "DNS отвалился" in exc_info.value.reason
 
     async def test_exhausted_keys_are_waited_out(self, build, sleeps, monkeypatch):
         executor, client = build(["готово"])
-        original = client.get_session
+        original = client.rotator.get_next_key
         raised = {"done": False}
 
-        def flaky_session():
+        def flaky_get_key():
             if not raised["done"]:
                 raised["done"] = True
                 raise AllKeysExhaustedError(wait_time=7)
             return original()
 
-        monkeypatch.setattr(client, "get_session", flaky_session)
+        monkeypatch.setattr(client.rotator, "get_next_key", flaky_get_key)
 
         assert await executor.generate_text(system_prompt="s", user_prompt="u") == "готово"
         assert sleeps == [8]
@@ -352,62 +403,10 @@ class TestNetworkResilience:
         def always_exhausted():
             raise AllKeysExhaustedError(wait_time=5)
 
-        monkeypatch.setattr(client, "get_session", always_exhausted)
+        monkeypatch.setattr(client.rotator, "get_next_key", always_exhausted)
 
         with pytest.raises(LLMRequestFailedError) as exc_info:
             await executor.generate_text(system_prompt="s", user_prompt="u")
 
-        assert "Превышено число попыток" in exc_info.value.reason
+        assert "превышено" in exc_info.value.reason.lower()
         assert sleeps == [6, 6]
-
-
-class TestRateLimitCooldown:
-    def test_quota_exhaustion_freezes_key_for_a_day(self, build, llm_fakes):
-        executor, _ = build([])
-        error = llm_fakes.rate_limit_error(body={"code": "insufficient_quota"})
-
-        assert executor._calculate_rate_limit_cooldown(error) == 86400
-
-    def test_billing_message_freezes_key_for_a_day(self, build, llm_fakes):
-        executor, _ = build([])
-        error = llm_fakes.rate_limit_error("Your billing plan is out of credits")
-
-        assert executor._calculate_rate_limit_cooldown(error) == 86400
-
-    def test_retry_after_header_is_respected(self, build, llm_fakes):
-        executor, _ = build([])
-        error = llm_fakes.rate_limit_error(headers={"retry-after": "45"})
-
-        assert executor._calculate_rate_limit_cooldown(error) == 45
-
-    def test_reset_header_is_used_as_fallback(self, build, llm_fakes):
-        executor, _ = build([])
-        error = llm_fakes.rate_limit_error(headers={"x-ratelimit-reset": "12"})
-
-        assert executor._calculate_rate_limit_cooldown(error) == 12
-
-    def test_unix_timestamp_is_converted_to_delay(self, build, llm_fakes):
-        executor, _ = build([])
-        error = llm_fakes.rate_limit_error(
-            headers={"retry-after": str(int(time.time()) + 120)}
-        )
-
-        assert 110 <= executor._calculate_rate_limit_cooldown(error) <= 130
-
-    def test_garbage_header_falls_back_to_default(self, build, llm_fakes):
-        executor, _ = build([])
-        error = llm_fakes.rate_limit_error(headers={"retry-after": "скоро"})
-
-        assert executor._calculate_rate_limit_cooldown(error) == 30
-
-    def test_missing_headers_fall_back_to_default(self, build, llm_fakes):
-        executor, _ = build([])
-
-        assert executor._calculate_rate_limit_cooldown(llm_fakes.rate_limit_error()) == 30
-
-    @pytest.mark.parametrize("raw, expected", [("0", 2), ("1", 2), ("99999", 300)])
-    def test_cooldown_is_clamped(self, build, llm_fakes, raw: str, expected: int):
-        executor, _ = build([])
-        error = llm_fakes.rate_limit_error(headers={"retry-after": raw})
-
-        assert executor._calculate_rate_limit_cooldown(error) == expected

@@ -7,22 +7,22 @@
 упал или исчерпал лимиты, запрос автоматически уходит локальной модели.
 """
 
-from typing import Awaitable, Callable, Dict, List, Optional, TypeVar
+from typing import Any, Awaitable, Callable, Dict, List, Optional, TypeVar, Union
 
 from pydantic import BaseModel
 
-from src.back.utils.logger import main_logger
 from src.back.l01_domain.exceptions.llm import (
     LLMError,
     LLMKeyMissingError,
     LLMProviderNotConfiguredError,
 )
 from src.back.l01_domain.llm.models.provider import LLMProviderConfig
+from src.back.l01_domain.llm.models.tools import ToolCall, ToolDefinition
 from src.back.l01_domain.protocols.llm import LLMClientProtocol
-
-from src.back.l03_infrastructure.llm.keys.rotator import APIKeyRotator
 from src.back.l03_infrastructure.llm.client import LLMClient
 from src.back.l03_infrastructure.llm.executor import LLMExecutor
+from src.back.l03_infrastructure.llm.keys.rotator import APIKeyRotator
+from src.back.utils.logger import main_logger
 
 T = TypeVar("T", bound=BaseModel)
 R = TypeVar("R")
@@ -52,7 +52,7 @@ class LLMFacade(LLMClientProtocol):
         """Регистрирует настройки провайдера."""
         self._providers[config.id] = config
 
-        # Если конфиг обновился, удаляем старые инстансы, чтобы они пересобрались
+        # Если конфиг обновился, удаляем старые инстансы для пересборки
         self._clients.pop(config.id, None)
         self._executors.pop(config.id, None)
 
@@ -72,7 +72,6 @@ class LLMFacade(LLMClientProtocol):
             )
 
         self._rotators[provider_id] = APIKeyRotator(provider_id=provider_id, keys=keys)
-        # Клиент и экзекутор должны быть пересобраны с новым ротатором
         self._clients.pop(provider_id, None)
         self._executors.pop(provider_id, None)
 
@@ -106,18 +105,14 @@ class LLMFacade(LLMClientProtocol):
 
     def keys_count(self, provider_id: str) -> int:
         """
-        Сколько ключей заведено провайдеру. Сами ключи наружу не отдаются:
-        экран настроек показывает только их количество.
+        Возвращает количество зарегистрированных ключей провайдера.
         """
         rotator = self._rotators.get(provider_id)
         return rotator.total_keys() if rotator is not None else 0
 
     async def ping(self, provider_id: Optional[str] = None) -> bool:
         """
-        Проверяет, отвечает ли провайдер: короткий запрос к модели.
-
-        Провайдер без ключей и незарегистрированный провайдер - ошибка
-        настройки, а не отказ сети, поэтому они летят наружу исключением.
+        Проверяет доступность провайдера тестовым запросом к модели.
         """
         target_id = provider_id or self._active_id
         if target_id is None:
@@ -183,8 +178,29 @@ class LLMFacade(LLMClientProtocol):
 
         return await self._execute_with_fallbacks(call)
 
+    async def generate_with_tools(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        tools: list[ToolDefinition],
+        temperature: float = 0.6,
+        tool_choice: Optional[Union[str, dict[str, Any]]] = "auto",
+    ) -> tuple[str, list[ToolCall]]:
+        """Маршрутизирует вызов инструментов по цепочке провайдеров."""
+
+        async def call(executor: LLMExecutor) -> tuple[str, list[ToolCall]]:
+            return await executor.generate_with_tools(
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                tools=tools,
+                temperature=temperature,
+                tool_choice=tool_choice,
+            )
+
+        return await self._execute_with_fallbacks(call)
+
     async def close_all(self) -> None:
-        """Очистка ресурсов (вызывается при graceful shutdown сервера)."""
+        """Очистка ресурсов при остановке сервера."""
         for client in self._clients.values():
             await client.close()
         self._clients.clear()
@@ -226,7 +242,6 @@ class LLMFacade(LLMClientProtocol):
         """
         Возвращает цепочку провайдеров (основной + фоллбэки без дубликатов).
         """
-        
         ordered_ids = []
         if self._active_id:
             ordered_ids.append(self._active_id)
@@ -242,21 +257,25 @@ class LLMFacade(LLMClientProtocol):
 
     def _get_or_create_executor(self, provider_id: str) -> LLMExecutor:
         """
-        Ленивая сборка Клиента и Экзекутора для провайдера.
+        Ленивая сборка клиента и экзекутора для провайдера.
         """
-
         if provider_id in self._executors:
             return self._executors[provider_id]
 
         config = self._providers[provider_id]
 
-        # Если ротатор не инициализирован (например для локальной модели без ключа), создаем пустой
         if provider_id not in self._rotators:
             self._rotators[provider_id] = APIKeyRotator(provider_id=provider_id, keys=[])
 
         rotator = self._rotators[provider_id]
 
-        client = LLMClient(provider_id=provider_id, api_url=config.base_url, rotator=rotator)
+        client = LLMClient(
+            provider_id=provider_id,
+            api_url=config.base_url,
+            rotator=rotator,
+            timeout_seconds=config.timeout_seconds,
+            max_retries=config.max_retries,
+        )
         self._clients[provider_id] = client
 
         executor = LLMExecutor(config=config, client=client)

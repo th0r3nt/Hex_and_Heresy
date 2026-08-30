@@ -14,12 +14,13 @@ import openai
 import pytest
 
 from src.back.l01_domain.llm.models.provider import LLMProviderConfig
-from src.back.l03_infrastructure.llm import executor as executor_module
+from src.back.l03_infrastructure.llm import client as client_module
+from src.back.l03_infrastructure.llm.client import LLMClient
 from src.back.l03_infrastructure.llm.keys import rotator as rotator_module
 from src.back.l03_infrastructure.llm.keys.rotator import APIKeyRotator
 
-# Элемент сценария ответов: либо текст ответа модели, либо исключение
-Behavior = Union[str, BaseException]
+# Элемент сценария ответов: либо текст ответа модели, либо исключение, либо объект с tool_calls
+Behavior = Union[str, BaseException, Any]
 
 
 # =========================================================================
@@ -51,7 +52,7 @@ def clock(monkeypatch: pytest.MonkeyPatch) -> FakeClock:
 @pytest.fixture
 def sleeps(monkeypatch: pytest.MonkeyPatch) -> List[float]:
     """
-    Отключает реальные паузы в исполнителе и записывает их длительности.
+    Отключает реальные паузы в клиенте и записывает их длительности.
     """
     recorded: List[float] = []
 
@@ -59,7 +60,7 @@ def sleeps(monkeypatch: pytest.MonkeyPatch) -> List[float]:
         recorded.append(seconds)
 
     monkeypatch.setattr(
-        executor_module,
+        client_module,
         "asyncio",
         SimpleNamespace(sleep=fake_sleep, TimeoutError=asyncio.TimeoutError),
     )
@@ -71,9 +72,10 @@ def sleeps(monkeypatch: pytest.MonkeyPatch) -> List[float]:
 # =========================================================================
 
 
-def make_completion(content: str) -> Any:
+def make_completion(content: str, tool_calls: Optional[List[Any]] = None) -> Any:
     """Минимальный аналог ChatCompletion из SDK OpenAI."""
-    return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=content))])
+    message = SimpleNamespace(content=content, tool_calls=tool_calls)
+    return SimpleNamespace(choices=[SimpleNamespace(message=message)])
 
 
 def make_http_response(status_code: int, headers: Optional[Dict[str, str]] = None) -> Any:
@@ -92,15 +94,11 @@ def rate_limit_error(
     headers: Optional[Dict[str, str]] = None,
     body: Any = None,
 ) -> openai.RateLimitError:
-    return openai.RateLimitError(
-        message, response=make_http_response(429, headers), body=body
-    )
+    return openai.RateLimitError(message, response=make_http_response(429, headers), body=body)
 
 
 def auth_error(message: str = "Invalid API key") -> openai.AuthenticationError:
-    return openai.AuthenticationError(
-        message, response=make_http_response(401), body=None
-    )
+    return openai.AuthenticationError(message, response=make_http_response(401), body=None)
 
 
 def api_error(message: str = "Internal server error") -> openai.APIError:
@@ -132,22 +130,31 @@ class FakeSession:
         self.closed = True
 
 
-class FakeLLMClient:
+class FakeLLMClient(LLMClient):
     """
-    Заглушка LLMClient: раздает сессии по живым ключам настоящего ротатора
-    и отвечает по заранее заданному сценарию.
+    Заглушка LLMClient с сохранением транспортного цикла (create_chat_completion),
+    раздающая FakeSession со сценарием ответов.
     """
 
-    def __init__(self, rotator: APIKeyRotator, script: Optional[List[Behavior]] = None) -> None:
-        self.rotator = rotator
-        self.provider_id = rotator.provider_id
+    def __init__(
+        self,
+        rotator: APIKeyRotator,
+        script: Optional[List[Behavior]] = None,
+        timeout_seconds: float = 60.0,
+        max_retries: int = 2,
+    ) -> None:
+        super().__init__(
+            provider_id=rotator.provider_id,
+            api_url=None,
+            rotator=rotator,
+            timeout_seconds=timeout_seconds,
+            max_retries=max_retries,
+        )
         self.script: List[Behavior] = list(script or [])
         self.calls: List[Dict[str, Any]] = []
         self.used_keys: List[str] = []
-        self.closed = False
-        self._sessions: Dict[str, FakeSession] = {}
 
-    def get_session(self) -> FakeSession:
+    def get_session(self) -> Any:
         api_key = self.rotator.get_next_key() or "no-key-required"
         if api_key not in self._sessions:
             self._sessions[api_key] = FakeSession(api_key, self)
@@ -167,10 +174,9 @@ class FakeLLMClient:
 
         if isinstance(behavior, BaseException):
             raise behavior
-        return make_completion(behavior)
-
-    async def close(self) -> None:
-        self.closed = True
+        if isinstance(behavior, str):
+            return make_completion(behavior)
+        return behavior
 
 
 # =========================================================================
@@ -202,8 +208,7 @@ def rotator() -> APIKeyRotator:
 @pytest.fixture
 def llm_fakes() -> SimpleNamespace:
     """
-    Единая точка доступа к фейкам: тесты не импортируют conftest напрямую,
-    поэтому фабрики раздаются через фикстуру.
+    Единая точка доступа к фейкам для тестов инфраструктуры LLM.
     """
     return SimpleNamespace(
         completion=make_completion,
