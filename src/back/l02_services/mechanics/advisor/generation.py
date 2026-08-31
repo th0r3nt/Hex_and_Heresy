@@ -1,9 +1,6 @@
 """
 Разговор с советником: плановое предложение, ответ на вопрос игрока и
-запрос действий после сделанного выбора.
-
-Модуль знает только протоколы языковой модели и сборщиков промптов - откуда
-берутся тексты ролей и как устроен клиент, ему неизвестно.
+запрос действий после сделанного выбора через Function Calling.
 """
 
 from typing import Optional
@@ -12,31 +9,31 @@ from src.back.l01_domain.exceptions.advisor import AdvisorGenerationFailedError
 from src.back.l01_domain.exceptions.llm import LLMError
 from src.back.l01_domain.factions.models.advisor import (
     ADVISOR_MAX_OPTIONS,
-    AdvisorAction,
     AdvisorAnswer,
     AdvisorOption,
     AdvisorOptionKind,
     AdvisorProposal,
-    LLMAdvisorOption,
-    LLMAdvisorProposalResponse,
 )
 from src.back.l01_domain.factions.models.faction import Faction
+from src.back.l01_domain.llm.models.tools import ToolCall
 from src.back.l01_domain.llm.prompts import PromptCatalog, get_faction_prompt_key
+from src.back.l01_domain.llm.tools.definitions.advisor import PROPOSE_ADVISOR_ACTION
+from src.back.l01_domain.llm.tools.schemas.advisor import ProposeAdvisorActionParams
 from src.back.l01_domain.protocols.llm import (
     ContextBuilderProtocol,
     LLMClientProtocol,
     PromptBuilderProtocol,
 )
 from src.back.l01_domain.world.models.state import WorldState
+from src.back.l01_domain.llm.tools.catalog import Toolset, get_toolset
 from src.back.utils.logger import main_logger
 
-# Кнопка свободного ответа есть в окне всегда: игрок вправе возразить словами
 FREEFORM_OPTION_LABEL = "Дать свой ответ"
 
 
 class AdvisorGenerator:
     """
-    Собирает промпты советника и превращает ответы модели в доменные модели.
+    Собирает промпты советника и управляет вызовами инструментов советника.
     """
 
     def __init__(
@@ -50,7 +47,7 @@ class AdvisorGenerator:
         self._context_builder = context_builder
 
     # ==================================================================
-    # ПАССИВНАЯ ИНИЦИАТИВА
+    # Пассивная инициатива
     # ==================================================================
 
     async def generate_proposal(
@@ -60,43 +57,55 @@ class AdvisorGenerator:
         personality_prompt: str = "",
     ) -> Optional[AdvisorProposal]:
         """
-        Советник осматривает державу и решает, есть ли повод для окна.
-
-        Возвращает None, если повода нет или модель не ответила: непрошеный
-        совет - украшение хода, а не игровое правило, и ронять из-за него
-        глобальный такт незачем.
+        Советник осматривает державу и при наличии повода вызывает инструмент
+        propose_advisor_action.
         """
         system_prompt = self._build_system_prompt(
             world_state, faction, personality_prompt, self._PROPOSAL_INSTRUCTIONS
         )
+        tools = get_toolset(Toolset.ADVISOR_COUNCIL)
 
         try:
-            draft = await self._llm.generate_structured(
+            _content, tool_calls = await self._llm.generate_with_tools(
                 system_prompt=system_prompt,
                 user_prompt=(
-                    "Наступил новый глобальный такт. Осмотри державу и реши, "
-                    "стоит ли беспокоить правителя."
+                    "Наступил новый глобальный такт. Осмотри державу и, если есть повод, "
+                    "вызови инструмент."
                 ),
-                response_model=LLMAdvisorProposalResponse,
+                tools=tools,
                 temperature=0.7,
             )
         except LLMError as error:
             main_logger.warning(f"[Advisor] Ошибка генерации предложения: {error.message}")
             return None
 
-        if not draft.should_speak or not draft.message.strip():
+        # Ищем вызов инструмента предложения
+        proposal_call = next(
+            (call for call in tool_calls if call.name == PROPOSE_ADVISOR_ACTION.name),
+            None,
+        )
+        if proposal_call is None:
+            return None
+
+        try:
+            params = proposal_call.parse_arguments(ProposeAdvisorActionParams)
+        except Exception as error:
+            main_logger.warning(f"[Advisor] Невалидные параметры предложения: {error}")
+            return None
+
+        if not params.message.strip():
             return None
 
         return AdvisorProposal(
             faction_id=faction.id,
             tick=world_state.time.total_ticks,
-            title=draft.title.strip() or "Доклад советника",
-            message=draft.message,
-            options=self._build_options(draft.options),
+            title=params.title.strip() or "Доклад советника",
+            message=params.message,
+            options=self._build_options(params.options),
         )
 
     # ==================================================================
-    # ДИАЛОГОВЫЙ РЕЖИМ
+    # Диалоговый режим
     # ==================================================================
 
     async def answer_question(
@@ -108,9 +117,6 @@ class AdvisorGenerator:
     ) -> AdvisorAnswer:
         """
         Советник отвечает на вопрос игрока в свободной форме.
-
-        Здесь молчание - это уже отказ в обслуживании: игрок открыл окно и
-        ждет ответа, поэтому ошибка модели летит наружу.
         """
         system_prompt = self._build_system_prompt(
             world_state, faction, personality_prompt, self._DIALOGUE_INSTRUCTIONS
@@ -128,12 +134,10 @@ class AdvisorGenerator:
         if not text.strip():
             raise AdvisorGenerationFailedError(faction.id, "модель вернула пустой ответ")
 
-        return AdvisorAnswer(
-            faction_id=faction.id, question=question, text=text.strip()
-        )
+        return AdvisorAnswer(faction_id=faction.id, question=question, text=text.strip())
 
     # ==================================================================
-    # ДЕЙСТВИЯ ПОСЛЕ ВЫБОРА ИГРОКА
+    # Действия после выбора игрока
     # ==================================================================
 
     async def request_actions(
@@ -144,18 +148,11 @@ class AdvisorGenerator:
         option: AdvisorOption,
         player_reply: str = "",
         personality_prompt: str = "",
-    ) -> tuple[str, list[AdvisorAction]]:
+    ) -> tuple[str, list[ToolCall]]:
         """
-        Игрок сделал выбор - советник подтверждает его словами и берется за дело.
-
-        Возвращает реплику советника и список намерений для исполнителя.
-
-        ЗАГЛУШКА в части намерений: выбирать действия советник обязан только
-        через навыки Function Calling, а их схемы еще не описаны. 
-        Пока список всегда пуст, и до мира решение игрока не доходит - 
-        интерфейс узнает об этом из статуса NOT_SUPPORTED у исполнителя.
+        Игрок сделал выбор: советник отвечает репликой и вызывает соответствующие
+        инструменты управления (set_tax_rate, assign_worker и т.д.).
         """
-
         choice_text = f"Правитель выбрал вариант «{option.label}»."
         if player_reply.strip():
             choice_text = f"{choice_text}\nСлова правителя:\n{player_reply.strip()}"
@@ -166,26 +163,26 @@ class AdvisorGenerator:
         user_prompt = (
             f"Твое предложение:\n{proposal.message}\n\n"
             f"{choice_text}\n\n"
-            "Ответь правителю одной-двумя фразами."
+            "Примени необходимые инструменты для выполнения решения правителя и подтверди его словами."
         )
+        tools = get_toolset(Toolset.STRATEGIC_TURN)
 
         try:
-            reply = await self._llm.generate_text(
+            content, tool_calls = await self._llm.generate_with_tools(
                 system_prompt=system_prompt,
                 user_prompt=user_prompt,
+                tools=tools,
                 temperature=0.7,
             )
         except LLMError as error:
             main_logger.warning(f"[Advisor] Ошибка ответа на выбор: {error.message}")
-            reply = ""
+            content, tool_calls = "", []
 
-        # TODO: заменить на вызов навыков, когда появятся схемы Function Calling
-        actions: list[AdvisorAction] = []
-
-        return reply.strip() or "Советник молча склоняет голову.", actions
+        reply = content.strip() or "Советник молча склоняет голову и приступает к исполнению."
+        return reply, tool_calls
 
     # ==================================================================
-    # СБОРКА ПРОМПТОВ
+    # Сборка промптов
     # ==================================================================
 
     def _build_system_prompt(
@@ -195,9 +192,6 @@ class AdvisorGenerator:
         personality_prompt: str,
         instructions: str,
     ) -> str:
-        """
-        Склеивает статику роли, срез мира, личность советника и задачу такта.
-        """
         static_context = self._prompt_builder.build(
             [
                 PromptCatalog.BASE.PERSONA,
@@ -220,19 +214,19 @@ class AdvisorGenerator:
 
         return "\n\n".join(part for part in parts if part.strip())
 
-    def _build_options(
-        self, drafted: list[LLMAdvisorOption]
-    ) -> list[AdvisorOption]:
+    def _build_options(self, option_labels: list[str]) -> list[AdvisorOption]:
         """
-        Приводит кнопки модели к контракту интерфейса.
+        Приводит подписи кнопок от модели к контракту интерфейса.
 
         Свободный ответ добавляется последним и всегда: возразить советнику
         своими словами игрок вправе, даже если тот такой кнопки не предложил.
+        Свою кнопку с той же подписью модель рисовать не должна - иначе в окне
+        окажутся две одинаковые, и лишь одна откроет поле ввода.
         """
         options = [
-            AdvisorOption(label=item.label, kind=item.kind)
-            for item in drafted
-            if item.label.strip() and item.kind != AdvisorOptionKind.FREEFORM
+            AdvisorOption(label=label, kind=AdvisorOptionKind.ACCEPT)
+            for label in option_labels
+            if label.strip() and label.strip().casefold() != FREEFORM_OPTION_LABEL.casefold()
         ]
 
         if not options:
@@ -247,35 +241,25 @@ class AdvisorGenerator:
         )
         return options
 
-    # ==================================================================
-    # ЗАДАЧИ СОВЕТНИКА
-    # ==================================================================
-
     # TODO: засунуть в промпты
     _PROPOSAL_INSTRUCTIONS = (
         "## Задача советника\n"
         "Осмотри срез державы и реши, есть ли повод для доклада правителю.\n"
-        "1. Не спамь: если казна полна, границы спокойны, а стройки идут, "
-        "выстави should_speak: false.\n"
-        "2. Говори об одном конкретном деле, а не обо всем сразу: пустая казна "
-        "при заниженном налоге, голод, брошенная стройка, чужая армия у столицы.\n"
-        "3. Предложи 2-3 варианта ответа: согласие (kind: accept), смягченный "
-        "или усиленный вариант (kind: adjust) и отказ (kind: decline). "
-        "Подписи кнопок короткие и конкретные: «Поднять на 10%», «Поднять на 5%»."
+        "1. Если обстановка стабильна, не вызывай никаких инструментов.\n"
+        "2. Если требуется решение правителя, вызови инструмент propose_advisor_action, "
+        "передав заголовок, краткий совет и 2-3 варианта выбора (например, «Поднять на 10%», «Поднять на 5%»)."
     )
 
     # TODO: засунуть в промпты
     _DIALOGUE_INSTRUCTIONS = (
         "## Задача советника\n"
         "Правитель обратился к тебе лично. Ответь коротко и по существу, "
-        "опираясь только на факты из среза мира выше. Не выдумывай того, чего "
-        "в отчетах нет: чего не знаешь - о том так и скажи."
+        "опираясь только на факты из среза мира выше."
     )
 
     # TODO: засунуть в промпты
     _EXECUTION_INSTRUCTIONS = (
         "## Задача советника\n"
-        "Правитель ответил на твое предложение. Подтверди его решение "
-        "одной-двумя фразами в своей манере: без списков и без пересказа "
-        "самого предложения."
+        "Правитель утвердил решение. Вызови необходимые прикладные инструменты "
+        "(например, set_tax_rate, assign_worker и др.) и кратко подтверди выполнение."
     )

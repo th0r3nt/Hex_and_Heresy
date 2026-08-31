@@ -1,150 +1,169 @@
 """
-Тесты переговоров: перенос решений лорда на агрегат отношений,
+Тесты переговоров: перенос решений лорда на агрегат отношений через навыки,
 ответ на депешу, автоматический торг двух нейросетей и казнь посла.
+
+Лорд говорит с миром только вызовами навыков (Function Calling): слова
+приезжают текстом, а любое действие - через ToolExecutor и его обработчики.
 """
 
-from typing import Optional
+from typing import Any
 
 import pytest
-from pydantic import BaseModel
 
 from src.back.l01_domain.exceptions.diplomacy import AmbassadorUnavailableError
 from src.back.l01_domain.factions.constants import (
-    DiplomaticActionType,
     DiplomaticStance,
     NegotiationMode,
     ResourceType,
 )
 from src.back.l01_domain.factions.models.diplomacy.messengers import Dispatch
-from src.back.l01_domain.factions.models.diplomacy.negotiations import (
-    DiplomaticAction,
-    LLMDiplomaticResponse,
-)
+from src.back.l01_domain.llm.models.tools import ToolCall, ToolDefinition
 from src.back.l02_services.mechanics.diplomacy.facade import DiplomacyFacade
 from src.back.l02_services.mechanics.diplomacy.negotiations import NegotiationService
-from src.back.tests.l02_services.fakes import FakeContextBuilder, FakePromptBuilder
+from src.back.l02_services.mechanics.tools.context import ToolExecutionContext
+from src.back.l02_services.mechanics.tools.executor import ToolExecutor
+from src.back.l02_services.mechanics.tools.handlers import (
+    DiplomacyToolHandlers,
+    GeneralToolHandlers,
+)
+from src.back.tests.l02_services.fakes import (
+    FakeContextBuilder,
+    FakePromptBuilder,
+    LLMReply,
+    reply,
+    tool_call,
+)
 from src.back.utils.event.registry import GameEvents
 
 
 class FakeLLMClient:
     """
     Фейковый LLM: отдает заранее уложенные ответы по очереди.
-    Структурированные ответы берутся из structured_replies, свободный
-    текст - из text_replies.
+
+    Один ответ - это свободный текст лорда или посла плюс навыки, которые он
+    решил вызвать. Когда очередь кончилась, модель молчит без вызовов.
     """
 
-    def __init__(
-        self,
-        structured_replies: Optional[list[BaseModel]] = None,
-        text_replies: Optional[list[str]] = None,
-    ) -> None:
-        self.structured_replies = list(structured_replies or [])
-        self.text_replies = list(text_replies or [])
+    def __init__(self, *replies: LLMReply) -> None:
+        self.replies: list[LLMReply] = list(replies)
         self.calls: list[tuple[str, str]] = []
 
-    async def generate_text(
+    async def generate_with_tools(
         self,
         system_prompt: str,
         user_prompt: str,
-        temperature: float = 0.8,
-        max_tokens: Optional[int] = None,
-    ) -> str:
-        self.calls.append((system_prompt, user_prompt))
-        if not self.text_replies:
-            return "..."
-        return self.text_replies.pop(0)
-
-    async def generate_structured(
-        self,
-        system_prompt: str,
-        user_prompt: str,
-        response_model: type[BaseModel],
+        tools: list[ToolDefinition],
         temperature: float = 0.6,
-    ) -> BaseModel:
+        tool_choice: Any = "auto",
+    ) -> tuple[str, list[ToolCall]]:
         self.calls.append((system_prompt, user_prompt))
-        if not self.structured_replies:
-            raise AssertionError("FakeLLMClient: структурированные ответы закончились")
-        return self.structured_replies.pop(0)
+        if not self.replies:
+            return "", []
+        content, calls = self.replies.pop(0)
+        return content, list(calls)
 
 
-def _reply(text: str, action: Optional[DiplomaticAction] = None) -> LLMDiplomaticResponse:
-    return LLMDiplomaticResponse(reply_text=text, action=action)
+def _executor(facade: DiplomacyFacade) -> ToolExecutor:
+    """Исполнитель с навыками аудиенции, подключенными к фасаду дипломатии."""
+    executor = ToolExecutor()
+    GeneralToolHandlers().register(executor)
+    DiplomacyToolHandlers(facade).register(executor)
+    return executor
 
 
-def _service(llm, event_bus=None) -> NegotiationService:
+def _service(llm, event_bus=None, tool_executor=None) -> NegotiationService:
     """Сервис переговоров на доменных фейках сборщиков."""
     return NegotiationService(
         llm_client=llm,
         prompt_builder=FakePromptBuilder(),
         context_builder=FakeContextBuilder(),
+        tool_executor=tool_executor,
         event_bus=event_bus,
     )
 
 
-def _facade(llm=None, event_bus=None) -> DiplomacyFacade:
-    """Фасад дипломатии: сборщики нужны только вместе с моделью."""
-    return DiplomacyFacade(
+def _facade(llm=None, event_bus=None, with_tools: bool = False) -> DiplomacyFacade:
+    """
+    Фасад дипломатии: сборщики нужны только вместе с моделью.
+
+    with_tools подключает переговорам исполнителя навыков - так же, как это
+    делает корень компоновки в main.py.
+    """
+    facade = DiplomacyFacade(
         llm_client=llm,
         prompt_builder=FakePromptBuilder() if llm is not None else None,
         context_builder=FakeContextBuilder() if llm is not None else None,
         event_bus=event_bus,
     )
+    if with_tools and facade._negotiations is not None:
+        facade._negotiations.set_tool_executor(_executor(facade))
+    return facade
 
 
-class TestApplyAction:
+def _audience_context(world, host: str = "elfs", guest: str = "humans"):
+    """Контекст тронного зала: решение принимает хозяин, проситель - гость."""
+    return ToolExecutionContext(
+        world_state=world,
+        caller_faction_id=host,
+        target_faction_id=guest,
+    )
+
+
+# ==================================================================
+# РЕШЕНИЯ ЛОРДА ЧЕРЕЗ НАВЫКИ
+# ==================================================================
+
+
+class TestToolActions:
+    """Навык лорда обязан доехать до агрегата отношений и до шины событий."""
+
     @pytest.mark.asyncio
     async def test_trade_action_creates_agreement(self, world, fake_bus):
-        service = _service(FakeLLMClient(), fake_bus)
+        executor = _executor(_facade(event_bus=fake_bus))
 
-        applied = await service.apply_action(
-            world,
-            "humans",
-            "elfs",
-            DiplomaticAction(
-                kind=DiplomaticActionType.PROPOSE_TRADE,
-                give_resource=ResourceType.FOOD,
+        result = await executor.execute(
+            tool_call(
+                "propose_trade",
+                give_resource=ResourceType.FOOD.value,
                 give_amount=50.0,
-                get_resource=ResourceType.GOLD,
+                get_resource=ResourceType.GOLD.value,
                 get_amount=30.0,
                 duration_turns=4,
             ),
+            _audience_context(world),
         )
 
         relation = world.get_relation("humans", "elfs")
-        assert applied is True
+        assert result.success is True
         assert relation.trade_agreement.give_amount == 50.0
         assert relation.trade_agreement.remaining_turns == 4
         assert GameEvents.Diplomacy.TRADE_AGREED in fake_bus.names()
 
     @pytest.mark.asyncio
     async def test_war_and_peace_switch_stance(self, world):
-        service = _service(FakeLLMClient())
+        executor = _executor(_facade())
+        context = _audience_context(world)
 
-        await service.apply_action(
-            world, "humans", "elfs", DiplomaticAction(kind=DiplomaticActionType.DECLARE_WAR)
-        )
+        await executor.execute(tool_call("declare_war"), context)
         relation = world.get_relation("humans", "elfs")
         assert relation.stance == DiplomaticStance.WAR
 
-        await service.apply_action(
-            world, "humans", "elfs", DiplomaticAction(kind=DiplomaticActionType.MAKE_PEACE)
-        )
+        await executor.execute(tool_call("make_peace"), context)
         assert relation.stance == DiplomaticStance.PEACE
 
     @pytest.mark.asyncio
-    async def test_right_of_passage_goes_to_initiator(self, world):
-        service = _service(FakeLLMClient())
+    async def test_right_of_passage_goes_to_the_guest(self, world):
+        """Право прохода дает хозяин земель гостю, а не себе."""
+        executor = _executor(_facade())
 
-        await service.apply_action(
-            world,
-            "humans",
-            "elfs",
-            DiplomaticAction(
-                kind=DiplomaticActionType.ESTABLISH_RIGHT_OF_PASSAGE,
-                gold_amount=500.0,
+        await executor.execute(
+            tool_call(
+                "establish_right_of_passage",
+                toll_gold_per_crossing=500.0,
                 duration_turns=3,
                 allowed_hex_ids=["hex_1", "hex_2"],
             ),
+            _audience_context(world),
         )
 
         passage = world.get_relation("humans", "elfs").right_of_passage
@@ -154,64 +173,68 @@ class TestApplyAction:
 
     @pytest.mark.asyncio
     async def test_tribute_demand_is_recorded(self, world, fake_bus):
-        service = _service(FakeLLMClient(), fake_bus)
+        executor = _executor(_facade(event_bus=fake_bus))
 
-        await service.apply_action(
-            world,
-            "humans",
-            "elfs",
-            DiplomaticAction(kind=DiplomaticActionType.DEMAND_TRIBUTE, gold_amount=250.0),
+        await executor.execute(
+            tool_call("demand_tribute", gold_amount=250.0),
+            _audience_context(world),
         )
 
         assert world.get_relation("humans", "elfs").tribute_demanded_gold == 250.0
         assert GameEvents.Diplomacy.TRIBUTE_DEMANDED in fake_bus.names()
 
     @pytest.mark.asyncio
-    async def test_empty_action_changes_nothing(self, world):
-        service = _service(FakeLLMClient())
+    async def test_unknown_tool_changes_nothing(self, world):
+        """Навык, которого нет в реестре, до мира не доходит."""
+        executor = _executor(_facade())
 
-        assert await service.apply_action(world, "humans", "elfs", None) is False
-        assert (
-            await service.apply_action(
-                world, "humans", "elfs", DiplomaticAction(kind=DiplomaticActionType.NONE)
-            )
-            is False
+        result = await executor.execute(
+            tool_call("annex_everything"), _audience_context(world)
         )
+
+        assert result.success is False
+        # Обработчик не отработал, поэтому и отношения между державами не заведены
+        assert world.get_relation("humans", "elfs") is None
 
     @pytest.mark.asyncio
     async def test_incomplete_trade_action_is_ignored(self, world):
-        service = _service(FakeLLMClient())
+        """Половина условий сделки - это не сделка, а брак вызова."""
+        executor = _executor(_facade())
 
-        applied = await service.apply_action(
-            world,
-            "humans",
-            "elfs",
-            DiplomaticAction(kind=DiplomaticActionType.PROPOSE_TRADE, give_amount=10.0),
+        result = await executor.execute(
+            tool_call("propose_trade", give_amount=10.0),
+            _audience_context(world),
         )
 
-        assert applied is False
-        assert world.get_relation("humans", "elfs").trade_agreement is None
+        assert result.success is False
+        assert world.get_relation("humans", "elfs") is None
+
+
+# ==================================================================
+# ОТВЕТ НА ДЕПЕШУ
+# ==================================================================
 
 
 class TestDispatchAnswer:
-    @pytest.mark.asyncio
-    async def test_lord_answers_letter_and_declares_war(self, world, fake_bus):
-        llm = FakeLLMClient(
-            structured_replies=[
-                _reply(
-                    "Твои слова оскорбительны. Готовь стены.",
-                    DiplomaticAction(kind=DiplomaticActionType.DECLARE_WAR),
-                )
-            ]
-        )
-        service = _service(llm, fake_bus)
-        dispatch = Dispatch(
+    def _dispatch(self) -> Dispatch:
+        return Dispatch(
             sender_faction_id="humans",
             recipient_faction_id="elfs",
             message_text="Уберите своих сборщиков податей.",
         )
 
-        response = await service.answer_dispatch(world, dispatch)
+    @pytest.mark.asyncio
+    async def test_lord_answers_letter_and_declares_war(self, world, fake_bus):
+        llm = FakeLLMClient(
+            reply(
+                "Твои слова оскорбительны. Готовь стены.",
+                tool_call("declare_war", reason="оскорбление послов"),
+            )
+        )
+        facade = _facade(event_bus=fake_bus)
+        service = _service(llm, fake_bus, tool_executor=_executor(facade))
+
+        response = await service.answer_dispatch(world, self._dispatch())
 
         assert "оскорбительны" in response.reply_text
         assert world.get_relation("humans", "elfs").stance == DiplomaticStance.WAR
@@ -223,29 +246,56 @@ class TestDispatchAnswer:
         assert "[factions.elfs]" in system_prompt
         assert "Уберите своих сборщиков податей." in user_prompt
 
+    @pytest.mark.asyncio
+    async def test_words_of_the_reply_tool_reach_the_player(self, world, fake_bus):
+        """Лорд вправе ответить навыком свободной речи - это его реплика."""
+        llm = FakeLLMClient(
+            reply("", tool_call("reply", text="Мои сборщики стоят на моей земле."))
+        )
+        facade = _facade(event_bus=fake_bus)
+        service = _service(llm, fake_bus, tool_executor=_executor(facade))
+
+        response = await service.answer_dispatch(world, self._dispatch())
+
+        assert response.reply_text == "Мои сборщики стоят на моей земле."
+        assert response.action is None
+
+    @pytest.mark.asyncio
+    async def test_without_an_executor_the_world_stays_untouched(self, world, fake_bus):
+        """Без исполнителя навыков лорд остается при своих словах."""
+        llm = FakeLLMClient(reply("Готовь стены.", tool_call("declare_war")))
+        service = _service(llm, fake_bus)
+
+        response = await service.answer_dispatch(world, self._dispatch())
+
+        assert response.reply_text == "Готовь стены."
+        assert response.action is None
+        assert world.get_relation("humans", "elfs") is None
+
+
+# ==================================================================
+# АВТОМАТИЧЕСКИЙ ТОРГ И СУДЬБА ПОСЛА
+# ==================================================================
+
 
 class TestAutoNegotiation:
     @pytest.mark.asyncio
     async def test_dialogue_stops_on_first_decision(self, world, fake_bus):
         llm = FakeLLMClient(
-            structured_replies=[
-                _reply("Пятьсот золота? Ты смеешься надо мной."),
-                _reply(
-                    "Восемьсот - и мои дозоры вас не тронут.",
-                    DiplomaticAction(
-                        kind=DiplomaticActionType.ESTABLISH_RIGHT_OF_PASSAGE,
-                        gold_amount=800.0,
-                        duration_turns=5,
-                    ),
+            reply("Мой лорд предлагает пятьсот золота за право прохода."),
+            reply("Пятьсот золота? Ты смеешься надо мной."),
+            reply("Хорошо, восемьсот - но это последнее слово."),
+            reply(
+                "Восемьсот - и мои дозоры вас не тронут.",
+                tool_call(
+                    "establish_right_of_passage",
+                    toll_gold_per_crossing=800.0,
+                    duration_turns=5,
                 ),
-                _reply("Этой реплики уже быть не должно."),
-            ],
-            text_replies=[
-                "Мой лорд предлагает пятьсот золота за право прохода.",
-                "Хорошо, восемьсот - но это последнее слово.",
-            ],
+            ),
+            reply("Этой реплики уже быть не должно."),
         )
-        facade = _facade(llm, fake_bus)
+        facade = _facade(llm, fake_bus, with_tools=True)
         ambassador = await facade.send_ambassador(
             world,
             faction_id="humans",
@@ -267,20 +317,19 @@ class TestAutoNegotiation:
         ]
         passage = world.get_relation("humans", "elfs").right_of_passage
         assert passage.toll_gold_per_crossing == 800.0
-        # Третий заготовленный ответ не понадобился - диалог оборвался на решении
-        assert len(llm.structured_replies) == 1
+        assert passage.beneficiary_faction_id == "humans"
+        # Пятый заготовленный ответ не понадобился - диалог оборвался на решении
+        assert len(llm.replies) == 1
 
     @pytest.mark.asyncio
     async def test_executed_ambassador_dies_and_war_begins(self, world, fake_bus):
         llm = FakeLLMClient(
-            structured_replies=[
-                _reply(
-                    "Многа букав. Я иду ломать твоя замок!",
-                    DiplomaticAction(kind=DiplomaticActionType.EXECUTE_AMBASSADOR),
-                )
-            ]
+            reply(
+                "Многа букав. Я иду ломать твоя замок!",
+                tool_call("execute_ambassador", reason="послы людей надоели"),
+            )
         )
-        facade = _facade(llm, fake_bus)
+        facade = _facade(llm, fake_bus, with_tools=True)
         ambassador = await facade.send_ambassador(
             world, "humans", "Граф Вальтер", "elfs", negotiation_mode=NegotiationMode.MANUAL
         )

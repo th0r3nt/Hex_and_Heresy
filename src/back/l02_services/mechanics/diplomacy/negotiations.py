@@ -1,18 +1,8 @@
 """
-Логика переговоров с чужой фракцией.
-
-Лорд отвечает на письма и реплики послов строго структурированным JSON:
-художественный текст плюс необязательное дипломатическое действие. Действие -
-это и есть Function Calling из diplomacy.md: сервис переносит его на методы
-агрегата DiplomaticRelation, который стоит на страже доменных правил.
-
-Сами схемы ответа живут в домене
-(l01_domain.factions.models.diplomacy.negotiations).
+Логика переговоров с чужой фракцией через вызовы инструментов (Function Calling).
 """
 
 from typing import Optional
-
-from src.back.utils.event.registry import GameEvents
 
 from src.back.l01_domain.factions.constants import (
     MAX_AUTO_NEGOTIATION_ROUNDS,
@@ -28,11 +18,6 @@ from src.back.l01_domain.factions.models.diplomacy.negotiations import (
     NegotiationLine,
     NegotiationTranscript,
 )
-from src.back.l01_domain.factions.models.diplomacy.pacts import (
-    NonAggressionPact,
-    RightOfPassagePact,
-    TradeAgreement,
-)
 from src.back.l01_domain.factions.models.faction import Faction
 from src.back.l01_domain.llm.prompts import PromptCatalog, get_faction_prompt_key
 from src.back.l01_domain.protocols.events import EventBusProtocol
@@ -42,15 +27,14 @@ from src.back.l01_domain.protocols.llm import (
     PromptBuilderProtocol,
 )
 from src.back.l01_domain.world.models.state import WorldState
-
-# ==================================================================
-# СЕРВИС
-# ==================================================================
+from src.back.l02_services.mechanics.tools.context import ToolExecutionContext
+from src.back.l02_services.mechanics.tools.executor import ToolExecutor
+from src.back.l01_domain.llm.tools.catalog import Toolset, get_toolset
 
 
 class NegotiationService:
     """
-    Ведет диалог с лордом чужой фракции и применяет принятые им решения.
+    Ведет диалог с лордом чужой фракции и применяет принятые им решения через ToolExecutor.
     """
 
     def __init__(
@@ -58,39 +42,71 @@ class NegotiationService:
         llm_client: LLMClientProtocol,
         prompt_builder: PromptBuilderProtocol,
         context_builder: ContextBuilderProtocol,
+        tool_executor: Optional[ToolExecutor] = None,
         event_bus: Optional[EventBusProtocol] = None,
     ) -> None:
         self._llm = llm_client
         self._prompt_builder = prompt_builder
         self._context_builder = context_builder
+        self._tool_executor = tool_executor
         self._event_bus = event_bus
+
+    def set_tool_executor(self, executor: ToolExecutor) -> None:
+        self._tool_executor = executor
 
     async def answer_dispatch(
         self, world_state: WorldState, dispatch: Dispatch
     ) -> LLMDiplomaticResponse:
         """
-        Лорд-получатель читает доставленное письмо и отвечает на него.
+        Лорд-получатель читает доставленное письмо и отвечает на него через инструменты аудиенции.
         """
-
         recipient = self._require_faction(world_state, dispatch.recipient_faction_id)
         sender = self._require_faction(world_state, dispatch.sender_faction_id)
 
-        response = await self._llm.generate_structured(
-            system_prompt=self._build_lord_prompt(world_state, recipient, sender),
-            user_prompt=f"Письмо от фракции '{sender.name}':\n{dispatch.message_text}",
-            response_model=LLMDiplomaticResponse,
+        system_prompt = self._build_lord_prompt(world_state, recipient, sender)
+        user_prompt = f"Письмо от фракции '{sender.name}':\n{dispatch.message_text}"
+        tools = get_toolset(Toolset.LORD_AUDIENCE)
+
+        content, tool_calls = await self._llm.generate_with_tools(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            tools=tools,
             temperature=0.7,
         )
 
-        await self.apply_action(world_state, sender.id, recipient.id, response.action)
-        return response
+        reply_text = content.strip() or "Лорд ознакомился с депешей."
+        action_kind = DiplomaticActionType.NONE
+
+        if self._tool_executor is not None and tool_calls:
+            ctx = ToolExecutionContext(
+                world_state=world_state,
+                caller_faction_id=recipient.id,
+                target_faction_id=sender.id,
+            )
+            results = await self._tool_executor.execute_many(tool_calls, ctx)
+            for res in results:
+                if res.tool_name == "reply":
+                    reply_text = res.output or reply_text
+                elif res.success:
+                    try:
+                        action_kind = DiplomaticActionType(res.tool_name)
+                    except ValueError:
+                        pass
+
+        return LLMDiplomaticResponse(
+            reply_text=reply_text,
+            action=(
+                DiplomaticAction(kind=action_kind)
+                if action_kind != DiplomaticActionType.NONE
+                else None
+            ),
+        )
 
     async def reply_to_player(
         self, world_state: WorldState, ambassador: Ambassador, player_text: str
     ) -> LLMDiplomaticResponse:
         """
-        Ручной режим аудиенции: игрок говорит от лица своего посла,
-        чужой лорд отвечает.
+        Ручной режим аудиенции: игрок говорит от лица посла, чужой лорд отвечает.
         """
         envoy_faction = self._require_faction(world_state, ambassador.faction_id)
         host_faction = self._require_faction(world_state, ambassador.target_faction_id or "")
@@ -98,18 +114,43 @@ class NegotiationService:
         sys_prompt = self._build_lord_prompt(
             world_state, host_faction, envoy_faction, ambassador
         )
+        tools = get_toolset(Toolset.LORD_AUDIENCE)
 
-        response = await self._llm.generate_structured(
+        content, tool_calls = await self._llm.generate_with_tools(
             system_prompt=sys_prompt,
             user_prompt=f"Посол {ambassador.name} говорит:\n{player_text}",
-            response_model=LLMDiplomaticResponse,
+            tools=tools,
             temperature=0.8,
         )
 
-        await self.apply_action(
-            world_state, envoy_faction.id, host_faction.id, response.action
+        reply_text = content.strip() or "Лорд молча слушает посла."
+        action_kind = DiplomaticActionType.NONE
+
+        if self._tool_executor is not None and tool_calls:
+            ctx = ToolExecutionContext(
+                world_state=world_state,
+                caller_faction_id=host_faction.id,
+                target_faction_id=envoy_faction.id,
+                actor_id=ambassador.id,
+            )
+            results = await self._tool_executor.execute_many(tool_calls, ctx)
+            for res in results:
+                if res.tool_name == "reply":
+                    reply_text = res.output or reply_text
+                elif res.success:
+                    try:
+                        action_kind = DiplomaticActionType(res.tool_name)
+                    except ValueError:
+                        pass
+
+        return LLMDiplomaticResponse(
+            reply_text=reply_text,
+            action=(
+                DiplomaticAction(kind=action_kind)
+                if action_kind != DiplomaticActionType.NONE
+                else None
+            ),
         )
-        return response
 
     async def run_auto_negotiation(
         self,
@@ -118,8 +159,7 @@ class NegotiationService:
         max_rounds: int = MAX_AUTO_NEGOTIATION_ROUNDS,
     ) -> NegotiationTranscript:
         """
-        Автоматический режим: посол-LLM торгуется с лордом-LLM по директиве
-        игрока, пока лорд не примет решение или не кончатся раунды.
+        Автоматический режим: посол-LLM торгуется с лордом-LLM по директиве.
         """
         envoy_faction = self._require_faction(world_state, ambassador.faction_id)
         host_faction = self._require_faction(world_state, ambassador.target_faction_id or "")
@@ -135,143 +175,63 @@ class NegotiationService:
         last_lord_words = "Лорд молча ждет первого слова посла."
 
         for _ in range(max_rounds):
-            envoy_text = await self._llm.generate_text(
+            # 1. Реплика посла
+            envoy_content, _ = await self._llm.generate_with_tools(
                 system_prompt=envoy_prompt,
                 user_prompt=f"Слова чужого лорда:\n{last_lord_words}",
+                tools=get_toolset(Toolset.AMBASSADOR_MISSION),
                 temperature=0.9,
             )
+            envoy_text = envoy_content.strip() or "Посол излагает предложение своего лорда."
             transcript.lines.append(NegotiationLine(speaker="ambassador", text=envoy_text))
 
-            response = await self._llm.generate_structured(
+            # 2. Ответ лорда
+            lord_content, tool_calls = await self._llm.generate_with_tools(
                 system_prompt=lord_prompt,
                 user_prompt=f"Посол {ambassador.name} говорит:\n{envoy_text}",
-                response_model=LLMDiplomaticResponse,
+                tools=get_toolset(Toolset.LORD_AUDIENCE),
                 temperature=0.8,
             )
-            transcript.lines.append(NegotiationLine(speaker="lord", text=response.reply_text))
+            lord_reply = lord_content.strip() or "Лорд слушает предложение."
+            transcript.lines.append(NegotiationLine(speaker="lord", text=lord_reply))
+
+            action_kind = DiplomaticActionType.NONE
+            if self._tool_executor is not None and tool_calls:
+                ctx = ToolExecutionContext(
+                    world_state=world_state,
+                    caller_faction_id=host_faction.id,
+                    target_faction_id=envoy_faction.id,
+                    actor_id=ambassador.id,
+                )
+                results = await self._tool_executor.execute_many(tool_calls, ctx)
+                for res in results:
+                    if res.tool_name == "reply":
+                        lord_reply = res.output or lord_reply
+                    elif res.success:
+                        try:
+                            action_kind = DiplomaticActionType(res.tool_name)
+                        except ValueError:
+                            pass
+
+            response = LLMDiplomaticResponse(
+                reply_text=lord_reply,
+                action=(
+                    DiplomaticAction(kind=action_kind)
+                    if action_kind != DiplomaticActionType.NONE
+                    else None
+                ),
+            )
             transcript.final_response = response
 
-            if (
-                response.action is not None
-                and response.action.kind != DiplomaticActionType.NONE
-            ):
-                await self.apply_action(
-                    world_state, envoy_faction.id, host_faction.id, response.action
-                )
+            if action_kind != DiplomaticActionType.NONE:
                 break
 
-            last_lord_words = response.reply_text
+            last_lord_words = lord_reply
 
         return transcript
 
     # ==================================================================
-    # ПРИМЕНЕНИЕ РЕШЕНИЙ ЛОРДА
-    # ==================================================================
-
-    async def apply_action(
-        self,
-        world_state: WorldState,
-        initiator_faction_id: str,
-        responder_faction_id: str,
-        action: Optional[DiplomaticAction],
-    ) -> bool:
-        """
-        Переносит решение лорда на агрегат отношений.
-        Возвращает True, если состояние мира изменилось.
-
-        Казнь посла здесь не исполняется: она требует работы с самим послом
-        и остается за DiplomacyFacade.
-        """
-        if action is None or action.kind == DiplomaticActionType.NONE:
-            return False
-
-        relation = world_state.get_or_create_relation(
-            initiator_faction_id, responder_faction_id
-        )
-
-        if action.kind == DiplomaticActionType.DECLARE_WAR:
-            relation.declare_war()
-            await self._publish(
-                GameEvents.Diplomacy.WAR_DECLARED,
-                initiator_faction_id,
-                responder_faction_id,
-            )
-            return True
-
-        if action.kind == DiplomaticActionType.MAKE_PEACE:
-            relation.make_peace()
-            await self._publish(
-                GameEvents.Diplomacy.PEACE_SIGNED,
-                initiator_faction_id,
-                responder_faction_id,
-            )
-            return True
-
-        if action.kind == DiplomaticActionType.PROPOSE_TRADE:
-            if action.give_resource is None or action.get_resource is None:
-                return False
-            relation.propose_trade(
-                TradeAgreement(
-                    give_resource=action.give_resource,
-                    give_amount=action.give_amount,
-                    get_resource=action.get_resource,
-                    get_amount=action.get_amount,
-                    duration_turns=action.duration_turns,
-                    remaining_turns=action.duration_turns,
-                )
-            )
-            await self._publish(
-                GameEvents.Diplomacy.TRADE_AGREED,
-                initiator_faction_id,
-                responder_faction_id,
-            )
-            return True
-
-        if action.kind == DiplomaticActionType.ESTABLISH_BORDERS:
-            relation.establish_borders(
-                NonAggressionPact(allowed_hex_ids=action.allowed_hex_ids)
-            )
-            await self._publish(
-                GameEvents.Diplomacy.PACT_FORMED,
-                initiator_faction_id,
-                responder_faction_id,
-                pact_name="non_aggression",
-            )
-            return True
-
-        if action.kind == DiplomaticActionType.ESTABLISH_RIGHT_OF_PASSAGE:
-            relation.establish_right_of_passage(
-                RightOfPassagePact(
-                    beneficiary_faction_id=initiator_faction_id,
-                    allowed_hex_ids=action.allowed_hex_ids,
-                    toll_gold_per_crossing=action.gold_amount,
-                    duration_turns=action.duration_turns,
-                    remaining_turns=action.duration_turns,
-                )
-            )
-            await self._publish(
-                GameEvents.Diplomacy.PACT_FORMED,
-                initiator_faction_id,
-                responder_faction_id,
-                pact_name="right_of_passage",
-            )
-            return True
-
-        if action.kind == DiplomaticActionType.DEMAND_TRIBUTE:
-            relation.demand_tribute(action.gold_amount)
-            if self._event_bus is not None:
-                await self._event_bus.publish(
-                    GameEvents.Diplomacy.TRIBUTE_DEMANDED,
-                    demander_faction_id=responder_faction_id,
-                    payer_faction_id=initiator_faction_id,
-                    amount_gold=action.gold_amount,
-                )
-            return True
-
-        return False
-
-    # ==================================================================
-    # СБОРКА ПРОМПТОВ
+    # Сборка промптов
     # ==================================================================
 
     def _build_lord_prompt(
@@ -290,13 +250,10 @@ class NegotiationService:
                 PromptCatalog.LORE.BASIC.MEDIUM,
             ]
         )
-
-        # Запрашиваем динамические блоки у билдера
         blocks = self._context_builder.build_lord_context(
             world_state, lord_faction, counterpart_faction, ambassador
         )
         dynamic_context = self._context_builder.render(blocks)
-
         return f"{static_context}\n\n{dynamic_context}"
 
     def _build_envoy_prompt(
@@ -314,36 +271,14 @@ class NegotiationService:
                 get_faction_prompt_key(envoy_faction.race),
             ]
         )
-
         blocks = self._context_builder.build_ambassador_context(
             world_state, ambassador, envoy_faction, host_faction
         )
         dynamic_context = self._context_builder.render(blocks)
-
         return f"{static_context}\n\n{dynamic_context}"
-
-    # ==================================================================
-    # ХЕЛПЕРЫ
-    # ==================================================================
-
-    async def _publish(
-        self,
-        event_name: str,
-        faction_a_id: str,
-        faction_b_id: str,
-        **extra: object,
-    ) -> None:
-        if self._event_bus is None:
-            return
-        await self._event_bus.publish(
-            event_name, faction_a_id=faction_a_id, faction_b_id=faction_b_id, **extra
-        )
 
     def _require_faction(self, world_state: WorldState, faction_id: str) -> Faction:
         faction = world_state.get_faction(faction_id)
         if faction is None:
             raise ValueError(f"Фракция {faction_id} не найдена")
         return faction
-
-
-__all__ = ["NegotiationService"]

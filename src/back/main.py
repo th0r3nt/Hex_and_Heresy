@@ -26,6 +26,9 @@ from src.back.l02_services.mechanics.chronicler.listener import ChroniclerListen
 from src.back.l02_services.mechanics.diplomacy.facade import DiplomacyFacade
 from src.back.l02_services.mechanics.game_master.facade import GameMasterFacade
 from src.back.l02_services.mechanics.gunsmith.facade import GunsmithFacade
+from src.back.l02_services.mechanics.settlements.facade import SettlementsFacade
+from src.back.l02_services.mechanics.tools.executor import ToolExecutor
+from src.back.l02_services.mechanics.tools.factory import build_tool_executor
 from src.back.l02_services.mechanics.victory.facade import VictoryFacade
 from src.back.l02_services.mechanics.vision.facade import VisionFacade
 from src.back.l02_services.saves.facade import SavesFacade
@@ -56,9 +59,6 @@ from src.back.l04_api.ws.visibility import PlayerVisionGate
 from src.back.utils.event.bus import EventBus
 from src.back.utils.logger import main_logger
 
-# Клиент игры - окно Electron, которое открывает страницу с диска и потому
-# приходит с "чужим" источником. Сервер слушает только петлю, так что
-# разрешать ему любые источники безопасно.
 ALLOWED_ORIGINS = ["*"]
 
 SERVER_HOST = "127.0.0.1"
@@ -91,10 +91,12 @@ class AppContainer:
     saves_facade: SavesFacade
     victory_facade: VictoryFacade
     vision_facade: VisionFacade
+    settlements_facade: SettlementsFacade
     world_generator: WorldGenerator
     gameflow_fsm: GameFlowFSM
     gameflow_facade: GameFlowFacade
     turns_facade: TurnsFacade
+    tool_executor: ToolExecutor
 
     # ==================================================================
     # Активная партия
@@ -102,11 +104,7 @@ class AppContainer:
 
     def bind_session(self, session: LoadedSession) -> None:
         """
-        Рассылает мир начатой или загруженной партии по сервисам, которые
-        держат его у себя между запросами.
-
-        Знать полный список таких сервисов может только корень компоновки,
-        поэтому рассылка живет здесь, а не в роутере загрузки.
+        Рассылает мир начатой или загруженной партии по сервисам.
         """
         self.gameflow_facade.bind_world_state(session.world_state)
         self.chronicler_listener.bind_world_state(session.world_state)
@@ -120,7 +118,7 @@ class AppContainer:
 
 
 # =======================================================================
-# ГЛАВНАЯ СБОРКА КОНТЕЙНЕРА ЗАВИСИМОСТЕЙ
+# Главная сборка контейнера зависимостей
 # =======================================================================
 
 
@@ -195,17 +193,10 @@ def create_app_container(
     )
 
     # 3. Игровой поток и конечный автомат
-    # Подсистема целей нужна и потоку (внеочередная проверка после штурма),
-    # и такту (шаг 4.8), поэтому экземпляр один на всех: своего состояния
-    # она не держит, а финал партии живет в самом WorldState
     victory_facade = VictoryFacade(event_bus=event_bus)
-
-    # Туман войны считается на такте, отдается роутерам карты и гейтит ленту
-    # событий - экземпляр один на всех, свое состояние он держит в WorldState
     vision_facade = VisionFacade(event_bus=event_bus)
+    settlements_facade = SettlementsFacade(event_bus=event_bus)
 
-    # Мир новой партии собирает генератор: он ставит державы, застройку и
-    # армии, а затем сам просит подсистему тумана посчитать стартовый обзор
     world_generator = WorldGenerator(
         gamedata=registry,
         vision_facade=vision_facade,
@@ -228,6 +219,7 @@ def create_app_container(
         diplomacy_facade=diplomacy_facade,
         victory_facade=victory_facade,
         vision_facade=vision_facade,
+        settlements_facade=settlements_facade,
         gameflow_facade=gameflow_facade,
         gamedata=registry,
         event_bus=event_bus,
@@ -242,6 +234,21 @@ def create_app_container(
         vision_facade=vision_facade,
         event_bus=event_bus,
     )
+
+    # 5. Диспетчер инструментов (Function Calling)
+    tool_executor = build_tool_executor(
+        turns_facade=turns_facade,
+        diplomacy_facade=diplomacy_facade,
+        gunsmith_facade=gunsmith_facade,
+        game_master_facade=game_master_facade,
+        chronicler_facade=chronicler_facade,
+        advisor_facade=advisor_facade,
+    )
+
+    # Позднее связывание исполнителя с фасадами
+    advisor_facade.set_tool_executor(tool_executor)
+    if diplomacy_facade._negotiations is not None:
+        diplomacy_facade._negotiations.set_tool_executor(tool_executor)
 
     main_logger.info("Контейнер зависимостей успешно собран.")
 
@@ -262,38 +269,28 @@ def create_app_container(
         saves_facade=saves_facade,
         victory_facade=victory_facade,
         vision_facade=vision_facade,
+        settlements_facade=settlements_facade,
         world_generator=world_generator,
         gameflow_fsm=gameflow_fsm,
         gameflow_facade=gameflow_facade,
         turns_facade=turns_facade,
+        tool_executor=tool_executor,
     )
 
 
 # =======================================================================
-# ЖИЗНЕННЫЙ ЦИКЛ ПРИЛОЖЕНИЯ
+# Жизненный цикл приложения
 # =======================================================================
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    """
-    Асинхронная часть старта и остановки сервера.
-
-    Все, что требует живого цикла событий, живет здесь, а не в create_app():
-    таблицы базы создаются при старте, а фоновые публикации шины и сетевые
-    клиенты моделей аккуратно доигрываются и закрываются при остановке.
-    """
     container: AppContainer = app.state.container
     dispatcher: EventDispatcher = app.state.ws_dispatcher
 
     main_logger.info("[APP] Запуск приложения...")
 
-    # Схема базы сохранений создается на месте: отдельных миграций у
-    # локального десктопного приложения нет.
     await container.db.init_tables()
-
-    # Мост "шина событий -> сокет" подписывается только на живом приложении,
-    # чтобы при остановке гарантированно отписаться.
     dispatcher.register(container.event_bus)
 
     main_logger.info("[APP] Приложение готово к работе.")
@@ -304,10 +301,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         main_logger.info("[APP] Остановка приложения...")
 
         dispatcher.unregister(container.event_bus)
-
-        # Порядок обратный использованию: сначала дожидаемся фоновых
-        # слушателей (они ходят в модели), потом закрываем клиентов моделей
-        # и лишь затем гасим пул соединений с базой.
         await container.event_bus.stop()
         await container.llm_facade.close_all()
         await container.db.dispose()
@@ -316,17 +309,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 # =======================================================================
-# СБОРКА ПРИЛОЖЕНИЯ FASTAPI
+# Сборка приложения FastAPI
 # =======================================================================
 
 
 def create_app(container: Optional[AppContainer] = None) -> FastAPI:
-    """
-    Собирает приложение FastAPI поверх контейнера зависимостей.
-
-    Готовый контейнер можно передать снаружи (тесты, отдельные сценарии
-    запуска) - иначе он собирается здесь же настройками по умолчанию.
-    """
     app = FastAPI(
         title="Hex & Heresy",
         description="Бэкенд: игровые команды по HTTP и лента событий мира по WebSocket.",
@@ -334,17 +321,15 @@ def create_app(container: Optional[AppContainer] = None) -> FastAPI:
         lifespan=lifespan,
     )
 
-    # 1. Зависимости. Роутеры достают их из app.state через dependencies.py
     app.state.container = container or create_app_container()
     app.state.ws_manager = ConnectionManager()
-    # Лента событий идет игроку через туман войны: чужой марш в неразведанном
-    # секторе до окна клиента не доезжает
-    container = app.state.container
+
+    resolved_container = app.state.container
     app.state.ws_dispatcher = EventDispatcher(
         manager=app.state.ws_manager,
         visibility_gate=PlayerVisionGate(
-            gameflow_facade=container.gameflow_facade,
-            vision_facade=container.vision_facade,
+            gameflow_facade=resolved_container.gameflow_facade,
+            vision_facade=resolved_container.vision_facade,
         ),
     )
 
@@ -360,7 +345,6 @@ def create_app(container: Optional[AppContainer] = None) -> FastAPI:
     app.include_router(api_router)
     app.include_router(ws_router)
 
-    # 4. Перевод доменных ошибок в статусы HTTP
     register_exception_handlers(app)
 
     return app
@@ -374,8 +358,6 @@ def create_app(container: Optional[AppContainer] = None) -> FastAPI:
 if __name__ == "__main__":
     import uvicorn
 
-    # Фабрика, а не готовый объект: контейнер собирается один раз, уже внутри
-    # процесса сервера.
     uvicorn.run(
         "src.back.main:create_app",
         factory=True,

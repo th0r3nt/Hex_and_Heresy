@@ -2,6 +2,9 @@
 Общие фикстуры мастерской: фракция с казной, фейковая шина событий
 и детерминированная языковая модель.
 
+Мастер отвечает правителю только вызовами навыков (Function Calling), поэтому
+фейковая модель отдает пары «свободный текст + список вызовов».
+
 Сборщики промптов и контекста приезжают из tests/l02_services/conftest.py:
 фикстуры fake_prompt_builder и fake_context_builder.
 """
@@ -9,7 +12,6 @@
 from typing import Any, Optional
 
 import pytest
-from pydantic import BaseModel
 
 from src.back.l01_domain.army.constants import EquipmentSlot, EquipmentTag
 from src.back.l01_domain.common import FactionRace
@@ -17,13 +19,18 @@ from src.back.l01_domain.factions.constants import ResourceType
 from src.back.l01_domain.factions.models.buildings import Headquarters
 from src.back.l01_domain.factions.models.faction import Faction
 from src.back.l01_domain.factions.models.lord import Lord
+from src.back.l01_domain.llm.models.tools import ToolCall, ToolDefinition
+from src.back.l01_domain.llm.tools.definitions.gunsmith import (
+    DRAFT_BLUEPRINT,
+    REJECT_BLUEPRINT,
+)
 from src.back.l01_domain.maps.models.strategic import HexCoordinates
 from src.back.l01_domain.world.models.state import WorldState
-from src.back.l02_services.mechanics.gunsmith.crafting import (
-    LLMGunsmithResponse,
-    StatPriorities,
-)
 from src.back.l02_services.mechanics.gunsmith.facade import GunsmithFacade
+from src.back.tests.l02_services.fakes import LLMReply, tool_call
+
+MASTER_APPROVAL = "Тяжелая выйдет, но я такое уже ковал. Держите чертеж."
+MASTER_REFUSAL = "Магический посох? В Империи за такое жгут. Вон отсюда."
 
 
 # ==================================================================
@@ -54,13 +61,17 @@ class FakeLLMClient:
     """
     Мастер-оружейник со скриптованным ответом.
 
-    Запоминает промпты: тестам важно не только что вернула модель,
-    но и что ей отдали на вход.
+    Ответы укладываются очередью (`script`) в порядке заказов. Запоминает
+    промпты: тестам важно не только что вернула модель, но и что ей отдали
+    на вход.
     """
 
-    def __init__(self, response: Optional[LLMGunsmithResponse] = None) -> None:
-        self.response = response
+    def __init__(self) -> None:
+        self.replies: list[LLMReply] = []
         self.calls: list[dict[str, Any]] = []
+
+    def script(self, *replies: LLMReply) -> None:
+        self.replies.extend(replies)
 
     async def generate_text(
         self,
@@ -71,23 +82,25 @@ class FakeLLMClient:
     ) -> str:
         return "Мастер что-то бурчит себе под нос."
 
-    async def generate_structured(
+    async def generate_with_tools(
         self,
         system_prompt: str,
         user_prompt: str,
-        response_model: type[BaseModel],
+        tools: list[ToolDefinition],
         temperature: float = 0.6,
-    ) -> BaseModel:
+        tool_choice: Any = "auto",
+    ) -> tuple[str, list[ToolCall]]:
         self.calls.append(
             {
                 "system_prompt": system_prompt,
                 "user_prompt": user_prompt,
-                "response_model": response_model,
+                "tools": list(tools),
             }
         )
-        if self.response is None:
+        if not self.replies:
             raise AssertionError("FakeLLMClient: ответ мастера не задан")
-        return self.response
+        content, calls = self.replies.pop(0)
+        return content, list(calls)
 
 
 # ==================================================================
@@ -95,42 +108,49 @@ class FakeLLMClient:
 # ==================================================================
 
 
-def build_approved_response(**overrides) -> LLMGunsmithResponse:
+def build_draft_call(**overrides) -> ToolCall:
     """Одобренный заказ: тяжелая двуручная алебарда с пороховым стволом."""
-    data = {
-        "is_approved": True,
-        "master_reply": "Тяжелая выйдет, но я такое уже ковал. Держите чертеж.",
+    arguments: dict[str, Any] = {
         "name": "Алебарда с аркебузой",
         "lore": "Древко, к которому прикручен однозарядный ствол.",
-        "tier": 3,
-        "slot": EquipmentSlot.WEAPON,
+        "slot": EquipmentSlot.WEAPON.value,
         "category_name": "polearm",
-        "tags": [EquipmentTag.TWO_HANDED, EquipmentTag.HEAVY, EquipmentTag.BLACKPOWDER],
-        "priorities": StatPriorities(
-            damage=8, armor_piercing=4, heavy_weight_tradeoff=5, clunkiness_tradeoff=2
-        ),
+        "tier": 3,
+        "tags": [
+            EquipmentTag.TWO_HANDED.value,
+            EquipmentTag.HEAVY.value,
+            EquipmentTag.BLACKPOWDER.value,
+        ],
+        "damage_priority": 8,
+        "armor_piercing_priority": 4,
+        "heavy_weight_tradeoff": 5,
+        "clunkiness_tradeoff": 2,
+        "master_reply": MASTER_APPROVAL,
     }
-    data.update(overrides)
-    return LLMGunsmithResponse(**data)
+    arguments.update(overrides)
+    return tool_call(DRAFT_BLUEPRINT.name, **arguments)
 
 
-def build_rejected_response(
-    reply: str = "Магический посох? В Империи за такое жгут. Вон отсюда.",
-) -> LLMGunsmithResponse:
+def build_reject_call(master_reply: str = MASTER_REFUSAL, **overrides) -> ToolCall:
     """Отказ мастера: заказ противоречит лору фракции."""
-    return LLMGunsmithResponse(is_approved=False, master_reply=reply)
+    arguments: dict[str, Any] = {
+        "reason": "Заказ противоречит лору фракции.",
+        "master_reply": master_reply,
+    }
+    arguments.update(overrides)
+    return tool_call(REJECT_BLUEPRINT.name, **arguments)
 
 
 @pytest.fixture
-def approved_response():
-    """Фабрика одобренных ответов (тестовые модули лежат вне пакета)."""
-    return build_approved_response
+def draft_call():
+    """Фабрика вызовов навыка чертежа (тестовые модули лежат вне пакета)."""
+    return build_draft_call
 
 
 @pytest.fixture
-def rejected_response():
-    """Фабрика отказов мастера."""
-    return build_rejected_response
+def reject_call():
+    """Фабрика вызовов навыка отказа."""
+    return build_reject_call
 
 
 # ==================================================================
@@ -170,7 +190,7 @@ def world(humans: Faction) -> WorldState:
 
 @pytest.fixture
 def llm() -> FakeLLMClient:
-    """Мастер без готового ответа: тест сам укладывает нужный в llm.response."""
+    """Мастер без готового ответа: тест сам укладывает нужный через llm.script."""
     return FakeLLMClient()
 
 

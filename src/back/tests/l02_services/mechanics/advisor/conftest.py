@@ -2,6 +2,9 @@
 Общие фикстуры ставки советника: фракция с казной, фейковая шина событий
 и скриптованная языковая модель.
 
+Советник говорит с миром только вызовами навыков (Function Calling), поэтому
+фейковая модель отдает пары «свободный текст + список вызовов».
+
 Сборщики промптов и контекста приезжают из tests/l02_services/conftest.py:
 фикстуры fake_prompt_builder и fake_context_builder.
 """
@@ -9,22 +12,19 @@
 from typing import Any, Optional
 
 import pytest
-from pydantic import BaseModel
 
 from src.back.l01_domain.common import FactionRace
 from src.back.l01_domain.factions.constants import ResourceType
-from src.back.l01_domain.factions.models.advisor import (
-    AdvisorOptionKind,
-    LLMAdvisorOption,
-    LLMAdvisorProposalResponse,
-)
 from src.back.l01_domain.factions.models.buildings import Headquarters
 from src.back.l01_domain.factions.models.faction import Faction
 from src.back.l01_domain.factions.models.lord import Lord
+from src.back.l01_domain.llm.models.tools import ToolCall, ToolDefinition
+from src.back.l01_domain.llm.tools.definitions.advisor import PROPOSE_ADVISOR_ACTION
 from src.back.l01_domain.maps.models.strategic import HexCoordinates
 from src.back.l01_domain.world.models.state import WorldState
 from src.back.l02_services.mechanics.advisor.facade import AdvisorFacade
 from src.back.l02_services.mechanics.advisor.generation import AdvisorGenerator
+from src.back.tests.l02_services.fakes import LLMReply, tool_call
 
 
 # ==================================================================
@@ -55,17 +55,25 @@ class FakeLLMClient:
     """
     Советник со скриптованными ответами.
 
+    Ответы в режиме навыков укладываются очередью (`script`): один разговор
+    с советником - это несколько обращений к модели подряд. Когда очередь
+    пуста, модель отвечает молчанием без вызовов.
+
     Запоминает промпты: тестам важно не только что сказала модель,
     но и что ей отдали на вход.
     """
 
     def __init__(self) -> None:
-        self.structured_response: Optional[BaseModel] = None
         self.text_response: str = "Как прикажете, мой лорд."
         self.error: Optional[Exception] = None
 
-        self.structured_calls: list[dict[str, Any]] = []
+        self.replies: list[LLMReply] = []
+        self.calls: list[dict[str, Any]] = []
         self.text_calls: list[dict[str, Any]] = []
+
+    def script(self, *replies: LLMReply) -> None:
+        """Укладывает ответы модели в очередь в порядке обращений."""
+        self.replies.extend(replies)
 
     async def generate_text(
         self,
@@ -81,25 +89,27 @@ class FakeLLMClient:
             raise self.error
         return self.text_response
 
-    async def generate_structured(
+    async def generate_with_tools(
         self,
         system_prompt: str,
         user_prompt: str,
-        response_model: type[BaseModel],
+        tools: list[ToolDefinition],
         temperature: float = 0.6,
-    ) -> BaseModel:
-        self.structured_calls.append(
+        tool_choice: Any = "auto",
+    ) -> tuple[str, list[ToolCall]]:
+        self.calls.append(
             {
                 "system_prompt": system_prompt,
                 "user_prompt": user_prompt,
-                "response_model": response_model,
+                "tools": list(tools),
             }
         )
         if self.error is not None:
             raise self.error
-        if self.structured_response is None:
-            raise AssertionError("FakeLLMClient: ответ советника не задан")
-        return self.structured_response
+        if not self.replies:
+            return "", []
+        content, calls = self.replies.pop(0)
+        return content, list(calls)
 
 
 # ==================================================================
@@ -107,39 +117,23 @@ class FakeLLMClient:
 # ==================================================================
 
 
-def build_proposal_response(**overrides) -> LLMAdvisorProposalResponse:
+def build_proposal_call(**overrides) -> ToolCall:
     """Канонический совет из advisor.md: поднять налоги."""
-    data = {
-        "should_speak": True,
+    arguments = {
         "title": "Казна пуста",
         "message": (
             "Мой лорд, налоги в графстве занижены. Предлагаю поднять сбор на 10%."
         ),
-        "options": [
-            LLMAdvisorOption(label="Принять", kind=AdvisorOptionKind.ACCEPT),
-            LLMAdvisorOption(label="Поднять на 5%", kind=AdvisorOptionKind.ADJUST),
-            LLMAdvisorOption(label="Отклонить", kind=AdvisorOptionKind.DECLINE),
-        ],
+        "options": ["Принять", "Поднять на 5%", "Отклонить"],
     }
-    data.update(overrides)
-    return LLMAdvisorProposalResponse(**data)
-
-
-def build_silent_response() -> LLMAdvisorProposalResponse:
-    """В державе спокойно - советник молчит."""
-    return LLMAdvisorProposalResponse(should_speak=False)
+    arguments.update(overrides)
+    return tool_call(PROPOSE_ADVISOR_ACTION.name, **arguments)
 
 
 @pytest.fixture
-def proposal_response():
-    """Фабрика советов (тестовые модули лежат вне пакета)."""
-    return build_proposal_response
-
-
-@pytest.fixture
-def silent_response():
-    """Фабрика молчания советника."""
-    return build_silent_response
+def proposal_call():
+    """Фабрика вызовов навыка предложения (тестовые модули лежат вне пакета)."""
+    return build_proposal_call
 
 
 # ==================================================================

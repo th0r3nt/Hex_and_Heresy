@@ -5,8 +5,8 @@
 import pytest
 
 from src.back.l01_domain.llm.models.tools import ToolDefinition
-from src.back.l03_infrastructure.llm.tools import catalog
-from src.back.l03_infrastructure.llm.tools.catalog import Toolset
+from src.back.l01_domain.llm.tools import catalog
+from src.back.l01_domain.llm.tools.catalog import Toolset
 
 
 def _names(tools: list[ToolDefinition]) -> set[str]:

@@ -12,6 +12,9 @@ from src.back.l01_domain.exceptions.advisor import (
 )
 from src.back.l01_domain.exceptions.factions import FactionNotFoundError
 from src.back.l01_domain.factions.models.advisor import (
+    AdvisorAction,
+    AdvisorActionOutcome,
+    AdvisorActionStatus,
     AdvisorAnswer,
     AdvisorDecision,
     AdvisorProposal,
@@ -24,11 +27,11 @@ from src.back.l01_domain.protocols.llm import (
     PromptBuilderProtocol,
 )
 from src.back.l01_domain.world.models.state import WorldState
-from src.back.l02_services.mechanics.advisor.actions import AdvisorActionExecutor
 from src.back.l02_services.mechanics.advisor.generation import AdvisorGenerator
+from src.back.l02_services.mechanics.tools.context import ToolExecutionContext
+from src.back.l02_services.mechanics.tools.executor import ToolExecutor
 from src.back.utils.event.registry import GameEvents
 
-# Минимальный интервал между непрошеными советами в глобальных тактах
 DEFAULT_TICKS_BETWEEN_PROPOSALS = 3
 
 
@@ -36,10 +39,6 @@ class AdvisorFacade:
     """
     Оркестрирует советника: когда ему говорить, что он говорит и что из его
     предложений доезжает до мира.
-
-    Открытые предложения живут в памяти фасада и в сохранение не уезжают:
-    совет привязан к обстановке своего такта и после загрузки партии
-    бессмысленен.
     """
 
     def __init__(
@@ -47,7 +46,7 @@ class AdvisorFacade:
         llm_client: LLMClientProtocol,
         prompt_builder: PromptBuilderProtocol,
         context_builder: ContextBuilderProtocol,
-        action_executor: Optional[AdvisorActionExecutor] = None,
+        tool_executor: Optional[ToolExecutor] = None,
         event_bus: Optional[EventBusProtocol] = None,
         is_enabled: bool = True,
         proposal_interval: int = DEFAULT_TICKS_BETWEEN_PROPOSALS,
@@ -57,7 +56,7 @@ class AdvisorFacade:
             prompt_builder=prompt_builder,
             context_builder=context_builder,
         )
-        self._executor = action_executor or AdvisorActionExecutor()
+        self._tool_executor = tool_executor
         self._event_bus = event_bus
         self._is_enabled = is_enabled
         self._proposal_interval = proposal_interval
@@ -66,35 +65,27 @@ class AdvisorFacade:
         self._proposals: dict[str, AdvisorProposal] = {}
         self._last_proposal_ticks: dict[str, int] = {}
 
-    # ==================================================================
-    # НАСТРОЙКИ СОВЕТНИКА
-    # ==================================================================
+    def set_tool_executor(self, executor: ToolExecutor) -> None:
+        """
+        Устанавливает исполнитель инструментов при позднем связывании.
+        """
+        self._tool_executor = executor
 
     @property
     def is_enabled(self) -> bool:
-        """Советник работает только если игрок включил его в настройках."""
         return self._is_enabled
 
     def set_enabled(self, enabled: bool) -> None:
         self._is_enabled = enabled
 
     def set_personality(self, faction_id: str, personality_prompt: str) -> None:
-        """
-        Задает личность советника фракции: тон речи и приоритеты.
-
-        Промпт приходит от мастера игры (кастомный советник) или от расового
-        архетипа - фасаду достаточно самого текста.
-        """
         self._personalities[faction_id] = personality_prompt
 
     # ==================================================================
-    # ПАССИВНАЯ ИНИЦИАТИВА
+    # Пассивная инициатива
     # ==================================================================
 
     def should_offer(self, world_state: WorldState, faction_id: str) -> bool:
-        """
-        Наступил ли срок очередного непрошеного совета.
-        """
         last_tick = self._last_proposal_ticks.get(faction_id, 0)
         return (world_state.time.total_ticks - last_tick) >= self._proposal_interval
 
@@ -104,13 +95,6 @@ class AdvisorFacade:
         faction_id: str,
         force: bool = False,
     ) -> Optional[AdvisorProposal]:
-        """
-        Советник осматривает державу и, если есть повод, приносит предложение.
-
-        Выключенный советник молчит без ошибки: интерфейс дергает этот метод
-        каждый глобальный такт, и настройка игрока - не повод для красного
-        экрана. force игнорирует паузу между советами.
-        """
         if not self._is_enabled:
             return None
 
@@ -143,7 +127,6 @@ class AdvisorFacade:
         return proposal
 
     def pending_proposals(self, faction_id: str) -> list[AdvisorProposal]:
-        """Открытые предложения фракции - то, что интерфейс еще не закрыл."""
         return [
             proposal
             for proposal in self._proposals.values()
@@ -157,15 +140,11 @@ class AdvisorFacade:
         return proposal
 
     def forget_proposals(self) -> None:
-        """
-        Забывает открытые советы. Вызывается при выходе из партии: советы
-        прошлой игры новой уже не касаются.
-        """
         self._proposals.clear()
         self._last_proposal_ticks.clear()
 
     # ==================================================================
-    # ДИАЛОГОВЫЙ РЕЖИМ
+    # Диалоговый режим
     # ==================================================================
 
     async def ask(
@@ -174,9 +153,6 @@ class AdvisorFacade:
         faction_id: str,
         question: str,
     ) -> AdvisorAnswer:
-        """
-        Игрок открыл окно советника и задал вопрос своими словами.
-        """
         self._require_enabled()
         faction = self._require_faction(world_state, faction_id)
 
@@ -188,7 +164,7 @@ class AdvisorFacade:
         )
 
     # ==================================================================
-    # РЕАКЦИЯ НА ВЫБОР ИГРОКА
+    # Реакция на выбор игрока
     # ==================================================================
 
     async def answer_proposal(
@@ -198,14 +174,6 @@ class AdvisorFacade:
         option_id: str,
         player_reply: str = "",
     ) -> AdvisorDecision:
-        """
-        Игрок нажал кнопку под предложением.
-
-        Отказ закрывает окно молча - советника не спрашивают, что он думает
-        по поводу отказа. Любой другой выбор уходит советнику: тот отвечает
-        репликой и берется за дело через навыки, а исполнитель переносит их
-        на мир.
-        """
         self._require_enabled()
 
         proposal = self.get_proposal(proposal_id)
@@ -217,7 +185,7 @@ class AdvisorFacade:
         if option.is_refusal:
             return AdvisorDecision(proposal_id=proposal.id, option_id=option.id)
 
-        reply, actions = await self._generator.request_actions(
+        reply, tool_calls = await self._generator.request_actions(
             world_state=world_state,
             faction=faction,
             proposal=proposal,
@@ -226,11 +194,26 @@ class AdvisorFacade:
             personality_prompt=self._personalities.get(faction.id, ""),
         )
 
-        outcomes = await self._executor.execute_all(world_state, faction.id, actions)
-
-        for outcome in outcomes:
-            if outcome.is_executed:
-                await self._publish_executed(faction.id, outcome.action.tool_name, outcome.detail)
+        outcomes: list[AdvisorActionOutcome] = []
+        if self._tool_executor is not None and tool_calls:
+            ctx = ToolExecutionContext(
+                world_state=world_state,
+                caller_faction_id=faction.id,
+            )
+            results = await self._tool_executor.execute_many(tool_calls, ctx)
+            for res in results:
+                status = (
+                    AdvisorActionStatus.EXECUTED if res.success else AdvisorActionStatus.FAILED
+                )
+                outcomes.append(
+                    AdvisorActionOutcome(
+                        action=AdvisorAction(tool_name=res.tool_name),
+                        status=status,
+                        detail=res.output if res.success else (res.error or "ошибка"),
+                    )
+                )
+                if res.success:
+                    await self._publish_executed(faction.id, res.tool_name, res.output)
 
         return AdvisorDecision(
             proposal_id=proposal.id,
@@ -240,7 +223,7 @@ class AdvisorFacade:
         )
 
     # ==================================================================
-    # СЛУЖЕБНОЕ
+    # Служебное
     # ==================================================================
 
     def _require_enabled(self) -> None:
@@ -266,9 +249,7 @@ class AdvisorFacade:
             option_label=option_label,
         )
 
-    async def _publish_executed(
-        self, faction_id: str, tool_name: str, detail: str
-    ) -> None:
+    async def _publish_executed(self, faction_id: str, tool_name: str, detail: str) -> None:
         if self._event_bus is None:
             return
         await self._event_bus.publish(

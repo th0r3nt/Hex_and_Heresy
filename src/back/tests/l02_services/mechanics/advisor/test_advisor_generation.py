@@ -1,6 +1,6 @@
 """
-Тесты разговора с советником: сборка его промпта, разбор ответа модели
-и заглушка выбора навыков.
+Тесты разговора с советником: сборка его промпта, разбор вызванных им навыков
+и намерения, которые он передает исполнителю.
 
 Генератор - это переводчик между моделью и доменом: он не решает, когда
 советнику говорить, но отвечает за то, чтобы окно предложения всегда
@@ -11,12 +11,10 @@ import pytest
 
 from src.back.l01_domain.exceptions.advisor import AdvisorGenerationFailedError
 from src.back.l01_domain.exceptions.llm import LLMRequestFailedError
-from src.back.l01_domain.factions.models.advisor import (
-    ADVISOR_MAX_OPTIONS,
-    AdvisorOptionKind,
-    LLMAdvisorOption,
-)
+from src.back.l01_domain.factions.models.advisor import ADVISOR_MAX_OPTIONS
+from src.back.l01_domain.llm.tools.catalog import Toolset, get_toolset
 from src.back.l02_services.mechanics.advisor.generation import FREEFORM_OPTION_LABEL
+from src.back.tests.l02_services.fakes import reply, tool_call
 
 QUESTION = "Какая армия врага ближе всего к столице?"
 
@@ -29,17 +27,17 @@ QUESTION = "Какая армия врага ближе всего к столи
 class TestSystemPrompt:
     @pytest.mark.asyncio
     async def test_prompt_carries_role_mechanics_and_race(
-        self, generator, world, humans, llm, proposal_response
+        self, generator, world, humans, llm, proposal_call
     ):
         """
         У каждой расы свой советник: в промпт уходят его роль, правила
         экономики и стратегии и лор фракции (см. docs/game_mechanics/advisor.md).
         """
-        llm.structured_response = proposal_response()
+        llm.script(reply("", proposal_call()))
 
         await generator.generate_proposal(world, humans)
 
-        system_prompt = llm.structured_calls[0]["system_prompt"]
+        system_prompt = llm.calls[0]["system_prompt"]
         assert "[base.persona]" in system_prompt
         assert "[base.mechanics.economy]" in system_prompt
         assert "[base.mechanics.strategic]" in system_prompt
@@ -49,27 +47,41 @@ class TestSystemPrompt:
 
     @pytest.mark.asyncio
     async def test_prompt_carries_the_current_slice_of_the_world(
-        self, generator, world, humans, llm, proposal_response
+        self, generator, world, humans, llm, proposal_call
     ):
         """Советник советует по отчетам, а не вслепую."""
-        llm.structured_response = proposal_response()
+        llm.script(reply("", proposal_call()))
 
         await generator.generate_proposal(world, humans)
 
-        assert "[advisor]" in llm.structured_calls[0]["system_prompt"]
+        assert "[advisor]" in llm.calls[0]["system_prompt"]
 
     @pytest.mark.asyncio
     async def test_custom_personality_reaches_the_prompt(
-        self, generator, world, humans, llm, proposal_response
+        self, generator, world, humans, llm, proposal_call
     ):
         """Личность советника пишет игрок или мастер игры - она обязана доехать."""
-        llm.structured_response = proposal_response()
+        llm.script(reply("", proposal_call()))
 
         await generator.generate_proposal(
             world, humans, personality_prompt="Фанатичный инквизитор, говорит приказами."
         )
 
-        assert "Фанатичный инквизитор" in llm.structured_calls[0]["system_prompt"]
+        assert "Фанатичный инквизитор" in llm.calls[0]["system_prompt"]
+
+    @pytest.mark.asyncio
+    async def test_advisor_gets_only_the_tools_of_his_council(
+        self, generator, world, humans, llm, proposal_call
+    ):
+        """
+        Набор навыков привязан к сцене: на докладе правителю советник вправе
+        только предложить решение, а не пойти воевать.
+        """
+        llm.script(reply("", proposal_call()))
+
+        await generator.generate_proposal(world, humans)
+
+        assert llm.calls[0]["tools"] == get_toolset(Toolset.ADVISOR_COUNCIL)
 
 
 # ==================================================================
@@ -80,23 +92,23 @@ class TestSystemPrompt:
 class TestGenerateProposal:
     @pytest.mark.asyncio
     async def test_proposal_carries_the_advisors_words(
-        self, generator, world, humans, llm, proposal_response
+        self, generator, world, humans, llm, proposal_call
     ):
-        response = proposal_response()
-        llm.structured_response = response
+        call = proposal_call()
+        llm.script(reply("", call))
 
         proposal = await generator.generate_proposal(world, humans)
 
         assert proposal is not None
-        assert proposal.title == response.title
-        assert proposal.message == response.message
+        assert proposal.title == call.arguments["title"]
+        assert proposal.message == call.arguments["message"]
         assert proposal.faction_id == "humans"
 
     @pytest.mark.asyncio
     async def test_proposal_remembers_the_tick_it_was_given_on(
-        self, generator, world, humans, llm, proposal_response
+        self, generator, world, humans, llm, proposal_call
     ):
-        llm.structured_response = proposal_response()
+        llm.script(reply("", proposal_call()))
         world.time.total_ticks = 17
 
         proposal = await generator.generate_proposal(world, humans)
@@ -105,19 +117,31 @@ class TestGenerateProposal:
 
     @pytest.mark.asyncio
     async def test_silent_advisor_does_not_open_a_window(
-        self, generator, world, humans, llm, silent_response
+        self, generator, world, humans, llm
     ):
-        """В спокойный такт советник вправе промолчать."""
-        llm.structured_response = silent_response()
+        """В спокойный такт советник вправе не звать ни одного навыка."""
+        llm.script(reply("В державе спокойно."))
 
         assert await generator.generate_proposal(world, humans) is None
 
     @pytest.mark.asyncio
     async def test_empty_message_is_treated_as_silence(
-        self, generator, world, humans, llm, proposal_response
+        self, generator, world, humans, llm, proposal_call
     ):
         """Окно без текста показывать нечем."""
-        llm.structured_response = proposal_response(message="   ")
+        llm.script(reply("", proposal_call(message="   ")))
+
+        assert await generator.generate_proposal(world, humans) is None
+
+    @pytest.mark.asyncio
+    async def test_broken_arguments_do_not_open_a_window(
+        self, generator, world, humans, llm
+    ):
+        """
+        Модель позвала навык, но параметры не по схеме: такой вызов - брак,
+        а не повод ронять глобальный такт.
+        """
+        llm.script(reply("", tool_call("propose_advisor_action", title="Казна пуста")))
 
         assert await generator.generate_proposal(world, humans) is None
 
@@ -142,22 +166,21 @@ class TestGenerateProposal:
 class TestOptions:
     @pytest.mark.asyncio
     async def test_options_of_the_model_reach_the_window(
-        self, generator, world, humans, llm, proposal_response
+        self, generator, world, humans, llm, proposal_call
     ):
-        llm.structured_response = proposal_response()
+        llm.script(reply("", proposal_call()))
 
         proposal = await generator.generate_proposal(world, humans)
 
         labels = [option.label for option in proposal.options]
         assert labels[:3] == ["Принять", "Поднять на 5%", "Отклонить"]
-        assert proposal.options[1].kind == AdvisorOptionKind.ADJUST
 
     @pytest.mark.asyncio
     async def test_freeform_button_is_always_the_last_one(
-        self, generator, world, humans, llm, proposal_response
+        self, generator, world, humans, llm, proposal_call
     ):
         """Возразить советнику своими словами игрок вправе всегда."""
-        llm.structured_response = proposal_response()
+        llm.script(reply("", proposal_call()))
 
         proposal = await generator.generate_proposal(world, humans)
 
@@ -166,10 +189,10 @@ class TestOptions:
 
     @pytest.mark.asyncio
     async def test_model_without_options_gets_the_default_pair(
-        self, generator, world, humans, llm, proposal_response
+        self, generator, world, humans, llm, proposal_call
     ):
-        """Молчаливой модели интерфейс дорисует «Принять» и «Отклонить»."""
-        llm.structured_response = proposal_response(options=[])
+        """Кнопки без подписей интерфейс заменит на «Принять» и «Отклонить»."""
+        llm.script(reply("", proposal_call(options=["   "])))
 
         proposal = await generator.generate_proposal(world, humans)
 
@@ -178,11 +201,11 @@ class TestOptions:
 
     @pytest.mark.asyncio
     async def test_extra_options_are_cut_to_fit_the_window(
-        self, generator, world, humans, llm, proposal_response
+        self, generator, world, humans, llm, proposal_call
     ):
         """Свободный ответ не должен вытесняться болтливостью модели."""
-        llm.structured_response = proposal_response(
-            options=[LLMAdvisorOption(label=f"Вариант {i}") for i in range(10)]
+        llm.script(
+            reply("", proposal_call(options=[f"Вариант {i}" for i in range(10)]))
         )
 
         proposal = await generator.generate_proposal(world, humans)
@@ -192,20 +215,18 @@ class TestOptions:
 
     @pytest.mark.asyncio
     async def test_freeform_option_of_the_model_is_not_duplicated(
-        self, generator, world, humans, llm, proposal_response
+        self, generator, world, humans, llm, proposal_call
     ):
-        """Модель предложила свой ответ сама - кнопка все равно одна."""
-        llm.structured_response = proposal_response(
-            options=[
-                LLMAdvisorOption(label="Принять", kind=AdvisorOptionKind.ACCEPT),
-                LLMAdvisorOption(label="Скажу сам", kind=AdvisorOptionKind.FREEFORM),
-            ]
+        """Модель предложила свободный ответ сама - кнопка все равно одна."""
+        llm.script(
+            reply("", proposal_call(options=["Принять", FREEFORM_OPTION_LABEL]))
         )
 
         proposal = await generator.generate_proposal(world, humans)
 
-        freeform = [o for o in proposal.options if o.requires_player_text]
-        assert len(freeform) == 1
+        labels = [option.label for option in proposal.options]
+        assert labels == ["Принять", FREEFORM_OPTION_LABEL]
+        assert len([o for o in proposal.options if o.requires_player_text]) == 1
 
 
 # ==================================================================
@@ -249,71 +270,88 @@ class TestAnswerQuestion:
 
 
 # ==================================================================
-# ЗАПРОС ДЕЙСТВИЙ ПОСЛЕ ВЫБОРА (ЗАГЛУШКА)
+# ЗАПРОС ДЕЙСТВИЙ ПОСЛЕ ВЫБОРА
 # ==================================================================
 
 
 class TestRequestActions:
-    async def _proposal(self, generator, world, humans, llm, proposal_response):
-        llm.structured_response = proposal_response()
+    async def _proposal(self, generator, world, humans, llm, proposal_call):
+        llm.script(reply("", proposal_call()))
         return await generator.generate_proposal(world, humans)
 
     @pytest.mark.asyncio
     async def test_choice_of_the_player_reaches_the_advisor(
-        self, generator, world, humans, llm, proposal_response
+        self, generator, world, humans, llm, proposal_call
     ):
-        proposal = await self._proposal(generator, world, humans, llm, proposal_response)
+        proposal = await self._proposal(generator, world, humans, llm, proposal_call)
         option = proposal.options[1]
 
         await generator.request_actions(world, humans, proposal, option)
 
-        assert option.label in llm.text_calls[-1]["user_prompt"]
+        assert option.label in llm.calls[-1]["user_prompt"]
 
     @pytest.mark.asyncio
     async def test_player_words_reach_the_advisor(
-        self, generator, world, humans, llm, proposal_response
+        self, generator, world, humans, llm, proposal_call
     ):
         """Свободный ответ игрока - тоже часть разговора."""
-        proposal = await self._proposal(generator, world, humans, llm, proposal_response)
+        proposal = await self._proposal(generator, world, humans, llm, proposal_call)
         freeform = proposal.options[-1]
 
         await generator.request_actions(
             world, humans, proposal, freeform, player_reply="Налоги не тронь, найди иное."
         )
 
-        assert "Налоги не тронь" in llm.text_calls[-1]["user_prompt"]
+        assert "Налоги не тронь" in llm.calls[-1]["user_prompt"]
 
     @pytest.mark.asyncio
-    async def test_no_actions_until_the_skills_are_written(
-        self, generator, world, humans, llm, proposal_response
+    async def test_advisor_acts_through_the_tools_of_his_turn(
+        self, generator, world, humans, llm, proposal_call
     ):
         """
-        Действовать советник обязан только через навыки Function Calling,
-        а их схем пока нет: список намерений всегда пуст.
+        Решение правителя советник исполняет навыками стратегического хода:
+        генератор отдает их исполнителю как есть.
         """
-        proposal = await self._proposal(generator, world, humans, llm, proposal_response)
-        llm.text_response = "Будет исполнено, мой лорд."
+        proposal = await self._proposal(generator, world, humans, llm, proposal_call)
+        raise_taxes = tool_call("set_tax_rate", rate=1.1)
+        llm.script(reply("Будет исполнено, мой лорд.", raise_taxes))
 
-        reply, actions = await generator.request_actions(
+        reply_text, calls = await generator.request_actions(
             world, humans, proposal, proposal.options[0]
         )
 
-        assert actions == []
-        assert reply == "Будет исполнено, мой лорд."
+        assert reply_text == "Будет исполнено, мой лорд."
+        assert calls == [raise_taxes]
+        assert llm.calls[-1]["tools"] == get_toolset(Toolset.STRATEGIC_TURN)
+
+    @pytest.mark.asyncio
+    async def test_advisor_without_tools_only_speaks(
+        self, generator, world, humans, llm, proposal_call
+    ):
+        """Советник вправе ограничиться словами - до мира ничего не доедет."""
+        proposal = await self._proposal(generator, world, humans, llm, proposal_call)
+        llm.script(reply("Тогда оставим казну в покое."))
+
+        reply_text, calls = await generator.request_actions(
+            world, humans, proposal, proposal.options[0]
+        )
+
+        assert reply_text == "Тогда оставим казну в покое."
+        assert calls == []
 
     @pytest.mark.asyncio
     async def test_broken_model_still_leaves_a_reply(
-        self, generator, world, humans, llm, proposal_response
+        self, generator, world, humans, llm, proposal_call
     ):
         """
         Игрок уже нажал кнопку: окно должно закрыться репликой, а не ошибкой.
         """
-        proposal = await self._proposal(generator, world, humans, llm, proposal_response)
+        proposal = await self._proposal(generator, world, humans, llm, proposal_call)
         llm.error = LLMRequestFailedError("openai", "gpt", "таймаут")
 
-        reply, actions = await generator.request_actions(
+        reply_text, calls = await generator.request_actions(
             world, humans, proposal, proposal.options[0]
         )
 
-        assert reply
-        assert actions == []
+        assert reply_text
+        assert calls == []

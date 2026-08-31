@@ -12,8 +12,11 @@ from src.back.l01_domain.army.constants import EquipmentSlot, EquipmentTag
 from src.back.l01_domain.army.models.card.equipment import Equipment, EquipmentStats
 from src.back.l01_domain.exceptions.factions import InsufficientResourcesError
 from src.back.l01_domain.factions.constants import ResourceType
+from src.back.l02_services.mechanics.gunsmith.crafting import StatPriorities
+from src.back.l02_services.mechanics.gunsmith.facade import INCOMPLETE_ANSWER_REPLY
 from src.back.l02_services.mechanics.gunsmith.validation.balance import EquipmentBalancer
 from src.back.l02_services.mechanics.gunsmith.validation.economy import EquipmentEconomist
+from src.back.tests.l02_services.fakes import reply
 from src.back.utils.event.registry import GameEvents
 
 ORDER = "Тяжелая двуручная алебарда с аркебузой на древке."
@@ -47,13 +50,13 @@ def make_draft(
 class TestSystemPrompt:
     @pytest.mark.asyncio
     async def test_prompt_carries_role_economy_and_race(
-        self, facade, world, llm, approved_response
+        self, facade, world, llm, draft_call
     ):
         """
         У каждой расы свой мастер: в промпт уходят его роль, правила экономики
         и лор фракции заказчика (см. docs/game_mechanics/gunsmith.md).
         """
-        llm.response = approved_response()
+        llm.script(reply("", draft_call()))
 
         await facade.draft_blueprint(world, "humans", ORDER)
 
@@ -66,10 +69,10 @@ class TestSystemPrompt:
 
     @pytest.mark.asyncio
     async def test_prompt_carries_the_current_state_of_the_faction(
-        self, facade, world, llm, approved_response
+        self, facade, world, llm, draft_call
     ):
         """Мастер должен видеть казну заказчика, а не выставлять цену вслепую."""
-        llm.response = approved_response()
+        llm.script(reply("", draft_call()))
 
         await facade.draft_blueprint(world, "humans", ORDER)
 
@@ -77,9 +80,9 @@ class TestSystemPrompt:
 
     @pytest.mark.asyncio
     async def test_player_order_reaches_the_user_prompt(
-        self, facade, world, llm, approved_response
+        self, facade, world, llm, draft_call
     ):
-        llm.response = approved_response()
+        llm.script(reply("", draft_call()))
 
         await facade.draft_blueprint(world, "humans", ORDER)
 
@@ -104,34 +107,41 @@ class TestSystemPrompt:
 class TestDraftApproved:
     @pytest.mark.asyncio
     async def test_draft_carries_the_masters_reply(
-        self, facade, world, llm, approved_response
+        self, facade, world, llm, draft_call
     ):
-        response = approved_response()
-        llm.response = response
+        call = draft_call()
+        llm.script(reply("", call))
 
-        draft, reply = await facade.draft_blueprint(world, "humans", ORDER)
+        draft, master_reply = await facade.draft_blueprint(world, "humans", ORDER)
 
         assert draft is not None
-        assert reply == response.master_reply
+        assert master_reply == call.arguments["master_reply"]
 
     @pytest.mark.asyncio
     async def test_stats_and_price_come_from_the_math_modules(
-        self, facade, world, llm, approved_response
+        self, facade, world, llm, draft_call
     ):
         """
         Фасад не считает сам: статы приходят от балансировщика,
         цена - от экономиста.
         """
-        response = approved_response()
-        llm.response = response
+        call = draft_call()
+        llm.script(reply("", call))
 
         draft, _ = await facade.draft_blueprint(world, "humans", ORDER)
 
+        priorities = StatPriorities(
+            damage=call.arguments["damage_priority"],
+            armor_piercing=call.arguments["armor_piercing_priority"],
+            heavy_weight_tradeoff=call.arguments["heavy_weight_tradeoff"],
+            clunkiness_tradeoff=call.arguments["clunkiness_tradeoff"],
+        )
         expected_stats = EquipmentBalancer.normalize_stats(
-            response.tier, response.priorities
+            call.arguments["tier"], priorities
         )
         expected_gold, expected_material = EquipmentEconomist.calculate_cost(
-            response.tier, response.tags
+            call.arguments["tier"],
+            [EquipmentTag(tag) for tag in call.arguments["tags"]],
         )
 
         assert draft.stats == expected_stats
@@ -140,10 +150,10 @@ class TestDraftApproved:
 
     @pytest.mark.asyncio
     async def test_tradeoffs_from_the_order_land_in_the_card(
-        self, facade, world, llm, approved_response
+        self, facade, world, llm, draft_call
     ):
         """Заказ тяжелой алебарды - это заявленные штрафы к скорости и инициативе."""
-        llm.response = approved_response()
+        llm.script(reply("", draft_call()))
 
         draft, _ = await facade.draft_blueprint(world, "humans", ORDER)
 
@@ -153,10 +163,10 @@ class TestDraftApproved:
 
     @pytest.mark.asyncio
     async def test_draft_is_not_registered_until_approved(
-        self, facade, world, llm, approved_response
+        self, facade, world, llm, draft_call
     ):
         """Чертеж - это предложение мастера, а не покупка: казна не тронута."""
-        llm.response = approved_response()
+        llm.script(reply("", draft_call()))
 
         await facade.draft_blueprint(world, "humans", ORDER)
 
@@ -165,9 +175,9 @@ class TestDraftApproved:
 
     @pytest.mark.asyncio
     async def test_drafted_event_names_the_item(
-        self, facade, world, llm, fake_bus, approved_response
+        self, facade, world, llm, fake_bus, draft_call
     ):
-        llm.response = approved_response()
+        llm.script(reply("", draft_call()))
 
         draft, _ = await facade.draft_blueprint(world, "humans", ORDER)
 
@@ -186,41 +196,43 @@ class TestDraftApproved:
 class TestDraftRejected:
     @pytest.mark.asyncio
     async def test_rejection_returns_the_reply_without_an_item(
-        self, facade, world, llm, rejected_response
+        self, facade, world, llm, reject_call
     ):
         """Заказ против лора расы уходит в отказ - грубый, но без чертежа."""
-        response = rejected_response()
-        llm.response = response
+        call = reject_call()
+        llm.script(reply("", call))
 
-        draft, reply = await facade.draft_blueprint(world, "humans", "Магический посох.")
+        draft, master_reply = await facade.draft_blueprint(
+            world, "humans", "Магический посох."
+        )
 
         assert draft is None
-        assert reply == response.master_reply
+        assert master_reply == call.arguments["master_reply"]
 
     @pytest.mark.asyncio
     async def test_rejected_event_carries_the_reason(
-        self, facade, world, llm, fake_bus, rejected_response
+        self, facade, world, llm, fake_bus, reject_call
     ):
-        response = rejected_response()
-        llm.response = response
+        call = reject_call()
+        llm.script(reply("", call))
 
         await facade.draft_blueprint(world, "humans", "Магический посох.")
 
         assert GameEvents.Gunsmith.BLUEPRINT_REJECTED in fake_bus.names()
         payload = fake_bus.payload_of(GameEvents.Gunsmith.BLUEPRINT_REJECTED)
         assert payload["faction_id"] == "humans"
-        assert payload["reason"] == response.master_reply
+        assert payload["reason"] == call.arguments["master_reply"]
         assert GameEvents.Gunsmith.BLUEPRINT_DRAFTED not in fake_bus.names()
 
     @pytest.mark.asyncio
-    async def test_approval_without_priorities_is_treated_as_refusal(
-        self, facade, world, llm, approved_response
+    async def test_priorities_beyond_the_scale_are_treated_as_refusal(
+        self, facade, world, llm, draft_call
     ):
         """
-        Модель сказала "да", но акцентов не расставила - считать по такому
-        ответу нечего, и чертежа не будет.
+        Мастер выставил акценты вне шкалы навыка: считать по такому вызову
+        нечего, и чертежа не будет.
         """
-        llm.response = approved_response(priorities=None)
+        llm.script(reply("", draft_call(damage_priority=99)))
 
         draft, _ = await facade.draft_blueprint(world, "humans", ORDER)
 
@@ -228,10 +240,10 @@ class TestDraftRejected:
 
     @pytest.mark.asyncio
     async def test_approval_without_tier_is_treated_as_refusal(
-        self, facade, world, llm, approved_response
+        self, facade, world, llm, draft_call
     ):
         """Без тира неоткуда взять ни бюджет статов, ни цену."""
-        llm.response = approved_response(tier=None)
+        llm.script(reply("", draft_call(tier=None)))
 
         draft, _ = await facade.draft_blueprint(world, "humans", ORDER)
 
@@ -239,35 +251,46 @@ class TestDraftRejected:
 
     @pytest.mark.asyncio
     async def test_approval_without_slot_is_treated_as_refusal(
-        self, facade, world, llm, fake_bus, approved_response
+        self, facade, world, llm, fake_bus, draft_call
     ):
         """
         Без слота непонятно, куда предмет надевать, и домен такую карточку
         не примет. Игрок должен получить отказ мастера, а не ошибку валидации.
         """
-        llm.response = approved_response(slot=None)
+        llm.script(reply("", draft_call(slot=None)))
 
-        draft, reply = await facade.draft_blueprint(world, "humans", ORDER)
+        draft, master_reply = await facade.draft_blueprint(world, "humans", ORDER)
 
         assert draft is None
-        assert reply == llm.response.master_reply
+        assert master_reply == INCOMPLETE_ANSWER_REPLY
         assert GameEvents.Gunsmith.BLUEPRINT_REJECTED in fake_bus.names()
 
     @pytest.mark.asyncio
     async def test_incomplete_answer_never_reaches_the_arsenal(
-        self, facade, world, llm, approved_response
+        self, facade, world, llm, draft_call
     ):
-        """Любой недозаполненный ответ мастера оставляет арсенал пустым."""
+        """Любой недозаполненный вызов мастера оставляет арсенал пустым."""
         for broken in (
-            approved_response(priorities=None),
-            approved_response(tier=None),
-            approved_response(slot=None),
+            draft_call(damage_priority=99),
+            draft_call(tier=None),
+            draft_call(slot=None),
+            draft_call(name=""),
         ):
-            llm.response = broken
+            llm.script(reply("", broken))
             draft, _ = await facade.draft_blueprint(world, "humans", ORDER)
             assert draft is None
 
         assert world.custom_equipment == {}
+
+    @pytest.mark.asyncio
+    async def test_master_without_any_tool_call_only_speaks(self, facade, world, llm):
+        """Мастер ограничился словами - заказ закрыт без чертежа."""
+        llm.script(reply("Такое я не кую."))
+
+        draft, master_reply = await facade.draft_blueprint(world, "humans", ORDER)
+
+        assert draft is None
+        assert master_reply == "Такое я не кую."
 
 
 # ==================================================================
@@ -355,10 +378,10 @@ class TestApproveBlueprint:
 class TestWorkshopEndToEnd:
     @pytest.mark.asyncio
     async def test_order_becomes_an_item_in_the_arsenal(
-        self, facade, world, humans, llm, fake_bus, approved_response
+        self, facade, world, humans, llm, fake_bus, draft_call
     ):
         """Путь заказа целиком: текст игрока -> чертеж -> оплата -> арсенал."""
-        llm.response = approved_response()
+        llm.script(reply("", draft_call()))
 
         draft, _ = await facade.draft_blueprint(world, "humans", ORDER)
         await facade.approve_blueprint(world, "humans", draft)
@@ -374,14 +397,14 @@ class TestWorkshopEndToEnd:
 
     @pytest.mark.asyncio
     async def test_second_order_does_not_overwrite_the_first(
-        self, facade, world, llm, approved_response
+        self, facade, world, llm, draft_call
     ):
         """У каждого чертежа свой идентификатор - арсенал копится."""
-        llm.response = approved_response()
+        llm.script(reply("", draft_call()))
         first, _ = await facade.draft_blueprint(world, "humans", ORDER)
         await facade.approve_blueprint(world, "humans", first)
 
-        llm.response = approved_response(name="Крепостной гвоздомет", tier=1)
+        llm.script(reply("", draft_call(name="Крепостной гвоздомет", tier=1)))
         second, _ = await facade.draft_blueprint(world, "humans", "Что-нибудь попроще.")
         await facade.approve_blueprint(world, "humans", second)
 

@@ -10,7 +10,6 @@ from typing import Optional
 from src.back.l01_domain.exceptions.diplomacy import AmbassadorUnavailableError
 from src.back.l01_domain.factions.constants import (
     AmbassadorStatus,
-    DiplomaticActionType,
     NegotiationMode,
     ResourceType,
 )
@@ -189,11 +188,7 @@ class DiplomacyFacade:
         """
         negotiations = self._require_negotiations()
         ambassador = self._require_ambassador(world_state, ambassador_id)
-        response = await negotiations.reply_to_player(
-            world_state, ambassador, player_text
-        )
-        await self._resolve_ambassador_fate(world_state, ambassador, response)
-        return response
+        return await negotiations.reply_to_player(world_state, ambassador, player_text)
 
     async def run_auto_negotiation(
         self, world_state: WorldState, ambassador_id: str
@@ -203,12 +198,7 @@ class DiplomacyFacade:
         """
         negotiations = self._require_negotiations()
         ambassador = self._require_ambassador(world_state, ambassador_id)
-        transcript = await negotiations.run_auto_negotiation(world_state, ambassador)
-        if transcript.final_response is not None:
-            await self._resolve_ambassador_fate(
-                world_state, ambassador, transcript.final_response
-            )
-        return transcript
+        return await negotiations.run_auto_negotiation(world_state, ambassador)
 
     async def execute_ambassador(
         self, world_state: WorldState, ambassador_id: str
@@ -225,23 +215,6 @@ class DiplomacyFacade:
     # ==================================================================
     # ВНУТРЕННЯЯ ЛОГИКА
     # ==================================================================
-
-    async def _resolve_ambassador_fate(
-        self,
-        world_state: WorldState,
-        ambassador: Ambassador,
-        response: LLMDiplomaticResponse,
-    ) -> None:
-        """
-        Единственное решение лорда, которое сервис переговоров не исполняет
-        сам, - казнь посла: она требует работы с картой и статусом посла.
-        """
-        if response.action is None:
-            return
-        if response.action.kind != DiplomaticActionType.EXECUTE_AMBASSADOR:
-            return
-
-        await self._ambassadors.execute_ambassador(world_state, ambassador.id)
 
     def _require_negotiations(self) -> NegotiationService:
         if self._negotiations is None:

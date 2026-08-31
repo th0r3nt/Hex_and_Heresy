@@ -1,14 +1,17 @@
 """
-Доменные фейки сборщиков промптов и контекста для тестов сервисного слоя.
+Доменные фейки сборщиков промптов и контекста для тестов сервисного слоя,
+а также скриптованный клиент языковой модели с вызовами навыков.
 
 Сервисы знают только протоколы из l01_domain, поэтому их тесты не поднимают
 инфраструктуру: ни файлов промптов с диска, ни настоящего ContextBuilder.
 Реальные реализации проверяются в tests/l03_infrastructure/llm/.
 """
 
-from typing import Union
+import json
+from typing import Any, NamedTuple, Union
 
 from src.back.l01_domain.llm.models.context import ContextBlock
+from src.back.l01_domain.llm.models.tools import ToolCall
 
 
 # ====================================================
@@ -91,4 +94,45 @@ def fake_builders() -> tuple[FakePromptBuilder, FakeContextBuilder]:
     return FakePromptBuilder(), FakeContextBuilder()
 
 
-__all__ = ["FakePromptBuilder", "FakeContextBuilder", "fake_builders"]
+# ====================================================
+# Вызовы навыков
+# ====================================================
+
+
+def tool_call(tool_name: str, /, **arguments: Any) -> ToolCall:
+    """
+    Вызов навыка так, как его вернул бы провайдер: словарь аргументов
+    вместе с исходной JSON-строкой.
+
+    Имя навыка передается позиционно: среди аргументов самих навыков
+    встречается и `name` (например, у чертежа оружейника).
+    """
+    return ToolCall(
+        name=tool_name,
+        arguments=arguments,
+        raw_arguments=json.dumps(arguments, ensure_ascii=False),
+    )
+
+
+class LLMReply(NamedTuple):
+    """
+    Один ответ модели в режиме Function Calling: свободный текст и вызовы навыков.
+    """
+
+    content: str = ""
+    calls: list[ToolCall] = []
+
+
+def reply(content: str = "", *calls: ToolCall) -> LLMReply:
+    """Короткая запись ответа модели для скрипта фейкового клиента."""
+    return LLMReply(content=content, calls=list(calls))
+
+
+__all__ = [
+    "FakePromptBuilder",
+    "FakeContextBuilder",
+    "fake_builders",
+    "tool_call",
+    "LLMReply",
+    "reply",
+]

@@ -1,13 +1,23 @@
 """
-Главный фасад механики Оружейника.
-Оркестрирует LLM, балансировщик, экономику и реестр чертежей.
+Главный фасад механики оружейника.
+Оркестрирует LLM через инструменты, балансировщик, экономику и реестр чертежей.
 """
 
 from typing import Optional
 
 from src.back.l01_domain.army.models.card.equipment import Equipment
 from src.back.l01_domain.factions.constants import ResourceType
+from src.back.l01_domain.exceptions.llm import InvalidToolCallError
+from src.back.l01_domain.factions.models.faction import Faction
 from src.back.l01_domain.llm.prompts import PromptCatalog, get_faction_prompt_key
+from src.back.l01_domain.llm.tools.definitions.gunsmith import (
+    DRAFT_BLUEPRINT,
+    REJECT_BLUEPRINT,
+)
+from src.back.l01_domain.llm.tools.schemas.gunsmith import (
+    DraftBlueprintParams,
+    RejectBlueprintParams,
+)
 from src.back.l01_domain.protocols.events import EventBusProtocol
 from src.back.l01_domain.protocols.llm import (
     ContextBuilderProtocol,
@@ -15,15 +25,25 @@ from src.back.l01_domain.protocols.llm import (
     PromptBuilderProtocol,
 )
 from src.back.l01_domain.world.models.state import WorldState
-from src.back.l01_domain.factions.models.faction import Faction
-from src.back.l02_services.mechanics.gunsmith.crafting import LLMGunsmithResponse
 from src.back.l02_services.mechanics.gunsmith.blueprints import BlueprintRegistry
+from src.back.l02_services.mechanics.gunsmith.crafting import (
+    LLMGunsmithResponse,
+    StatPriorities,
+)
 from src.back.l02_services.mechanics.gunsmith.validation.balance import EquipmentBalancer
 from src.back.l02_services.mechanics.gunsmith.validation.economy import EquipmentEconomist
+from src.back.l01_domain.llm.tools.catalog import Toolset, get_toolset
 from src.back.utils.event.registry import GameEvents
+
+# Реплика мастера на вызов навыка с недозаполненными параметрами
+INCOMPLETE_ANSWER_REPLY = "Мастер повертел заказ в руках и вернул его: чертеж так не собрать."
 
 
 class GunsmithFacade:
+    """
+    Фасад взаимодействия с мастером-оружейником.
+    """
+
     def __init__(
         self,
         llm_client: LLMClientProtocol,
@@ -44,35 +64,67 @@ class GunsmithFacade:
             raise ValueError(f"Фракция {faction_id} не найдена")
 
         system_prompt = self._build_gunsmith_system_prompt(world_state, faction)
+        tools = get_toolset(Toolset.GUNSMITH_WORKSHOP)
 
-        # Вызываем LLM
-        response = await self._llm.generate_structured(
+        content, tool_calls = await self._llm.generate_with_tools(
             system_prompt=system_prompt,
             user_prompt=f"Заказ от правителя:\n{user_request}",
-            response_model=LLMGunsmithResponse,
+            tools=tools,
             temperature=0.7,
         )
 
-        # Мастер отказался делать этот бред - либо ответил так, что считать нечего:
-        # без приоритетов не собрать статы, без тира - бюджет и цену,
-        # без слота домен не примет карточку
-        if (
-            not response.is_approved
-            or response.priorities is None
-            or response.tier is None
-            or response.slot is None
-        ):
-            if self._event_bus:
-                await self._event_bus.publish(
-                    GameEvents.Gunsmith.BLUEPRINT_REJECTED,
-                    faction_id=faction_id,
-                    reason=response.master_reply,
-                )
-            return None, response.master_reply
+        # 1. Проверяем отказ мастера
+        reject_call = next(
+            (call for call in tool_calls if call.name == REJECT_BLUEPRINT.name), None
+        )
+        if reject_call is not None:
+            try:
+                reject_params = reject_call.parse_arguments(RejectBlueprintParams)
+            except InvalidToolCallError:
+                return await self._refuse(faction_id, INCOMPLETE_ANSWER_REPLY)
+            return await self._refuse(faction_id, reject_params.master_reply)
 
-        stats = EquipmentBalancer.normalize_stats(response.tier, response.priorities)
-        gold, material = EquipmentEconomist.calculate_cost(response.tier, response.tags)
-        draft = BlueprintRegistry.construct_draft(response, stats, gold, material)
+        # 2. Проверяем создание чертежа
+        draft_call = next(
+            (call for call in tool_calls if call.name == DRAFT_BLUEPRINT.name), None
+        )
+        if draft_call is None:
+            reply = content.strip() or "Мастер не смог спроектировать такой чертеж."
+            return None, reply
+
+        # Недозаполненный вызов - это тот же отказ мастера, а не ошибка сервера:
+        # без слота, имени или внятного тира домен карточку все равно не примет,
+        # и игроку полезнее реплика мастерской, чем красный экран валидации.
+        try:
+            params = draft_call.parse_arguments(DraftBlueprintParams)
+        except InvalidToolCallError:
+            return await self._refuse(faction_id, INCOMPLETE_ANSWER_REPLY)
+
+        priorities = StatPriorities(
+            damage=params.damage_priority,
+            armor_piercing=params.armor_piercing_priority,
+            armor_bonus=params.armor_bonus_priority,
+            range_hexes=params.range_priority,
+            heavy_weight_tradeoff=params.heavy_weight_tradeoff,
+            clunkiness_tradeoff=params.clunkiness_tradeoff,
+        )
+
+        response_draft = LLMGunsmithResponse(
+            is_approved=True,
+            master_reply=params.master_reply,
+            name=params.name,
+            lore=params.lore,
+            tier=params.tier,
+            slot=params.slot,
+            category_name=params.category_name,
+            tags=params.tags,
+            priorities=priorities,
+            special_rules=params.special_rules,
+        )
+
+        stats = EquipmentBalancer.normalize_stats(params.tier, priorities)
+        gold, material = EquipmentEconomist.calculate_cost(params.tier, params.tags)
+        draft = BlueprintRegistry.construct_draft(response_draft, stats, gold, material)
 
         if self._event_bus:
             await self._event_bus.publish(
@@ -82,23 +134,29 @@ class GunsmithFacade:
                 equipment_name=draft.name,
             )
 
-        return draft, response.master_reply
+        return draft, params.master_reply
+
+    async def _refuse(
+        self, faction_id: str, master_reply: str
+    ) -> tuple[None, str]:
+        """
+        Закрывает заказ отказом мастера: чертежа нет, игрок получает реплику.
+        """
+        if self._event_bus:
+            await self._event_bus.publish(
+                GameEvents.Gunsmith.BLUEPRINT_REJECTED,
+                faction_id=faction_id,
+                reason=master_reply,
+            )
+        return None, master_reply
 
     async def approve_blueprint(
         self, world_state: WorldState, faction_id: str, draft: Equipment
     ) -> None:
-        """
-        Игрок соглашается с чертежом.
-        Оплачивается R&D (стоимость производства 1 штуки как плата за разработку),
-        и чертеж добавляется в арсенал партии.
-        """
         faction = world_state.get_faction(faction_id)
         if not faction:
             raise ValueError(f"Фракция {faction_id} не найдена")
 
-        # Плата за исследования и внедрение (Research & Development).
-        # Списываем разово стоимость крафта 1 предмета - и сразу оба ресурса:
-        # заплатить золотом и остаться без чертежа из-за нехватки материалов нельзя.
         faction.spend_all(
             {
                 ResourceType.GOLD: draft.cost_gold,
@@ -106,7 +164,6 @@ class GunsmithFacade:
             }
         )
 
-        # Добавляем в реестр кастомных предметов текущей партии
         world_state.add_custom_equipment(draft)
 
         if self._event_bus:
@@ -120,16 +177,16 @@ class GunsmithFacade:
             )
 
     def _build_gunsmith_system_prompt(self, world_state: WorldState, faction: Faction) -> str:
-        # Статика
-        static_context = self._prompt_builder.build([
-            PromptCatalog.BASE.PERSONA,
-            PromptCatalog.BASE.MECHANICS.ECONOMY,
-            PromptCatalog.ROLES.GUNSMITH,
-            get_faction_prompt_key(faction.race),
-            PromptCatalog.LORE.BASIC.MEDIUM
-        ])
+        static_context = self._prompt_builder.build(
+            [
+                PromptCatalog.BASE.PERSONA,
+                PromptCatalog.BASE.MECHANICS.ECONOMY,
+                PromptCatalog.ROLES.GUNSMITH,
+                get_faction_prompt_key(faction.race),
+                PromptCatalog.LORE.BASIC.MEDIUM,
+            ]
+        )
 
-        # Динамика через билдер
         blocks = self._context_builder.build_gunsmith_context(world_state, faction)
         dynamic_context = self._context_builder.render(blocks)
 
