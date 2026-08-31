@@ -13,6 +13,8 @@ from src.back.l01_domain.exceptions.llm import (
     LLMProviderNotConfiguredError,
     LLMRequestFailedError,
 )
+from src.back.l01_domain.llm.models.tools import ToolCall
+from src.back.l01_domain.llm.tools.definitions.strategic import SET_TAX_RATE
 from src.back.l01_domain.protocols.llm import LLMClientProtocol
 from src.back.l03_infrastructure.llm import facade as facade_module
 from src.back.l03_infrastructure.llm.facade import LLMFacade
@@ -36,6 +38,7 @@ class ScriptedExecutor:
         self.client = client
         self.text_calls: List[Dict[str, Any]] = []
         self.structured_calls: List[Dict[str, Any]] = []
+        self.tool_calls: List[Dict[str, Any]] = []
         ScriptedExecutor.created[config.id] = self
 
     def _resolve(self, default: Any) -> Any:
@@ -52,6 +55,12 @@ class ScriptedExecutor:
     async def generate_structured(self, **kwargs: Any) -> Any:
         self.structured_calls.append(kwargs)
         return self._resolve(kwargs["response_model"]())
+
+    async def generate_with_tools(self, **kwargs: Any) -> Any:
+        self.tool_calls.append(kwargs)
+        return self._resolve(
+            (f"текст от {self.config.id}", [ToolCall(name="set_tax_rate")])
+        )
 
 
 @pytest.fixture(autouse=True)
@@ -193,6 +202,44 @@ class TestRouting:
         call = ScriptedExecutor.created["local"].structured_calls[0]
         assert call["response_model"] is Verdict
         assert call["temperature"] == 0.2
+
+    async def test_tools_request_carries_the_toolset(self, facade: LLMFacade, local):
+        facade.register_provider(local)
+
+        content, calls = await facade.generate_with_tools(
+            system_prompt="s",
+            user_prompt="u",
+            tools=[SET_TAX_RATE],
+            temperature=0.2,
+            tool_choice="required",
+        )
+
+        assert content == "текст от local"
+        assert [call.name for call in calls] == ["set_tax_rate"]
+        call = ScriptedExecutor.created["local"].tool_calls[0]
+        assert call["tools"] == [SET_TAX_RATE]
+        assert call["temperature"] == 0.2
+        assert call["tool_choice"] == "required"
+
+    async def test_failed_provider_hands_over_the_toolset_to_fallback(
+        self, facade: LLMFacade, cloud, local
+    ):
+        """Запасной провайдер обязан получить тот же набор навыков."""
+        facade.register_provider(cloud, make_active=True)
+        facade.register_provider(local)
+        facade.set_api_keys("cloud", ["key-one"])
+        facade.set_fallback_chain(["local"])
+        ScriptedExecutor.behaviors["cloud"] = LLMRequestFailedError(
+            "cloud", "cloud-model", "провайдер лег"
+        )
+
+        content, _calls = await facade.generate_with_tools(
+            system_prompt="s", user_prompt="u", tools=[SET_TAX_RATE]
+        )
+
+        assert content == "текст от local"
+        assert ScriptedExecutor.attempts == ["cloud", "local"]
+        assert ScriptedExecutor.created["local"].tool_calls[0]["tools"] == [SET_TAX_RATE]
 
     async def test_failed_provider_hands_over_to_fallback(
         self, facade: LLMFacade, cloud, local

@@ -1,9 +1,10 @@
 """
-Тесты переговоров: перенос решений лорда на агрегат отношений через навыки,
-ответ на депешу, автоматический торг двух нейросетей и казнь посла.
+Тесты переговоров: ответ на депешу, ручная аудиенция и автоматический торг
+двух нейросетей.
 
 Лорд говорит с миром только вызовами навыков (Function Calling): слова
-приезжают текстом, а любое действие - через ToolExecutor и его обработчики.
+приезжают текстом, а любое действие - через ToolExecutor. Само исполнение
+навыков проверяется в tests/l02_services/mechanics/tools/.
 """
 
 from typing import Any
@@ -11,16 +12,11 @@ from typing import Any
 import pytest
 
 from src.back.l01_domain.exceptions.diplomacy import AmbassadorUnavailableError
-from src.back.l01_domain.factions.constants import (
-    DiplomaticStance,
-    NegotiationMode,
-    ResourceType,
-)
+from src.back.l01_domain.factions.constants import DiplomaticStance, NegotiationMode
 from src.back.l01_domain.factions.models.diplomacy.messengers import Dispatch
 from src.back.l01_domain.llm.models.tools import ToolCall, ToolDefinition
 from src.back.l02_services.mechanics.diplomacy.facade import DiplomacyFacade
 from src.back.l02_services.mechanics.diplomacy.negotiations import NegotiationService
-from src.back.l02_services.mechanics.tools.context import ToolExecutionContext
 from src.back.l02_services.mechanics.tools.executor import ToolExecutor
 from src.back.l02_services.mechanics.tools.handlers import (
     DiplomacyToolHandlers,
@@ -98,116 +94,6 @@ def _facade(llm=None, event_bus=None, with_tools: bool = False) -> DiplomacyFaca
     if with_tools and facade._negotiations is not None:
         facade._negotiations.set_tool_executor(_executor(facade))
     return facade
-
-
-def _audience_context(world, host: str = "elfs", guest: str = "humans"):
-    """Контекст тронного зала: решение принимает хозяин, проситель - гость."""
-    return ToolExecutionContext(
-        world_state=world,
-        caller_faction_id=host,
-        target_faction_id=guest,
-    )
-
-
-# ==================================================================
-# РЕШЕНИЯ ЛОРДА ЧЕРЕЗ НАВЫКИ
-# ==================================================================
-
-
-class TestToolActions:
-    """Навык лорда обязан доехать до агрегата отношений и до шины событий."""
-
-    @pytest.mark.asyncio
-    async def test_trade_action_creates_agreement(self, world, fake_bus):
-        executor = _executor(_facade(event_bus=fake_bus))
-
-        result = await executor.execute(
-            tool_call(
-                "propose_trade",
-                give_resource=ResourceType.FOOD.value,
-                give_amount=50.0,
-                get_resource=ResourceType.GOLD.value,
-                get_amount=30.0,
-                duration_turns=4,
-            ),
-            _audience_context(world),
-        )
-
-        relation = world.get_relation("humans", "elfs")
-        assert result.success is True
-        assert relation.trade_agreement.give_amount == 50.0
-        assert relation.trade_agreement.remaining_turns == 4
-        assert GameEvents.Diplomacy.TRADE_AGREED in fake_bus.names()
-
-    @pytest.mark.asyncio
-    async def test_war_and_peace_switch_stance(self, world):
-        executor = _executor(_facade())
-        context = _audience_context(world)
-
-        await executor.execute(tool_call("declare_war"), context)
-        relation = world.get_relation("humans", "elfs")
-        assert relation.stance == DiplomaticStance.WAR
-
-        await executor.execute(tool_call("make_peace"), context)
-        assert relation.stance == DiplomaticStance.PEACE
-
-    @pytest.mark.asyncio
-    async def test_right_of_passage_goes_to_the_guest(self, world):
-        """Право прохода дает хозяин земель гостю, а не себе."""
-        executor = _executor(_facade())
-
-        await executor.execute(
-            tool_call(
-                "establish_right_of_passage",
-                toll_gold_per_crossing=500.0,
-                duration_turns=3,
-                allowed_hex_ids=["hex_1", "hex_2"],
-            ),
-            _audience_context(world),
-        )
-
-        passage = world.get_relation("humans", "elfs").right_of_passage
-        assert passage.beneficiary_faction_id == "humans"
-        assert passage.toll_gold_per_crossing == 500.0
-        assert passage.allowed_hex_ids == ["hex_1", "hex_2"]
-
-    @pytest.mark.asyncio
-    async def test_tribute_demand_is_recorded(self, world, fake_bus):
-        executor = _executor(_facade(event_bus=fake_bus))
-
-        await executor.execute(
-            tool_call("demand_tribute", gold_amount=250.0),
-            _audience_context(world),
-        )
-
-        assert world.get_relation("humans", "elfs").tribute_demanded_gold == 250.0
-        assert GameEvents.Diplomacy.TRIBUTE_DEMANDED in fake_bus.names()
-
-    @pytest.mark.asyncio
-    async def test_unknown_tool_changes_nothing(self, world):
-        """Навык, которого нет в реестре, до мира не доходит."""
-        executor = _executor(_facade())
-
-        result = await executor.execute(
-            tool_call("annex_everything"), _audience_context(world)
-        )
-
-        assert result.success is False
-        # Обработчик не отработал, поэтому и отношения между державами не заведены
-        assert world.get_relation("humans", "elfs") is None
-
-    @pytest.mark.asyncio
-    async def test_incomplete_trade_action_is_ignored(self, world):
-        """Половина условий сделки - это не сделка, а брак вызова."""
-        executor = _executor(_facade())
-
-        result = await executor.execute(
-            tool_call("propose_trade", give_amount=10.0),
-            _audience_context(world),
-        )
-
-        assert result.success is False
-        assert world.get_relation("humans", "elfs") is None
 
 
 # ==================================================================

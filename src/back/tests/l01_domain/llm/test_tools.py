@@ -2,6 +2,10 @@
 Тесты схем параметров инструментов по всем направлениям.
 """
 
+import pytest
+from pydantic import ValidationError
+
+from src.back.l01_domain.factions.constants import MAX_TAX_RATE, MIN_TAX_RATE
 from src.back.l01_domain.llm.tools.definitions import (
     advisor as adv_tools,
     chronicler as chr_tools,
@@ -198,3 +202,116 @@ class TestGameMasterTools:
         )
         assert event.category == GlobalEventCategory.WEATHER
         assert event.scope == GlobalEventScope.GLOBAL
+
+
+# ==================================================================
+# ГРАНИЦЫ СХЕМ
+# ==================================================================
+
+
+class TestSchemaLimits:
+    """
+    Схема - единственный барьер между фантазией модели и доменом: то, что
+    она пропустит, придется принимать фасадам.
+    """
+
+    def test_tax_rate_stays_within_the_game_scale(self):
+        assert str_tools.SetTaxRateParams(rate=MIN_TAX_RATE).rate == MIN_TAX_RATE
+        assert str_tools.SetTaxRateParams(rate=MAX_TAX_RATE).rate == MAX_TAX_RATE
+
+        with pytest.raises(ValidationError):
+            str_tools.SetTaxRateParams(rate=MAX_TAX_RATE + 0.1)
+
+        with pytest.raises(ValidationError):
+            str_tools.SetTaxRateParams(rate=MIN_TAX_RATE - 0.1)
+
+    def test_blueprint_tier_is_limited_to_the_six_game_tiers(self):
+        assert gun_tools.DraftBlueprintParams(
+            name="Кинжал", slot=EquipmentSlot.WEAPON, tier=6, master_reply="Готово."
+        ).tier == 6
+
+        with pytest.raises(ValidationError):
+            gun_tools.DraftBlueprintParams(
+                name="Кинжал", slot=EquipmentSlot.WEAPON, tier=7, master_reply="Готово."
+            )
+
+        with pytest.raises(ValidationError):
+            gun_tools.DraftBlueprintParams(
+                name="Кинжал", slot=EquipmentSlot.WEAPON, tier=0, master_reply="Готово."
+            )
+
+    def test_blueprint_priorities_stay_within_the_scale(self):
+        with pytest.raises(ValidationError):
+            gun_tools.DraftBlueprintParams(
+                name="Кинжал",
+                slot=EquipmentSlot.WEAPON,
+                damage_priority=11,
+                master_reply="Готово.",
+            )
+
+        with pytest.raises(ValidationError):
+            gun_tools.DraftBlueprintParams(
+                name="Кинжал",
+                slot=EquipmentSlot.WEAPON,
+                clunkiness_tradeoff=-1,
+                master_reply="Готово.",
+            )
+
+    def test_blueprint_without_a_slot_is_not_a_blueprint(self):
+        """Без слота домен карточку снаряжения не примет."""
+        with pytest.raises(ValidationError):
+            gun_tools.DraftBlueprintParams(name="Кинжал", master_reply="Готово.")
+
+    def test_trade_moves_a_positive_amount_of_resources(self):
+        with pytest.raises(ValidationError):
+            dip_tools.ProposeTradeParams(
+                give_resource=ResourceType.FOOD,
+                give_amount=0.0,
+                get_resource=ResourceType.GOLD,
+                get_amount=25.0,
+            )
+
+    def test_tribute_demands_a_positive_amount_of_gold(self):
+        with pytest.raises(ValidationError):
+            dip_tools.DemandTributeParams(gold_amount=0.0)
+
+    def test_dispatch_needs_a_recipient_and_a_text(self):
+        with pytest.raises(ValidationError):
+            dip_tools.SendDispatchParams(recipient_faction_id="", message_text="Привет.")
+
+        with pytest.raises(ValidationError):
+            dip_tools.SendDispatchParams(recipient_faction_id="elfs", message_text="")
+
+    def test_advisor_proposal_needs_words_and_at_least_one_button(self):
+        with pytest.raises(ValidationError):
+            adv_tools.ProposeAdvisorActionParams(
+                title="Казна пустеет", message="", options=["Да"]
+            )
+
+        with pytest.raises(ValidationError):
+            adv_tools.ProposeAdvisorActionParams(
+                title="Казна пустеет", message="Пора поднять налог.", options=[]
+            )
+
+    def test_enums_are_read_from_plain_strings(self):
+        """
+        Провайдер присылает аргументы JSON-ом, поэтому в схему приезжают
+        строки, а не члены перечислений.
+        """
+        draft = gun_tools.DraftBlueprintParams(
+            name="Мушкет", slot="weapon", tags=["heavy", "blackpowder"], master_reply="Ок."
+        )
+        assert draft.slot == EquipmentSlot.WEAPON
+        assert draft.tags == [EquipmentTag.HEAVY, EquipmentTag.BLACKPOWDER]
+
+        move = tac_tools.OrderSquadMoveParams(
+            squad_id="sq_1", target_x=1, target_y=1, pace="charge"
+        )
+        assert move.pace == TacticalMovementPace.CHARGE
+
+    def test_unknown_enum_value_is_rejected(self):
+        """Навык, которого нет в правилах игры, схема не пропустит."""
+        with pytest.raises(ValidationError):
+            tac_tools.OrderSquadMoveParams(
+                squad_id="sq_1", target_x=1, target_y=1, pace="teleport"
+            )
