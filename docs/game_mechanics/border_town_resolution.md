@@ -51,9 +51,9 @@
 
 ## Где это в коде
 
-* Доменная модель операции и методы города (`downgrade`, `transfer_ownership`): `src/back/l01_domain/factions/models/border_town.py`, константы (сроки, доли добычи, урон инфраструктуре) — в `factions/constants.py`.
+* Доменная модель операции и методы города (`downgrade`, `transfer_ownership`): `backend/l01_domain/factions/models/border_town.py`, константы (сроки, доли добычи, урон инфраструктуре) — в `factions/constants.py`.
 * Реестр активных операций: `WorldState.border_town_operations` в `l01_domain/world/models/state.py`.
-* Право начать операцию и ее обратный отсчет: `src/back/l02_services/mechanics/settlements/border_towns/resolution.py`, последствия трех исходов — `.../border_towns/outcomes.py`. Точка входа — `SettlementsFacade` в `settlements/facade.py`, шаг 1.6 конвейера в `strategic/orchestrator.py`.
-* Заморозка ополчения на время операции: `src/back/l02_services/turns/strategic/garrison.py`.
+* Право начать операцию и ее обратный отсчет: `backend/l02_services/mechanics/settlements/border_towns/resolution.py`, последствия трех исходов — `.../border_towns/outcomes.py`. Точка входа — `SettlementsFacade` в `settlements/facade.py`, шаг 1.6 конвейера в `strategic/orchestrator.py`.
+* Заморозка ополчения на время операции: `backend/l02_services/turns/strategic/garrison.py`.
 * HTTP: `POST /api/strategic/border-towns/{town_id}/resolve`, `GET /api/strategic/border-towns/{town_id}/operation`.
 * События для интерфейса: `economy.border_town_resolution_started`, `.../razed`, `.../pillaged`, `.../occupied`.

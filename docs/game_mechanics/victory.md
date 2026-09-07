@@ -66,10 +66,10 @@
 
 ## Где это в коде
 
-* Доменные модели: `src/back/l01_domain/world/models/victory.py`, константы и `VictoryType` - в `world/constants.py`.
-* Проверка условий: `src/back/l02_services/mechanics/victory/evaluator.py`, формулировки финала - `narrative.py`.
-* Фасад подсистемы: `src/back/l02_services/mechanics/victory/facade.py`.
-* Шаг такта: `src/back/l02_services/turns/strategic/orchestrator.py` (шаг 4.8).
+* Доменные модели: `backend/l01_domain/world/models/victory.py`, константы и `VictoryType` - в `world/constants.py`.
+* Проверка условий: `backend/l02_services/mechanics/victory/evaluator.py`, формулировки финала - `narrative.py`.
+* Фасад подсистемы: `backend/l02_services/mechanics/victory/facade.py`.
+* Шаг такта: `backend/l02_services/turns/strategic/orchestrator.py` (шаг 4.8).
 * Внеочередная проверка после штурма и перевод на экран финала: `GameFlowFacade.finish_tactical_combat`, `GameFlowFacade.check_victory_conditions`.
 * Финальная глава хроники: `ChroniclerFacade.write_finale`, промпт - `l03_infrastructure/llm/prompt/roles/chronicler/finale.md`.
 * HTTP: `GET /api/strategic/victory-progress`.

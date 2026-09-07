@@ -42,8 +42,8 @@
 При штурме гекса с цитаделью, городом или союзной землей защищающаяся сторона собирается из мобильной армии на гексе (если она там есть) плюс всего состава гарнизона: ополчение и расквартированные войска идут в бой вместе. Ополчение встает в строй первым - оно встречает штурм у стен.
 
 ## Где это в коде
-* Доменная модель: `src/back/l01_domain/factions/models/garrison.py`, константы - в `factions/constants.py`.
-* Обслуживание на такте (подъем гарнизонов, ополчение, восстановление): `src/back/l02_services/turns/strategic/garrison.py`, шаг 1.7 конвейера в `strategic/orchestrator.py`.
-* Содержание: `src/back/l02_services/turns/strategic/economy.py`.
+* Доменная модель: `backend/l01_domain/factions/models/garrison.py`, константы - в `factions/constants.py`.
+* Обслуживание на такте (подъем гарнизонов, ополчение, восстановление): `backend/l02_services/turns/strategic/garrison.py`, шаг 1.7 конвейера в `strategic/orchestrator.py`.
+* Содержание: `backend/l02_services/turns/strategic/economy.py`.
 * Оборона гекса: `TurnsFacade.execute_tactical_turn`, заморозка на время боя - `GameFlowFacade.enter_tactical_combat`.
 * HTTP: `POST /api/strategic/garrisons/{zone_id}/station`, `.../unstation`, `GET /api/strategic/garrisons/{zone_id}`.
